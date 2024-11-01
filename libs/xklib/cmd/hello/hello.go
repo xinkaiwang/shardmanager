@@ -16,8 +16,33 @@ limitations under the License.
 
 package main
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+)
 
 func main() {
+	ctx := context.TODO()
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "json"))
 	fmt.Println("hello")
+	// testKerror()
+	testKlogging()
+}
+
+func testKerror() {
+	ec := kerror.EC_INVALID_PARAMETER
+	fmt.Println(ec)
+}
+
+func testKlogging() {
+	klogging.Info(context.Background()).With("key", 1028).Log("serverSend", "")
+}
+
+func testTimer(ctx context.Context) {
+	kcommon.TryCatchRun(ctx, func() {})
+	// klogging.Info(context.Background()).With("key", 1028).Log("serverSend", "")
 }
