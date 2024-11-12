@@ -29,13 +29,15 @@ func main() {
 	ctx := context.TODO()
 	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "json"))
 	fmt.Println("hello")
-	// testKerror()
-	testKlogging()
+	testKerror()
+	// testKlogging()
 }
 
 func testKerror() {
-	ec := kerror.EC_INVALID_PARAMETER
-	fmt.Println(ec)
+	ke := kerror.Create("MyErr", "longer story").WithErrorCode(kerror.EC_INVALID_PARAMETER).With("app", "myApp")
+	httpCode := ke.GetHttpErrorCode()
+	msg := ke.Error()
+	fmt.Printf("%d, %s\n", httpCode, msg)
 }
 
 func testKlogging() {

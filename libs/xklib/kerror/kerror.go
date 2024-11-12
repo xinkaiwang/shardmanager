@@ -109,6 +109,10 @@ func (ke *Kerror) buildCausedByString(b *strings.Builder, withStack, withCause b
 	}
 }
 
+func (ke *Kerror) GetHttpErrorCode() int {
+	return ke.ErrorCode.ToHttpErrorCode()
+}
+
 func formatVal(val interface{}) interface{} {
 	if val == nil {
 		return nil
