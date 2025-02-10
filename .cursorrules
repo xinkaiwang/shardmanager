@@ -98,4 +98,440 @@
    - 服务健康状态
    - 请求延迟
    - 错误率
-   - 资源使用率 
+   - 资源使用率
+
+## 包使用指南
+
+### kmetrics 包
+1. 包的位置：libs/xklib/kmetrics
+2. 主要组件：
+   - decorator.go：函数装饰器，用于收集性能指标
+   - gauge.go：实时值测量
+   - gauge_group.go：带标签的实时值组
+   - histogram.go：延迟分布统计
+
+3. 度量指标类型：
+   a. Kmetric (Summary)：
+      - 轻量级指标收集
+      - 适用于普通操作
+      - 记录：方法名、状态、错误、自定义注释
+      - 示例：`OpsLatencyMetric`
+
+   b. Khistogram：
+      - 重量级指标收集
+      - 适用于重要操作
+      - 提供详细的延迟分布
+      - 示例：`OpsLatencyHistogram`
+
+   c. GaugeGroup：
+      - 实时值测量
+      - 支持多维度标签
+      - 适用于状态监控
+
+4. 装饰器使用规范：
+   a. 普通操作：
+      ```go
+      InstrumentSummaryRunVoid(ctx, "method_name", func() {
+          // 业务逻辑
+      }, "custom_note")
+      ```
+
+   b. 重要操作：
+      ```go
+      InstrumentHistogramRunVoid(ctx, "important_method", func() {
+          // 重要业务逻辑
+      })
+      ```
+
+5. 错误处理规范：
+   - 使用 kerror 包装业务错误
+   - 通过 panic 传递错误
+   - 装饰器自动捕获并记录错误
+   - 错误最终会被重新抛出
+
+6. 性能考虑：
+   - Summary 适用于大多数场景
+   - Histogram 开销较大，仅用于重要操作
+   - 合理使用标签，避免标签基数过高
+
+7. 最佳实践：
+   - 在函数入口处使用装饰器
+   - 保持标签维度可控
+   - 使用有意义的方法名和注释
+   - 确保错误类型正确（kerror）
+
+### kerror 包
+1. 包的位置：libs/xklib/kerror
+2. 主要组件：
+   - kerror.go：错误类型定义和基本操作
+   - error_code.go：错误码定义和 HTTP 状态码映射
+
+3. 错误类型：
+   a. Kerror 结构：
+      - Type：错误类型标识
+      - Msg：错误描述
+      - Details：键值对形式的详细信息
+      - Stack：调用栈信息（可选）
+      - CausedBy：原始错误（可选）
+      - ErrorCode：错误码（默认 EC_UNKNOWN）
+
+4. 错误创建方式：
+   a. 创建新错误：
+      ```go
+      ke := kerror.Create("MyErr", "错误描述").
+            With("key", "value").
+            WithErrorCode(kerror.EC_INVALID_PARAMETER)
+      ```
+
+   b. 包装已有错误：
+      ```go
+      ke := kerror.Wrap(err, "WrapperType", "包装描述", true /*needStack*/)
+      ```
+
+5. 错误码类型：
+   - EC_OK：正常（200）
+   - EC_UNKNOWN：未知错误（500）
+   - EC_NOT_FOUND：未找到（404）
+   - EC_INVALID_PARAMETER：参数无效（400）
+   - EC_CONFLICT：冲突（409）
+   - EC_INTERNAL_ERROR：内部错误（503）
+   - EC_RETRYABLE：可重试错误（429）
+
+6. 最佳实践：
+   - 使用有意义的错误类型名
+   - 添加足够的上下文信息
+   - 适当时使用调用栈
+   - 正确设置错误码
+   - 处理错误时检查是否可重试
+
+### klogging 包
+1. 包的位置：libs/xklib/klogging
+2. 主要组件：
+   - nlogging.go：核心日志功能
+   - ctx_info.go：上下文信息管理
+   - logrus_logger.go：logrus 适配器
+
+3. 日志级别：
+   - FatalLevel：致命错误，记录后退出
+   - ErrorLevel：错误信息
+   - WarnLevel：警告信息
+   - InfoLevel：一般信息
+   - DebugLevel：调试信息
+   - VerboseLevel：详细信息
+
+4. 上下文信息：
+   a. 创建和使用：
+      ```go
+      ctx, info := klogging.CreateCtxInfo(ctx)
+      info.With("sessionID", "123").
+          With("userID", "456")
+      ```
+
+   b. 重要性级别：
+      - HighImportance：所有日志都包含
+      - MidImportance：Debug 级别包含
+      - LowImportance：仅 Verbose 级别包含
+
+5. 日志记录方式：
+   ```go
+   klogging.Info(ctx).
+       With("key", "value").
+       WithError(err).
+       Log("EventType", "描述信息")
+   ```
+
+6. 最佳实践：
+   - 使用合适的日志级别
+   - 添加必要的上下文信息
+   - 使用有意义的事件类型
+   - 错误日志包含完整错误信息
+   - 避免冗余的日志记录
+
+### kcommon 包
+1. 包的位置：libs/xklib/kcommon
+2. 主要组件：
+   - try_catch_run.go：错误处理工具
+
+3. 错误处理函数：
+   a. TryCatchRun：
+      ```go
+      ke := kcommon.TryCatchRun(ctx, func() {
+          // 可能抛出错误的代码
+      })
+      ```
+   
+   b. 特点：
+      - 自动捕获 panic
+      - 转换为 Kerror 类型
+      - 处理非 Kerror 的错误
+      - 记录致命错误日志
+
+4. 最佳实践：
+   - 用于包装可能 panic 的代码
+   - 确保错误被正确转换和处理
+   - 配合 kerror 包使用
+   - 在适当的地方使用 defer
+
+5. 注意事项：
+   - 不要在 defer 中使用
+   - 处理所有可能的错误类型
+   - 避免嵌套使用
+   - 保持错误处理的一致性
+
+## 开发侧笔记
+1. 服务结构规范：
+   - api/：对外接口定义
+   - internal/：内部实现
+     - handler/：HTTP 请求处理
+     - biz/：业务逻辑
+   - cmd/：服务入口
+   - API 路径规范：/api/{resource}，例如 /api/hello
+   - 每个服务一个独立目录
+
+2. 开发工具链：
+   - Makefile：标准化开发命令
+   - golangci-lint：代码质量检查
+   - go fmt：代码格式化
+   - go vet：静态分析
+
+3. 开发流程：
+   - 先创建目录结构
+   - 定义 API 接口
+   - 实现业务逻辑
+   - 添加服务入口
+   - 编写 Makefile
+   - 提交前完成 lint 和 fmt
+
+4. 服务启动管理：
+   - 使用 tmux 管理服务进程
+   - 启动前检查现有会话：tmux ls
+   - 需要重启时：
+     1. 先结束现有会话：tmux kill-session -t {session-name}
+     2. 再启动新会话：tmux new-session -d -s {session-name} 'cd /path/to/service && go run cmd/main.go'
+   - 查看日志：tmux attach -t {session-name}
+   - 避免重复创建同名会话
+
+5. 测试策略：
+   - 单元测试：业务逻辑
+   - 集成测试：HTTP 接口
+   - 基准测试：性能验证
+
+6. 代码提交规范：
+   - 提交前先运行 make fmt 和 make lint
+   - 确保 make test 通过
+   - 遵循 Go 项目标准布局
+   - 按功能模块组织代码
+
+7. 模块路径规范：
+   - 主模块：github.com/xinkaiwang/shardmanager
+   - 工具库：github.com/xinkaiwang/shardmanager/libs/xklib
+   - 服务包：github.com/xinkaiwang/shardmanager/services/{服务名}
+   - 注意：不要使用 github.com/xinkai/cursor/shardmanager 这样的路径
+   - 原因：这是一个独立的模块，不应该包含父仓库的路径
+
+## Lessons
+
+## 错误处理经验
+1. kerror 包装规范：
+   - 错误示例：
+     ```go
+     ke := kerror.Create("InternalServerError", "an unexpected error occurred").
+           WithErrorCode(kerror.EC_INTERNAL_ERROR).
+           With("error", err)  // err 可能已经是 kerror 类型
+     ```
+   - 正确示例：
+     ```go
+     var ke *kerror.Kerror
+     if existingKe, ok := err.(*kerror.Kerror); ok {
+         ke = existingKe
+     } else {
+         ke = kerror.Create("InternalServerError", "an unexpected error occurred").
+              WithErrorCode(kerror.EC_INTERNAL_ERROR).
+              With("error", err)
+     }
+     ```
+   - 原因：避免重复包装已经是 kerror 类型的错误
+   - 好处：
+     1. 保持原始错误的上下文信息
+     2. 避免不必要的错误嵌套
+     3. 保持错误堆栈的清晰性
+
+2. 中间件错误处理最佳实践：
+   - 错误示例：
+     ```go
+     if err := recover(); err != nil {
+         ke := kerror.Create("InternalServerError", "error occurred").
+              WithErrorCode(kerror.EC_INTERNAL_ERROR).
+              With("error", err)
+         // ... 处理错误 ...
+     }
+     ```
+   - 正确示例：
+     ```go
+     if err := recover(); err != nil {
+         logger := klogging.Error(ctx)
+         
+         var ke *kerror.Kerror
+         switch v := err.(type) {
+         case *kerror.Kerror:
+             ke = v
+             logger.WithError(ke)  // kerror 已经包含堆栈信息
+         case error:
+             ke = kerror.Create("InternalServerError", "an unexpected error occurred").
+                  WithErrorCode(kerror.EC_INTERNAL_ERROR).
+                  With("error", v.Error())
+             logger.WithError(ke)
+         default:
+             ke = kerror.Create("UnknownPanic", "unexpected panic with non-error value").
+                  WithErrorCode(kerror.EC_INTERNAL_ERROR).
+                  With("panic_value", v)
+             logger.With("panic_value", v)
+         }
+         
+         // 使用 ErrorCode 的 ToHttpErrorCode 方法转换错误码
+         w.WriteHeader(ke.ErrorCode.ToHttpErrorCode())
+     }
+     ```
+   
+   - 最佳实践：
+     1. 使用 type switch 处理不同类型的错误
+     2. 保持原始的 kerror 类型和上下文
+     3. 使用 ErrorCode 的 ToHttpErrorCode 方法转换错误码
+     4. 统一的日志记录格式
+     5. 设置正确的响应头
+     6. 利用 kerror 内置的堆栈信息
+   
+   - 好处：
+     1. 更准确的错误分类和处理
+     2. 保持错误上下文的完整性
+     3. 避免重复记录堆栈信息
+     4. 统一的错误码转换逻辑
+     5. 更容易维护和扩展
+
+## 目录操作经验
+1. 命令执行目录：
+   - 错误示例：在 cursor/services/hellosvc 下运行命令
+   - 正确示例：在 cursor/shardmanager/services/hellosvc 下运行命令
+   - 原因：shardmanager 是一个子模块，所有操作都应该在子模块目录下进行
+   - 检查方法：
+     1. 使用 pwd 确认当前目录
+     2. 确保路径包含 "shardmanager"
+     3. 如果找不到文件，先检查是否在正确的子模块目录下 
+
+# 错误处理最佳实践
+
+## HTTP 错误码映射 [P1]
+
+1. 使用 `kerror.EC_UNKNOWN` (500) 处理：
+   - 普通的 error
+   - 未知类型的 panic 值
+   - 其他未预期的错误情况
+
+2. 使用 `kerror.EC_INTERNAL_ERROR` (503) 处理：
+   - 服务暂时不可用
+   - 依赖服务故障
+   - 需要重试的系统错误
+
+3. 其他错误码：
+   - `EC_INVALID_PARAMETER` (400)：参数验证失败
+   - `EC_NOT_FOUND` (404)：资源不存在
+   - `EC_CONFLICT` (409)：资源冲突
+   - `EC_RETRYABLE` (429)：需要客户端重试
+   - `EC_UNAUTHENTICATED` (401)：未认证
+
+## 错误处理中间件 [P1]
+
+1. 错误类型判断顺序：
+   ```go
+   switch v := err.(type) {
+   case *kerror.Kerror:  // 优先处理已有的 kerror
+   case error:           // 其次处理普通 error
+   default:             // 最后处理其他类型
+   }
+   ```
+
+2. 错误信息格式：
+   ```json
+   {
+     "error": "错误类型",
+     "msg": "错误消息",
+     "code": "错误码"
+   }
+   ```
+
+3. 日志记录：
+   - 使用 WithError(ke) 记录 kerror，自动包含堆栈信息
+   - 保留原始错误信息
+   - 记录错误处理过程
+   - 区分不同类型的错误
+
+## 测试要点 [P1]
+
+1. 测试场景：
+   - 已有的 kerror
+   - 普通的 error
+   - 字符串类型的 panic
+   - 正常请求流程
+
+2. 验证内容：
+   - HTTP 状态码
+   - 响应头（Content-Type）
+   - 错误响应格式
+   - 错误信息内容
+
+## 错误处理经验
+
+1. 错误码选择：
+   - 使用 `EC_UNKNOWN` (500) 表示意外的系统错误
+   - 使用 `EC_INTERNAL_ERROR` (503) 表示临时的服务不可用
+   - 区分好这两种情况对客户端重试策略很重要
+
+2. 测试用例设计：
+   - 测试用例的名字要准确反映测试内容
+   - 使用真实场景的错误值进行测试
+   - 不要在测试用例中重用被测试的实现
+
+3. 中间件实现：
+   - 在返回响应前设置 Content-Type
+   - 使用 defer 确保总能处理 panic
+   - 保持错误处理逻辑的一致性
+
+4. 日志记录：
+   - 使用 WithError(ke) 记录 kerror，自动包含堆栈信息
+   - 保留原始错误信息
+   - 记录错误处理过程
+   - 区分不同类型的错误
+
+5. 服务端日志查看：
+   - 使用后台运行（&）启动服务
+   - 重定向输出到日志文件（> server.log 2>&1）
+   - 使用 curl -v 查看详细的请求和响应信息
+
+6. 错误处理调试：
+   - 检查 HTTP 状态码是否符合预期
+   - 验证错误响应格式是否标准
+   - 确认日志中包含必要的调试信息
+   - 验证错误类型转换是否正确
+
+## 错误处理最佳实践 [P1]
+
+1. 使用中间件统一处理错误：
+   - 错误示例：在每个处理器中都写错误处理逻辑
+   - 正确示例：使用 ErrorHandlingMiddleware 统一处理所有错误
+   - 原因：避免代码重复，保证错误处理的一致性
+   - 实现方式：
+     1. 在中间件中处理所有 panic
+     2. 业务代码直接使用 panic 抛出错误
+     3. 不要在处理器中手动处理错误
+
+2. 错误处理流程：
+   - 业务层：使用 panic 抛出 kerror 或普通 error
+   - 中间件：捕获 panic 并统一处理
+   - 响应：设置正确的状态码和格式化的错误信息
+   - 日志：记录完整的错误上下文
+
+3. 注意事项：
+   - 始终在处理器开始时设置 Content-Type
+   - 使用 kerror 包装业务错误
+   - 在中间件中统一记录错误日志
+   - 保持错误响应格式的一致性 
