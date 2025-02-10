@@ -1,13 +1,14 @@
-module github.com/xinkaiwang/shardmanager
+module github.com/xinkaiwang/shardmanager/services/hellosvc
 
 go 1.21
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/xinkaiwang/shardmanager/libs/xklib v0.0.0
+	go.opencensus.io v0.24.0
 )
 
-replace github.com/xinkaiwang/shardmanager/libs/xklib => ./libs/xklib
+replace github.com/xinkaiwang/shardmanager/libs/xklib => ../../libs/xklib
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -23,7 +24,6 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/prometheus/statsd_exporter v0.22.7 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

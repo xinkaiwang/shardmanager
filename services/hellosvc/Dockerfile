@@ -2,18 +2,22 @@
 FROM golang:1.21-alpine AS builder
 
 # 设置工作目录
-WORKDIR /app
+WORKDIR /src/shardmanager
 
 # 安装构建依赖
 RUN apk add --no-cache git make
 
+# 复制 libs/xklib
+COPY libs/xklib ./libs/xklib/
+
+# 复制服务代码
+COPY services/hellosvc ./services/hellosvc/
+
 # 复制 go.mod 和 go.sum
 COPY go.mod go.sum ./
 
-# 复制整个项目代码
-COPY . .
-
-# 构建应用
+# 进入服务目录构建
+WORKDIR /src/shardmanager/services/hellosvc
 RUN make build
 
 # 使用轻量级基础镜像
@@ -34,7 +38,7 @@ RUN adduser -D -u 1000 appuser
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=builder /app/bin/hellosvc .
+COPY --from=builder /src/shardmanager/services/hellosvc/bin/hellosvc .
 
 # 使用非 root 用户运行
 USER appuser
