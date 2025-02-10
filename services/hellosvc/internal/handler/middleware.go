@@ -11,6 +11,9 @@ import (
 // ErrorHandlingMiddleware 捕获 panic 并处理错误
 func ErrorHandlingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 确保在处理请求前设置 Content-Type
+		w.Header().Set("Content-Type", "application/json")
+
 		defer func() {
 			if err := recover(); err != nil {
 				// 记录错误信息
@@ -22,12 +25,11 @@ func ErrorHandlingMiddleware(next http.Handler) http.Handler {
 				case *kerror.Kerror:
 					// 如果已经是 kerror，直接使用
 					ke = v
-					logger.WithError(ke) // kerror 已经包含堆栈信息
+					logger.WithError(ke)
 				case error:
 					// 如果是普通 error，包装成 kerror
-					ke = kerror.Create("InternalServerError", "an unexpected error occurred").
-						WithErrorCode(kerror.EC_UNKNOWN).
-						With("error", v.Error())
+					ke = kerror.Create("InternalServerError", v.Error()).
+						WithErrorCode(kerror.EC_UNKNOWN)
 					logger.WithError(ke)
 				default:
 					// 其他类型（如 string 或其他值），创建新的 kerror
@@ -44,7 +46,6 @@ func ErrorHandlingMiddleware(next http.Handler) http.Handler {
 				w.WriteHeader(ke.ErrorCode.ToHttpErrorCode())
 
 				// 返回错误响应
-				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"error": ke.Type,
 					"msg":   ke.Msg,

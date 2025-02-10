@@ -1,42 +1,34 @@
 package internal
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/xinkai/cursor/shardmanager/services/hellosvc/api"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 )
 
-// Handler 处理 HTTP 请求
-type Handler struct {
-	svc *Service
+func HelloHandler(w http.ResponseWriter, r *http.Request) {
+	// Implementation of HelloHandler
 }
 
-// NewHandler 创建一个新的 Handler 实例
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func HelloErrorHandler(w http.ResponseWriter, r *http.Request) {
+	// Implementation of HelloErrorHandler
 }
 
-// HelloHandler 处理 /hello 请求
-func (h *Handler) HelloHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+func HelloKerrorHandler(w http.ResponseWriter, r *http.Request) {
+	// Implementation of HelloKerrorHandler
+}
 
-	var req api.HelloRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-
-	resp := h.svc.SayHello(&req)
-
+func HelloPanicHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "hello_panic", func() {
+		kcommon.HelloWithPanic()
+	}, "")
 }
 
-// RegisterRoutes 注册路由
-func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/hello", h.HelloHandler)
+func RegisterHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("/api/hello", HelloHandler)
+	mux.HandleFunc("/api/test_error", HelloErrorHandler)
+	mux.HandleFunc("/api/test_kerror", HelloKerrorHandler)
+	mux.HandleFunc("/api/test_panic", HelloPanicHandler)
 }

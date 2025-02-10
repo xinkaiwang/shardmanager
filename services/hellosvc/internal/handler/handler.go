@@ -7,6 +7,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/hellosvc/api"
 	"github.com/xinkaiwang/shardmanager/services/hellosvc/internal/biz"
 )
@@ -52,7 +53,11 @@ func (h *Handler) HelloHandler(w http.ResponseWriter, r *http.Request) {
 		Log("HelloRequest", "received hello request")
 
 	// 处理请求
-	message := h.app.Hello(req.Name)
+	var message string
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.Hello", func() {
+		message = h.app.Hello(req.Name)
+	}, "")
+
 	resp := &api.HelloResponse{
 		Message: message,
 		Time:    time.Now().Format(time.RFC3339),
@@ -78,6 +83,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/hello", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloHandler)))
 	mux.Handle("/api/test_kerror", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloKerrorHandler)))
 	mux.Handle("/api/test_error", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloErrorHandler)))
+	mux.Handle("/api/test_panic", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloPanicHandler)))
 }
 
 // HelloKerrorHandler 处理 /hello/kerror 请求，总是抛出 kerror
@@ -87,7 +93,9 @@ func (h *Handler) HelloKerrorHandler(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "test"
 	}
-	h.app.HelloWithKerror(name)
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.HelloWithKerror", func() {
+		h.app.HelloWithKerror(name)
+	}, "")
 }
 
 // HelloErrorHandler 处理 /hello/error 请求，总是抛出普通 error
@@ -97,5 +105,19 @@ func (h *Handler) HelloErrorHandler(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "test"
 	}
-	h.app.HelloWithError(name)
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.HelloWithError", func() {
+		h.app.HelloWithError(name)
+	}, "")
+}
+
+// HelloPanicHandler 处理 /hello/panic 请求，总是抛出非错误类型的 panic
+func (h *Handler) HelloPanicHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		name = "test"
+	}
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.HelloWithPanic", func() {
+		h.app.HelloWithPanic(name)
+	}, "")
 }

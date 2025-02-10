@@ -534,4 +534,148 @@
    - 始终在处理器开始时设置 Content-Type
    - 使用 kerror 包装业务错误
    - 在中间件中统一记录错误日志
-   - 保持错误响应格式的一致性 
+   - 保持错误响应格式的一致性
+
+### kmetrics 包使用指南
+
+1. 初始化和配置：
+   ```go
+   // 1. 创建 Prometheus 导出器
+   pe, err := prometheus.NewExporter(prometheus.Options{
+       Namespace: "your_service_name",
+   })
+   if err != nil {
+       log.Fatalf("Failed to create Prometheus exporter: %v", err)
+   }
+
+   // 2. 获取并注册 kmetrics 注册表
+   registry := kmetrics.GetKmetricsRegistry()
+   metricproducer.GlobalManager().AddProducer(registry)
+
+   // 3. 创建 metrics 路由（用于暴露指标）
+   metricsMux := http.NewServeMux()
+   metricsMux.Handle("/metrics", pe)
+   ```
+
+2. 指标类型选择指南：
+   a. 轻量级操作（Kmetric）：
+      - 适用场景：普通 API 调用、简单操作
+      - 记录内容：调用次数、延迟、状态
+      - 示例：
+        ```go
+        // 全局定义
+        var ApiLatencyMetric = kmetrics.CreateKmetric(
+            context.Background(),
+            "api_latency_ms",
+            "API 调用延迟",
+            []string{"method", "status", "error"}
+        )
+
+        // 使用装饰器记录
+        kmetrics.InstrumentSummaryRunVoid(ctx, "method_name", func() {
+            // 业务逻辑
+        }, "custom_note")
+        ```
+
+   b. 重要操作（Khistogram）：
+      - 适用场景：关键业务流程、需要分布统计
+      - 记录内容：详细的延迟分布、百分位数据
+      - 示例：
+        ```go
+        // 全局定义
+        var ApiLatencyHistogram = kmetrics.CreateKhistogram(
+            context.Background(),
+            "api_latency_histogram_ms",
+            "API 调用延迟分布",
+            []string{"method", "status"},
+            []int64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000}  // 分布区间
+        )
+
+        // 使用装饰器记录
+        kmetrics.InstrumentHistogramRunVoid(ctx, "important_method", func() {
+            // 重要业务逻辑
+        })
+        ```
+
+   c. 状态监控（GaugeGroup）：
+      - 适用场景：实时状态、资源使用情况
+      - 记录内容：当前值、多维度标签
+      - 示例：
+        ```go
+        // 创建 GaugeGroup
+        workerLoadGauge := kmetrics.NewGaugeGroup(
+            "worker_load",
+            "Worker 负载情况",
+            "worker_id", "queue_name"
+        )
+
+        // 更新值
+        values := map[string]*kmetrics.GaugeTimeSequence{
+            "worker1-queue1": kmetrics.NewGaugeTimeSequence(
+                workerLoadGauge,
+                100,  // 当前值
+                "worker1", "queue1"  // 标签值
+            ),
+        }
+        workerLoadGauge.UpdateValue(values)
+        ```
+
+3. 全局标签使用：
+   ```go
+   registry := kmetrics.GetKmetricsRegistry()
+   
+   // 添加全局标签（所有指标都会包含这些标签）
+   registry.AddGlobalTag("env", "prod")
+   registry.AddGlobalTag("service", "hellosvc")
+   ```
+
+4. 最佳实践：
+   a. 指标命名规范：
+      - 使用下划线分隔单词：api_latency_ms
+      - 包含单位信息：_ms, _bytes, _count
+      - 使用有意义的前缀：service_name_metric_name
+
+   b. 标签使用规范：
+      - 避免高基数标签（如 user_id）
+      - 限制标签数量（建议不超过 4 个）
+      - 使用有意义的标签名和值
+
+   c. 性能考虑：
+      - 优先使用 Kmetric 而不是 Khistogram
+      - 合理设置直方图的区间
+      - 避免过多的时间序列
+
+5. 错误处理：
+   ```go
+   // 使用 InstrumentSummaryRunVoid 自动处理错误
+   kmetrics.InstrumentSummaryRunVoid(ctx, "method_name", func() {
+       if err := doSomething(); err != nil {
+           // 转换为 kerror 并 panic
+           panic(kerror.Create("OperationFailed", "operation failed").
+               WithErrorCode(kerror.EC_INTERNAL_ERROR).
+               With("error", err.Error()))
+       }
+   }, "")
+   ```
+
+6. 监控指标：
+   a. 基础指标：
+      - 请求计数：xxx_count
+      - 请求延迟：xxx_latency_ms
+      - 错误计数：xxx_error_count
+
+   b. 业务指标：
+      - 队列长度：queue_length
+      - 处理速率：process_rate
+      - 资源使用：resource_usage
+
+7. 调试技巧：
+   - 使用 curl http://localhost:9090/metrics 查看原始指标
+   - 在 Prometheus 中使用 rate() 函数查看速率
+   - 使用 histogram_quantile() 查看延迟分布
+
+8. 注意事项：
+   - 在包初始化时创建指标对象
+   - 避免在热路径创建新的时间序列
+   - 定期检查指标数量，避免过多
+   - 及时清理不再使用的指标 

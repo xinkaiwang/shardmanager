@@ -2,6 +2,7 @@ package kmetrics
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -14,9 +15,7 @@ var (
 	OpsLatencyHistogram = CreateKhistogram(context.Background(), "op_lat_ms", "desc", []string{"method", "status", "error"}, []int64{1, 2, 3, 6, 10, 20, 30, 60, 100, 200, 300, 600, 1000, 2000, 3000, 6000, 10000, 20000, 30000}) // note: metrics name cannot conflict, that's why we name this `op_lat_ms`
 )
 
-// FuncTypeVoid is a function being decorated. typically this is a
-// function closure that has access to variables defined in
-// the enclosing scope.
+// FuncTypeVoid is a function being decorated.
 // When an error happens, this func should throw (panic), that's why this func doesn't return an error.
 type FuncTypeVoid func()
 
@@ -27,11 +26,19 @@ type FuncTypeError func(ctx context.Context) error
 func invokeFuncVoid(ctx context.Context, ef FuncTypeVoid) (ke *kerror.Kerror) {
 	defer func() {
 		if r := recover(); r != nil {
-			var ok bool
-			ke, ok = r.(*kerror.Kerror)
-			if !ok {
-				// this is func throws a non-kerror object?!
-				klogging.Fatal(ctx).WithPanic(r).Log("InvalidPanic", "invalid kerror in panic")
+			// we should print the panic type here to debug what's going on.
+			fmt.Printf("panic type: %T\n", r)
+			switch v := r.(type) {
+			case *kerror.Kerror:
+				// 已经是 kerror，直接使用
+				ke = v
+			case error:
+				// 普通 error，包装成 kerror
+				ke = kerror.Create("InternalServerError", v.Error()).
+					WithErrorCode(kerror.EC_UNKNOWN)
+			default:
+				// 非错误的 panic 值（比如字符串或其他类型），记录 fatal 日志并退出
+				klogging.Fatal(ctx).WithPanic(v).Log("InvalidPanic", "invalid panic with non-error value")
 			}
 		}
 	}()
@@ -86,11 +93,17 @@ func InstrumentHistogramRunVoid(ctx context.Context, method string, ef FuncTypeV
 func invokeFuncError(ctx context.Context, ef FuncTypeError) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			var ok bool
-			err, ok = r.(error)
-			if !ok {
-				// this function throws a non-error object?!
-				klogging.Fatal(ctx).WithPanic(r).Log("InvalidPanic", "invalid error in panic")
+			switch v := r.(type) {
+			case *kerror.Kerror:
+				// 已经是 kerror，直接使用
+				err = v
+			case error:
+				// 普通 error，包装成 kerror
+				err = kerror.Create("InternalServerError", v.Error()).
+					WithErrorCode(kerror.EC_UNKNOWN)
+			default:
+				// 非错误的 panic 值（比如字符串或其他类型），记录 fatal 日志并退出
+				klogging.Fatal(ctx).WithPanic(v).Log("InvalidPanic", "invalid panic with non-error value")
 			}
 		}
 	}()

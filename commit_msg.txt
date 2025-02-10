@@ -1,0 +1,7 @@
+[Cursor] feat: implement error handling middleware and test cases
+
+- Add error handling middleware with different error types support
+- Add test cases for kerror, error and non-error panic
+- Remove unnecessary gorilla/mux dependency
+- Add comprehensive logging for error cases
+- Document error handling strategy and test results
