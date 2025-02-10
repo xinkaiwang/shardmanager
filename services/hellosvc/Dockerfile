@@ -48,7 +48,7 @@ EXPOSE 8080 9090
 
 # 设置健康检查
 HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/hello || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/ping || exit 1
 
 # 运行应用
 CMD ["./hellosvc"] 

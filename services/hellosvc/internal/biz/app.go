@@ -7,10 +7,19 @@ import (
 )
 
 type App struct {
+	// 添加版本信息
+	version string
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{
+		version: "v0.0.1", // 使用当前版本
+	}
+}
+
+// GetVersion 返回服务版本
+func (a *App) GetVersion() string {
+	return a.version
 }
 
 func (a *App) Hello(name string) string {

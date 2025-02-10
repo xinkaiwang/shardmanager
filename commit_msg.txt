@@ -1,1 +1,1 @@
-[Cursor] feat: update hellosvc dependencies and dockerfile
+[Cursor] feat: add ping endpoint for health check
