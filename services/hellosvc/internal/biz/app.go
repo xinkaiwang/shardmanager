@@ -6,20 +6,27 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
-type App struct {
-	// 添加版本信息
-	version string
+// 包级变量，用于存储构建时注入的版本信息
+var (
+	version = "dev" // 默认版本号，会在构建时通过 -ldflags 覆盖
+)
+
+// SetVersion 设置服务版本
+func SetVersion(v string) {
+	if v != "" {
+		version = v
+	}
 }
 
+type App struct{}
+
 func NewApp() *App {
-	return &App{
-		version: "v0.0.1", // 使用当前版本
-	}
+	return &App{}
 }
 
 // GetVersion 返回服务版本
 func (a *App) GetVersion() string {
-	return a.version
+	return version
 }
 
 func (a *App) Hello(name string) string {

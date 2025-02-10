@@ -1,4 +1,13 @@
-.PHONY: all fmt lint build test clean help
+VERSION ?= $(shell cat VERSION)
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD)
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%d_%H:%M:%S')
+LDFLAGS := -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)
+
+# Docker 镜像标签
+DOCKER_TAG ?= $(VERSION)
+DOCKER_IMAGE := xinkaiw/hellosvc
+
+.PHONY: all fmt lint build test clean help docker-build docker-push
 
 # 默认目标
 all: fmt lint build test
@@ -7,7 +16,16 @@ all: fmt lint build test
 build:
 	@echo "Building hello service..."
 	@mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/hellosvc ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o bin/hellosvc cmd/main.go
+
+# Docker 相关目标
+docker-build:
+	@echo "Building Docker image $(DOCKER_IMAGE):$(DOCKER_TAG)..."
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f Dockerfile ../../
+
+docker-push:
+	@echo "Pushing Docker image $(DOCKER_IMAGE):$(DOCKER_TAG)..."
+	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
 
 # 运行测试
 test:
@@ -51,4 +69,6 @@ help:
 	@echo "  fmt        - Format code"
 	@echo "  lint       - Run linters"
 	@echo "  clean      - Clean build artifacts"
-	@echo "  help       - Show this help message" 
+	@echo "  help       - Show this help message"
+	@echo "  docker-build - Build Docker image"
+	@echo "  docker-push  - Push Docker image" 

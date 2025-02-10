@@ -16,7 +16,18 @@ import (
 	"go.opencensus.io/metric/metricproducer"
 )
 
+// 构建时注入的版本信息
+var Version string = "dev"       // 通过 -ldflags 注入
+var GitCommit string = "unknown" // 通过 -ldflags 注入
+var BuildTime string = "unknown" // 通过 -ldflags 注入
+
 func main() {
+	// 设置版本信息
+	biz.SetVersion(Version)
+
+	// 记录启动信息
+	log.Printf("Starting hellosvc version=%s commit=%s buildTime=%s\n", Version, GitCommit, BuildTime)
+
 	// 创建 Prometheus 导出器
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "hellosvc",
