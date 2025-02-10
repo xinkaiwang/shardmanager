@@ -1,4 +1,4 @@
-.PHONY: all build test clean run fmt lint help
+.PHONY: all fmt lint build test clean help
 
 # 默认目标
 all: fmt lint build test
@@ -6,7 +6,8 @@ all: fmt lint build test
 # 构建服务
 build:
 	@echo "Building hello service..."
-	go build -v ./cmd/main.go
+	@mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/hellosvc ./cmd/main.go
 
 # 运行测试
 test:
@@ -38,7 +39,7 @@ lint:
 clean:
 	@echo "Cleaning build artifacts..."
 	go clean
-	rm -f main
+	rm -rf bin
 
 # 帮助信息
 help:
