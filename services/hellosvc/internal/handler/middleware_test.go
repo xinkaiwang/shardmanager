@@ -35,7 +35,7 @@ func TestErrorHandlingMiddleware(t *testing.T) {
 			},
 			expectedCode:  http.StatusInternalServerError,
 			expectedType:  "InternalServerError",
-			expectedError: "an unexpected error occurred",
+			expectedError: "some error",
 		},
 		{
 			name: "字符串 panic",

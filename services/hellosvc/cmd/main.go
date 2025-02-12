@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/hellosvc/internal/biz"
 	"github.com/xinkaiwang/shardmanager/services/hellosvc/internal/handler"
@@ -22,11 +23,28 @@ var GitCommit string = "unknown" // 通过 -ldflags 注入
 var BuildTime string = "unknown" // 通过 -ldflags 注入
 
 func main() {
+	ctx := context.Background()
+	// 从环境变量读取日志配置
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info" // 默认日志级别
+	}
+	logFormat := os.Getenv("LOG_FORMAT")
+	if logFormat == "" {
+		logFormat = "json" // 默认 JSON 格式
+	}
+
+	// 创建并配置 LogrusLogger
+	logrusLogger := klogging.NewLogrusLogger(ctx)
+	logrusLogger.SetConfig(ctx, logLevel, logFormat)
+	klogging.SetDefaultLogger(logrusLogger)
+	klogging.Info(ctx).With("logLevel", logLevel).With("logFormat", logFormat).Log("LogLevelSet", "")
+
 	// 设置版本信息
 	biz.SetVersion(Version)
 
 	// 记录启动信息
-	log.Printf("Starting hellosvc version=%s commit=%s buildTime=%s\n", Version, GitCommit, BuildTime)
+	klogging.Info(ctx).With("version", Version).With("commit", GitCommit).With("buildTime", BuildTime).Log("ServerStarting", "Starting hellosvc")
 
 	// 创建 Prometheus 导出器
 	pe, err := prometheus.NewExporter(prometheus.Options{
@@ -70,30 +88,30 @@ func main() {
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
 
-		log.Println("Shutting down servers...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		klogging.Info(ctx).Log("ServerShutdown", "Shutting down servers...")
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("Main server shutdown error: %v\n", err)
+			klogging.Error(ctx).With("error", err).Log("MainServerShutdownError", "Main server shutdown error")
 		}
 		if err := metricsServer.Shutdown(ctx); err != nil {
-			log.Printf("Metrics server shutdown error: %v\n", err)
+			klogging.Error(ctx).With("error", err).Log("MetricsServerShutdownError", "Metrics server shutdown error")
 		}
 	}()
 
 	// 启动 metrics 服务器
 	go func() {
-		log.Printf("Metrics server starting on %s\n", metricsServer.Addr)
+		klogging.Info(ctx).With("addr", metricsServer.Addr).Log("MetricsServerStarting", "Metrics server starting")
 		if err := metricsServer.ListenAndServe(); err != http.ErrServerClosed {
-			log.Printf("Metrics server error: %v\n", err)
+			klogging.Error(ctx).With("error", err).Log("MetricsServerError", "Metrics server error")
 		}
 	}()
 
 	// 启动主服务器
-	log.Printf("Main server starting on %s\n", server.Addr)
+	klogging.Info(ctx).With("addr", server.Addr).Log("MainServerStarting", "Main server starting")
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("Main server error: %v\n", err)
+		klogging.Error(ctx).With("error", err).Log("MainServerError", "Main server error")
 	}
-	log.Println("Servers stopped")
+	klogging.Info(ctx).Log("ServerShutdown", "Servers stopped")
 }

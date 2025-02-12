@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
@@ -13,11 +14,12 @@ func ErrorHandlingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 确保在处理请求前设置 Content-Type
 		w.Header().Set("Content-Type", "application/json")
-
+		startMs := kcommon.GetMonoTimeMs()
 		defer func() {
+			elapsedMs := kcommon.GetMonoTimeMs() - startMs
 			if err := recover(); err != nil {
 				// 记录错误信息
-				logger := klogging.Error(r.Context())
+				logger := klogging.Error(r.Context()).With("elapsedMs", elapsedMs)
 
 				// 处理错误
 				var ke *kerror.Kerror

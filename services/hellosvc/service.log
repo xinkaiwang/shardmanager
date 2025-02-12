@@ -1,0 +1,19 @@
+2025/02/10 11:35:02 Starting hellosvc version=v0.0.4 commit=cec2ce1 buildTime=2025-02-10_19:35:00
+2025/02/10 11:35:02 Main server starting on :8080
+2025/02/10 11:35:02 Metrics server starting on :9090
+level=info, event=PingRequest, msg=received ping request
+level=info, event=PingResponse, msg=sending ping response, status=ok, version=v0.0.4
+level=info, event=PingRequest, msg=received ping request
+level=info, event=PingResponse, msg=sending ping response, status=ok, version=v0.0.4
+level=info, event=PingRequest, msg=received ping request
+level=info, event=PingResponse, msg=sending ping response, status=ok, version=v0.0.4
+level=info, event=PingRequest, msg=received ping request
+level=info, event=PingResponse, msg=sending ping response, status=ok, version=v0.0.4
+level=info, event=HelloRequest, msg=received hello request, name=
+level=info, event=CryptoRandSeedSucc, msg=, seed=1042b4f5adb777bd
+level=info, event=HelloResponse, msg=sending hello response, message=Hello, !, time=2025-02-10T22:07:33-08:00
+level=info, event=CreateTimeSequence, msg=, gaugeName=op_latency_ms, tagKey=biz.Hello-OK--
+level=info, event=PingRequest, msg=received ping request
+level=info, event=PingResponse, msg=sending ping response, status=ok, version=v0.0.4
+2025/02/10 23:29:27 Shutting down servers...
+2025/02/10 23:29:27 Servers stopped

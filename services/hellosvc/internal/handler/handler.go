@@ -47,10 +47,13 @@ func (h *Handler) HelloHandler(w http.ResponseWriter, r *http.Request) {
 			WithErrorCode(kerror.EC_INVALID_PARAMETER))
 	}
 
-	// 记录请求信息
-	klogging.Info(r.Context()).
+	// 使用 Verbose 记录请求详情，只保留一个日志事件
+	klogging.Verbose(r.Context()).
+		With("method", r.Method).
+		With("path", r.URL.Path).
+		With("userAgent", r.Header.Get("User-Agent")).
 		With("name", req.Name).
-		Log("HelloRequest", "received hello request")
+		Log("HelloRequest", "Received hello request")
 
 	// 处理请求
 	var message string
@@ -63,11 +66,12 @@ func (h *Handler) HelloHandler(w http.ResponseWriter, r *http.Request) {
 		Time:    time.Now().Format(time.RFC3339),
 	}
 
-	// 记录响应信息
-	klogging.Info(r.Context()).
+	// 移除之前的 Info 日志事件
+	// 记录响应信息，使用默认重要性
+	klogging.Debug(r.Context()).
 		With("message", resp.Message).
 		With("time", resp.Time).
-		Log("HelloResponse", "sending hello response")
+		Log("HelloResponse", "Sending hello response")
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -99,15 +103,14 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求信息
-	klogging.Info(r.Context()).
+	klogging.Verbose(r.Context()).
 		Log("PingRequest", "received ping request")
 
 	// 处理请求
-	resp := &api.PingResponse{
-		Status:    "ok",
-		Timestamp: time.Now().Format(time.RFC3339),
-		Version:   h.app.GetVersion(),
-	}
+	var resp api.PingResponse
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.Ping", func() {
+		resp = h.app.Ping(r.Context())
+	}, "")
 
 	// 记录响应信息
 	klogging.Info(r.Context()).

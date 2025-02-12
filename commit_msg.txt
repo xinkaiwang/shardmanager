@@ -1,1 +1,0 @@
-[Cursor] feat: add ping endpoint for health check
