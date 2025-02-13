@@ -29,8 +29,8 @@ RUN apk add --no-cache ca-certificates tzdata bash vim curl wget bind-tools tcpd
 # 设置 bash 为默认 shell
 SHELL ["/bin/bash", "-c"]
 
-# 设置默认时区为 UTC
-ENV TZ=UTC
+# 设置默认时区为西雅图（美国太平洋时区）
+ENV TZ=America/Los_Angeles
 
 # 创建非 root 用户
 RUN adduser -D -u 1000 appuser

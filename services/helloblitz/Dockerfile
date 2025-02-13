@@ -36,8 +36,8 @@ RUN apk add --no-cache \
 # 设置 bash 为默认 shell
 SHELL ["/bin/bash", "-c"]
 
-# 设置默认时区为 UTC
-ENV TZ=UTC
+# 设置默认时区为西雅图（美国太平洋时区）
+ENV TZ=America/Los_Angeles
 
 WORKDIR /app
 
