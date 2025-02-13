@@ -1,0 +1,18 @@
+# 构建产物
+bin/
+*.exe
+
+# 日志文件
+*.log
+*.tmp
+
+# IDE 文件
+.vscode/
+.idea/
+
+# 依赖目录
+vendor/
+
+# 临时文件
+*.swp
+*~ 

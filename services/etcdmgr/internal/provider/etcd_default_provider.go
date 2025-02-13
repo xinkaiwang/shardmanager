@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -96,6 +97,11 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, startKey string, maxCo
 		opts = append(opts, clientv3.WithLimit(int64(maxCount)))
 	}
 
+	klogging.Info(ctx).
+		With("startKey", startKey).
+		With("maxCount", maxCount).
+		Log("ListKeysRequest", "listing keys from etcd")
+
 	resp, err := pvd.client.Get(ctx, startKey, opts...)
 	if err != nil {
 		panic(kerror.Create("EtcdListError", "failed to list keys from etcd").
@@ -104,6 +110,11 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, startKey string, maxCo
 			With("error", err.Error()))
 	}
 
+	klogging.Info(ctx).
+		With("startKey", startKey).
+		With("count", len(resp.Kvs)).
+		Log("ListKeysResponse", "got keys from etcd")
+
 	items := make([]EtcdKvItem, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
 		items = append(items, EtcdKvItem{
@@ -111,6 +122,10 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, startKey string, maxCo
 			Value:       string(kv.Value),
 			ModRevision: kv.ModRevision,
 		})
+		klogging.Debug(ctx).
+			With("key", string(kv.Key)).
+			With("value", string(kv.Value)).
+			Log("ListKeysItem", "found key")
 	}
 	return items
 }
