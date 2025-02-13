@@ -14,6 +14,7 @@ import (
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/ksysmetrics"
 	"github.com/xinkaiwang/shardmanager/services/helloblitz/internal/biz"
 	"go.opencensus.io/metric/metricproducer"
 )
@@ -82,6 +83,12 @@ func main() {
 	// 注册 kmetrics 注册表
 	registry := kmetrics.GetKmetricsRegistry()
 	metricproducer.GlobalManager().AddProducer(registry)
+
+	// 注册系统指标注册表
+	metricproducer.GlobalManager().AddProducer(ksysmetrics.GetRegistry())
+
+	// 启动系统指标收集器
+	ksysmetrics.StartSysMetricsCollector(ctx, 15*time.Second, Version)
 
 	// 创建 metrics 服务器
 	metricsMux := http.NewServeMux()

@@ -12,6 +12,7 @@ import (
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/ksysmetrics"
 	"github.com/xinkaiwang/shardmanager/services/hellosvc/internal/biz"
 	"github.com/xinkaiwang/shardmanager/services/hellosvc/internal/handler"
 	"go.opencensus.io/metric/metricproducer"
@@ -42,6 +43,7 @@ func main() {
 
 	// 设置版本信息
 	biz.SetVersion(Version)
+	ksysmetrics.SetVersion(Version) // 设置系统指标的版本号
 
 	// 记录启动信息
 	klogging.Info(ctx).With("version", Version).With("commit", GitCommit).With("buildTime", BuildTime).Log("ServerStarting", "Starting hellosvc")
@@ -57,6 +59,12 @@ func main() {
 	// 注册 kmetrics 注册表
 	registry := kmetrics.GetKmetricsRegistry()
 	metricproducer.GlobalManager().AddProducer(registry)
+
+	// 注册系统指标注册表
+	metricproducer.GlobalManager().AddProducer(ksysmetrics.GetRegistry())
+
+	// 启动系统指标收集器
+	ksysmetrics.StartSysMetricsCollector(ctx, 15*time.Second, Version)
 
 	// 创建应用实例
 	app := biz.NewApp()
