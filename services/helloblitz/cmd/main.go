@@ -65,8 +65,25 @@ func runLoadTest(ctx context.Context, app *biz.App, targetURL string, loopSleepM
 }
 
 func main() {
-	// 配置日志
 	ctx := context.Background()
+
+	// 从环境变量读取日志配置
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info" // 默认日志级别
+	}
+	logFormat := os.Getenv("LOG_FORMAT")
+	if logFormat == "" {
+		logFormat = "json" // 默认 JSON 格式
+	}
+
+	// 创建并配置 LogrusLogger
+	logrusLogger := klogging.NewLogrusLogger(ctx)
+	logrusLogger.SetConfig(ctx, logLevel, logFormat)
+	klogging.SetDefaultLogger(logrusLogger)
+	klogging.Info(ctx).With("logLevel", logLevel).With("logFormat", logFormat).Log("LogLevelSet", "")
+
+	// 记录启动信息
 	klogging.Info(ctx).With("version", Version).
 		With("commit", GitCommit).
 		With("buildTime", BuildTime).
@@ -90,11 +107,14 @@ func main() {
 	// 启动系统指标收集器
 	ksysmetrics.StartSysMetricsCollector(ctx, 15*time.Second, Version)
 
+	// 获取 metrics 端口配置
+	metricsPort := getEnvInt("METRICS_PORT", 9090)
+
 	// 创建 metrics 服务器
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", pe)
 	metricsServer := &http.Server{
-		Addr:    ":9090",
+		Addr:    fmt.Sprintf(":%d", metricsPort),
 		Handler: metricsMux,
 	}
 
@@ -117,6 +137,7 @@ func main() {
 	klogging.Info(ctx).With("thread_count", threadCount).
 		With("loop_sleep_ms", loopSleepMs).
 		With("target_url", targetURL).
+		With("metrics_port", metricsPort).
 		Log("Config", "Load test configuration")
 
 	// 创建应用实例

@@ -36,8 +36,8 @@ RUN apk add --no-cache \
 # 设置 bash 为默认 shell
 SHELL ["/bin/bash", "-c"]
 
-# 设置时区
-ENV TZ=Asia/Shanghai
+# 设置默认时区为 UTC
+ENV TZ=UTC
 
 WORKDIR /app
 
@@ -47,6 +47,9 @@ COPY --from=builder /app/services/helloblitz/bin/helloblitz /app/
 # 设置默认环境变量
 ENV BLITZ_THREAD_COUNT=3 \
     BLITZ_LOOP_SLEEP_MS=0 \
-    BLITZ_TARGET_URL=http://localhost:8080/api/ping
+    BLITZ_TARGET_URL=http://localhost:8080/api/ping \
+    LOG_LEVEL=info \
+    LOG_FORMAT=json \
+    METRICS_PORT=9090
 
 ENTRYPOINT ["/app/helloblitz"]

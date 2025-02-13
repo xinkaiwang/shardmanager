@@ -29,8 +29,8 @@ RUN apk add --no-cache ca-certificates tzdata bash vim curl wget bind-tools tcpd
 # 设置 bash 为默认 shell
 SHELL ["/bin/bash", "-c"]
 
-# 设置时区
-ENV TZ=Asia/Shanghai
+# 设置默认时区为 UTC
+ENV TZ=UTC
 
 # 创建非 root 用户
 RUN adduser -D -u 1000 appuser
@@ -43,12 +43,18 @@ COPY --from=builder /src/shardmanager/services/hellosvc/bin/hellosvc .
 # 使用非 root 用户运行
 USER appuser
 
+# 设置默认环境变量
+ENV API_PORT=8080 \
+    METRICS_PORT=9090 \
+    LOG_LEVEL=info \
+    LOG_FORMAT=json
+
 # 暴露端口
-EXPOSE 8080 9090
+EXPOSE ${API_PORT} ${METRICS_PORT}
 
 # 设置健康检查
 HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/ping || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${API_PORT}/api/ping || exit 1
 
 # 运行应用
 CMD ["./hellosvc"] 

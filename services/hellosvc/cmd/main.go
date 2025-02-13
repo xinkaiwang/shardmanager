@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -22,6 +24,16 @@ import (
 var Version string = "dev"       // 通过 -ldflags 注入
 var GitCommit string = "unknown" // 通过 -ldflags 注入
 var BuildTime string = "unknown" // 通过 -ldflags 注入
+
+// getEnvInt 从环境变量获取整数值，如果不存在或无效则返回默认值
+func getEnvInt(key string, defaultValue int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}
 
 func main() {
 	ctx := context.Background()
@@ -66,29 +78,37 @@ func main() {
 	// 启动系统指标收集器
 	ksysmetrics.StartSysMetricsCollector(ctx, 15*time.Second, Version)
 
-	// 创建应用实例
-	app := biz.NewApp()
-	h := handler.NewHandler(app)
-
-	// 创建主路由
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
+	// 获取端口配置
+	apiPort := getEnvInt("API_PORT", 8080)
+	metricsPort := getEnvInt("METRICS_PORT", 9090)
 
 	// 创建 metrics 路由
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", pe)
 
+	// 创建主路由
+	app := biz.NewApp()
+	h := handler.NewHandler(app)
+	mainMux := http.NewServeMux()
+	h.RegisterRoutes(mainMux)
+
 	// 创建主 HTTP 服务器
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: mux,
+	mainServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", apiPort),
+		Handler: mainMux,
 	}
 
 	// 创建 metrics HTTP 服务器
 	metricsServer := &http.Server{
-		Addr:    ":9090",
+		Addr:    fmt.Sprintf(":%d", metricsPort),
 		Handler: metricsMux,
 	}
+
+	// 记录端口配置
+	klogging.Info(ctx).
+		With("api_port", apiPort).
+		With("metrics_port", metricsPort).
+		Log("ServerConfig", "Server ports configuration")
 
 	// 优雅关闭
 	go func() {
@@ -100,7 +120,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
-		if err := server.Shutdown(ctx); err != nil {
+		if err := mainServer.Shutdown(ctx); err != nil {
 			klogging.Error(ctx).With("error", err).Log("MainServerShutdownError", "Main server shutdown error")
 		}
 		if err := metricsServer.Shutdown(ctx); err != nil {
@@ -117,8 +137,8 @@ func main() {
 	}()
 
 	// 启动主服务器
-	klogging.Info(ctx).With("addr", server.Addr).Log("MainServerStarting", "Main server starting")
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+	klogging.Info(ctx).With("addr", mainServer.Addr).Log("MainServerStarting", "Main server starting")
+	if err := mainServer.ListenAndServe(); err != http.ErrServerClosed {
 		klogging.Error(ctx).With("error", err).Log("MainServerError", "Main server error")
 	}
 	klogging.Info(ctx).Log("ServerShutdown", "Servers stopped")
