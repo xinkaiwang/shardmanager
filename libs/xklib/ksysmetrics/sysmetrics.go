@@ -206,6 +206,10 @@ func collectMetrics(ctx context.Context, pid int) {
 
 // getFDCount 获取进程打开的文件描述符数量
 func getFDCount(pid int) (int, error) {
+	if runtime.GOOS == "darwin" {
+		// macOS 不支持通过 /proc 获取文件描述符数量
+		return 0, nil
+	}
 	fdPath := fmt.Sprintf("/proc/%d/fd", pid)
 	fds, err := os.ReadDir(fdPath)
 	if err != nil {
