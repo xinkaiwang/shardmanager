@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Box,
   Paper,
@@ -9,7 +8,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   Dialog,
   DialogTitle,
   DialogContent,

@@ -98,6 +98,9 @@ func main() {
 	mainMux := http.NewServeMux()
 	h.RegisterRoutes(mainMux)
 
+	// 添加静态文件服务
+	mainMux.Handle("/", http.FileServer(http.Dir("web/dist")))
+
 	// 创建主 HTTP 服务器
 	mainServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", apiPort),
