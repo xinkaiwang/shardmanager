@@ -26,3 +26,4 @@ go.work.sum
 
 build/
 node_modules/
+bin/

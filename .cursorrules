@@ -851,3 +851,35 @@
   * 代码改动时同步更新注释
   * 确保注释与实现保持一致
   * 删除过时或错误的注释 
+
+## Go 版本注入最佳实践 [P1]
+
+1. 版本注入路径：
+   - 错误示例：`-X internal.common.Version=$(VERSION)`
+   - 正确示例：`-X github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common.Version=$(VERSION)`
+   - 原因：
+     1. 必须使用完整的包路径
+     2. 包路径必须与 go.mod 中的模块路径一致
+     3. 相对路径不会被正确解析
+
+2. 验证版本注入：
+   ```bash
+   # 构建时
+   go build -ldflags "-X github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common.Version=v0.1.0"
+
+   # 验证
+   ./bin/hello  # 应该输出正确的版本号
+   ```
+
+3. 常见问题：
+   - 使用不完整的包路径
+   - 包路径与 go.mod 不一致
+   - 忘记在 Makefile 中更新 LDFLAGS
+
+4. 最佳实践：
+   - 始终使用完整的包路径
+   - 在 Makefile 中正确设置 LDFLAGS
+   - 构建后验证版本信息
+   - 保持包路径与 go.mod 一致
+
+// ... existing code ... 
