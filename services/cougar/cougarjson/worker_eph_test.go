@@ -36,7 +36,7 @@ func TestWorkerEphJsonMarshal(t *testing.T) {
 				worker.LastUpdateReason = "periodic update"
 				return worker
 			}(),
-			expected: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","sesssion_id":"session-123","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
+			expected: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","session_id":"session-123","addr_port":"10.0.0.32:8080","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
 			wantErr:  false,
 		},
 		{
@@ -47,7 +47,7 @@ func TestWorkerEphJsonMarshal(t *testing.T) {
 				now,
 				20,
 			),
-			expected: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","sesssion_id":"session-456","start_time_ms":1234567890000,"capacity":20}`,
+			expected: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","session_id":"session-456","start_time_ms":1234567890000,"capacity":20}`,
 			wantErr:  false,
 		},
 		{
@@ -58,7 +58,7 @@ func TestWorkerEphJsonMarshal(t *testing.T) {
 				now,
 				30,
 			),
-			expected: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","sesssion_id":"session-789","start_time_ms":1234567890000,"capacity":30}`,
+			expected: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","session_id":"session-789","start_time_ms":1234567890000,"capacity":30}`,
 			wantErr:  false,
 		},
 	}
@@ -85,7 +85,7 @@ func TestWorkerEphJsonUnmarshal(t *testing.T) {
 	}{
 		{
 			name:  "完整字段",
-			input: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","sesssion_id":"session-123","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
+			input: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","session_id":"session-123","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
 			want: func() *WorkerEphJson {
 				worker := NewWorkerEphJson(
 					"cougar-worker-75fffc88f9-fkbcm",
@@ -107,7 +107,7 @@ func TestWorkerEphJsonUnmarshal(t *testing.T) {
 		},
 		{
 			name:  "最小字段",
-			input: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","sesssion_id":"session-456","start_time_ms":1234567890000,"capacity":20}`,
+			input: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","session_id":"session-456","start_time_ms":1234567890000,"capacity":20}`,
 			want: NewWorkerEphJson(
 				"cougar-worker-75fffc88f9-xj9n2",
 				"session-456",
@@ -118,7 +118,7 @@ func TestWorkerEphJsonUnmarshal(t *testing.T) {
 		},
 		{
 			name:  "空可选字段",
-			input: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","sesssion_id":"session-789","start_time_ms":1234567890000,"capacity":30}`,
+			input: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","session_id":"session-789","start_time_ms":1234567890000,"capacity":30}`,
 			want: NewWorkerEphJson(
 				"cougar-worker-75fffc88f9-p4m7k",
 				"session-789",

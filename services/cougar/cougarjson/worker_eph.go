@@ -6,25 +6,27 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
-// key="/smg/discover/{worker_id}:{session_id}"
+// etcd path is "/smg/discover/{worker_id}:{session_id}"
 type WorkerEphJson struct {
-	// WorkerId 是工作节点的唯一标识符
+	// WorkerId 是工作节点的唯一标识符, 通常是 hostname，也就是 pod name
 	WorkerId string `json:"worker_id"`
 
-	AddressPort string `json:"addr_port,omitempty"` // for exp: "10.0.0.32:8080"
+	// SessionId unique ID to identity current process, changes in each restart/reboot.
+	SessionId string `json:"session_id"`
 
-	// SessionId unique ID for each restart
-	SessionId string `json:"sesssion_id"`
+	AddressPort string `json:"addr_port,omitempty"` // for exp: "10.0.0.32:8080"
 
 	// StartTimeMs 是工作节点启动的时间戳（毫秒）
 	StartTimeMs int64 `json:"start_time_ms"`
 
-	// Capacity 表示工作节点的处理容量
+	// Capacity 表示工作节点的处理容量 (100 means 100%)
 	Capacity int32 `json:"capacity"`
+
+	MemorySizeMB int32 `json:"memory_size_mb,omitempty"` // how many memory (or vmem, depend on which resource is on the critical path) in this worker
 
 	// Properties 存储工作节点的额外属性
 	// 键和值都是字符串类型
-	Properties map[string]string `json:"properties,omitempty"` // cpu_ct="1", cpu_type="H100", etc.
+	Properties map[string]string `json:"properties,omitempty"` // gpu_ct="1", gpu_type="H100", etc.
 
 	Assignments []*AssignmentJson `json:"assignments,omitempty"`
 
