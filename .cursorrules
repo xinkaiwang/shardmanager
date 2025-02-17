@@ -882,4 +882,226 @@
    - 构建后验证版本信息
    - 保持包路径与 go.mod 一致
 
-// ... existing code ... 
+## 命名约定最佳实践 [P1]
+
+1. 常量命名规范：
+   - Go 代码中使用大写下划线命名（如 `MP_KillBeforeStart`）
+   - JSON 中使用小写下划线命名（如 `kill_before_start`）
+   - 原因：
+     1. 保持与现有代码一致
+     2. 遵循各自语言的惯例
+     3. 便于在不同上下文中使用
+
+2. 常量定义原则：
+   - 使用有意义的前缀（如 MP_ 表示 MovePolicy）
+   - 在注释中说明常量的用途
+   - 保持命名的一致性和可读性
+   - 示例：
+     ```go
+     const (
+         MP_KillBeforeStart  MovePolicy = "kill_before_start"  // 先杀后启
+         MP_StartBeforeKill  MovePolicy = "start_before_kill"  // 先启后杀
+         MP_Cocurrent        MovePolicy = "concurrent"         // 同时进行
+     )
+     ```
+
+## 测试用例设计最佳实践 [P1]
+
+1. 测试用例结构：
+   - 使用表驱动测试（table-driven tests）
+   - 每个测试用例包含：
+     * name：测试用例名称
+     * input：输入数据
+     * want：期望输出
+     * description：测试用例的详细描述
+   - 示例：
+     ```go
+     tests := []struct {
+         name        string
+         input       string
+         want        *ShardPlan
+         description string
+     }{
+         {
+             name: "基本测试",
+             input: "test_input",
+             want: expectedOutput,
+             description: "测试基本功能",
+         },
+     }
+     ```
+
+2. 测试场景覆盖：
+   - 基本功能测试
+   - 边界条件测试
+   - 错误处理测试
+   - 特殊格式处理（如 Windows CRLF）
+   - 注释和空白处理
+   - 示例：
+     ```go
+     {
+         name: "空行处理",
+         input: "line1\n\nline2\n",
+         description: "测试空行处理逻辑",
+     },
+     {
+         name: "注释处理",
+         input: "# 注释\nline1  # 行尾注释",
+         description: "测试注释处理逻辑",
+     }
+     ```
+
+3. 测试数据准备：
+   - 使用有意义的测试数据
+   - 包含实际场景中可能出现的情况
+   - 避免使用随机生成的数据
+   - 注意数据的可读性和可维护性
+
+4. 错误检查：
+   - 详细的错误信息
+   - 包含期望值和实际值的比较
+   - 使用 t.Errorf 而不是 t.Error
+   - 示例：
+     ```go
+     if got != want {
+         t.Errorf("got %v, want %v", got, want)
+     }
+     ```
+
+5. 测试注释：
+   - 使用清晰的测试用例名称
+   - 添加详细的测试场景描述
+   - 说明测试的目的和预期结果
+   - 记录特殊的测试条件或假设
+
+## 测试中的时间处理最佳实践 [P1]
+
+1. 使用 `kcommon.TimeProvider` 而不是真实时间：
+   - 错误示例：使用 `time.Now()` 获取当前时间
+   - 正确示例：使用 `kcommon.FakeTimeProvider` 控制时间
+   - 原因：
+     1. 测试应该是确定性的，不依赖外部因素
+     2. 避免使用误差范围进行时间比较
+     3. 加快测试执行速度
+     4. 提高测试可靠性
+
+2. 时间相关测试的标准模式：
+   ```go
+   // 创建并配置 FakeTimeProvider
+   fakeTime := kcommon.NewFakeTimeProvider()
+   fakeTime.WallTime = 1234567890000
+   fakeTime.MonoTime = 1234567890000
+
+   // 使用 RunWithTimeProvider 临时替换默认时间提供者
+   kcommon.RunWithTimeProvider(fakeTime, func() {
+       // 测试代码
+   })
+   ```
+
+3. 时间值验证：
+   - 错误示例：使用误差范围比较
+     ```go
+     if node.LastUpdateAtMs < now-1000 || node.LastUpdateAtMs > now+1000 {
+         t.Errorf("LastUpdateAtMs not in range")
+     }
+     ```
+   - 正确示例：精确匹配
+     ```go
+     if node.LastUpdateAtMs != 1234567890000 {
+         t.Errorf("LastUpdateAtMs = %v, want %v", node.LastUpdateAtMs, 1234567890000)
+     }
+     ```
+
+4. JSON 序列化测试：
+   - 错误示例：使用 fmt.Sprintf 动态生成 JSON
+     ```go
+     expected := fmt.Sprintf(`{"time":%d}`, now)
+     ```
+   - 正确示例：使用固定时间戳的字符串
+     ```go
+     expected := `{"time":1234567890000}`
+     ```
+
+5. 注意事项：
+   - 在测试开始时设置固定的时间戳
+   - 使用 RunWithTimeProvider 确保时间提供者的正确清理
+   - 对于需要时间流逝的测试，使用 FakeTimeProvider.SimulateForward
+   - 在测试文件中统一使用相同的时间戳值
+   - 使用容易识别的时间戳（如 1234567890000）
+
+## 配置文件格式最佳实践 [P1]
+
+1. 配置文件格式规范：
+   - 支持注释（以 # 开头）
+   - 支持空行和空白字符
+   - 使用 | 分隔不同部分
+   - 示例：
+     ```
+     # 这是注释
+     shard_1  # 这是行尾注释
+     shard_2|{"min_replica_count":2}  # 带配置的分片
+     shard_3|{"move_type":"kill_before_start"}|{"region":"us-west"}
+     ```
+
+2. JSON 字段命名：
+   - 使用小写下划线命名（snake_case）
+   - 字段名要有描述性
+   - 保持命名一致性
+   - 示例：
+     ```json
+     {
+       "min_replica_count": 2,
+       "max_replica_count": 10,
+       "move_type": "kill_before_start"
+     }
+     ```
+
+3. 配置解析原则：
+   - 提供合理的默认值
+   - 优雅处理格式错误
+   - 支持部分配置覆盖
+   - 详细的错误提示
+   - 示例：
+     ```go
+     defaultHints := ShardHints{
+         MinReplicaCount: 1,
+         MaxReplicaCount: 10,
+         MoveType:        MP_StartBeforeKill,
+     }
+     ```
+
+4. 特殊字符处理：
+   - 正确处理 Windows 换行符（CRLF）
+   - 处理前导和尾随空白
+   - 忽略空行
+   - 支持行尾注释
+   - 示例：
+     ```go
+     // 处理 Windows 换行符
+     line = strings.TrimRight(line, "\r")
+     
+     // 处理注释
+     if idx := strings.Index(line, "#"); idx >= 0 {
+         line = line[:idx]
+     }
+     
+     // 处理空白
+     line = strings.TrimSpace(line)
+     ```
+
+5. 配置文件组织：
+   - 按功能分组
+   - 使用注释说明配置项的用途
+   - 提供配置示例
+   - 记录配置的默认值
+   - 示例：
+     ```
+     # 基本配置
+     shard_1
+     
+     # 高级配置
+     shard_2|{"min_replica_count":2}
+     
+     # 自定义属性
+     shard_3|{"move_type":"kill_before_start"}|{"region":"us-west"}
+     ``` 
