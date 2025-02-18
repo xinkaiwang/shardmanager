@@ -1,4 +1,4 @@
-package core
+package data
 
 type ShardId string
 

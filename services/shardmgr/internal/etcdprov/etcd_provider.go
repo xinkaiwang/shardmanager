@@ -17,6 +17,8 @@ type EtcdKvItem struct {
 	ModRevision int64
 }
 
+type EtcdRevision int64
+
 // EtcdProvider 定义了 etcd 操作的接口
 type EtcdProvider interface {
 	// Get 获取指定键的值
@@ -31,6 +33,12 @@ type EtcdProvider interface {
 
 	// Delete 删除指定的键
 	Delete(ctx context.Context, key string)
+
+	// LoadAllByPrefix
+	LoadAllByPrefix(ctx context.Context, pathPrefix string) ([]EtcdKvItem, EtcdRevision)
+
+	// WatchPrefix
+	WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan *EtcdKvItem
 }
 
 var (
