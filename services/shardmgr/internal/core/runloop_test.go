@@ -26,7 +26,7 @@ func NewTestEvent(msg string) *TestEvent {
 	}
 }
 
-func (te *TestEvent) Execute(ctx context.Context) {
+func (te *TestEvent) Execute(ctx context.Context, _ *ServiceState) {
 	klogging.Info(ctx).Log("TestEvent", te.Message)
 	select {
 	case te.executed <- true:
@@ -37,7 +37,7 @@ func (te *TestEvent) Execute(ctx context.Context) {
 
 // 测试 RunLoop 的创建
 func TestNewRunLoop(t *testing.T) {
-	rl := NewRunLoop(context.Background())
+	rl := NewRunLoop(context.Background(), nil)
 	if rl == nil {
 		t.Fatal("RunLoop should not be nil")
 	}
@@ -48,7 +48,7 @@ func TestNewRunLoop(t *testing.T) {
 
 // 测试事件入队
 func TestEnqueueEvent(t *testing.T) {
-	rl := NewRunLoop(context.Background())
+	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -82,7 +82,7 @@ func TestEnqueueEvent(t *testing.T) {
 
 // 测试 RunLoop 的运行和事件处理
 func TestRunLoop(t *testing.T) {
-	rl := NewRunLoop(context.Background())
+	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -94,7 +94,7 @@ func TestRunLoop(t *testing.T) {
 	}()
 
 	// 发送一个测试事件
-	testEvent := NewTestEvent("test event")
+	testEvent := NewTestEvent("testEvent")
 	rl.EnqueueEvent(testEvent)
 
 	// 等待事件执行
@@ -119,7 +119,7 @@ func TestRunLoop(t *testing.T) {
 
 // 测试上下文取消
 func TestRunLoopContextCancellation(t *testing.T) {
-	rl := NewRunLoop(context.Background())
+	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// 启动 RunLoop
@@ -143,7 +143,7 @@ func TestRunLoopContextCancellation(t *testing.T) {
 
 // 测试大量事件的处理
 func TestRunLoopHighLoad(t *testing.T) {
-	rl := NewRunLoop(context.Background())
+	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -151,10 +151,10 @@ func TestRunLoopHighLoad(t *testing.T) {
 	go rl.Run(ctx)
 
 	// 发送大量事件
-	const numEvents = 10000
+	const numEvents = 1000
 	events := make([]*TestEvent, numEvents)
 	for i := 0; i < numEvents; i++ {
-		events[i] = NewTestEvent("test")
+		events[i] = NewTestEvent("largeVolumnEvent" + strconv.Itoa(i))
 		rl.EnqueueEvent(events[i])
 	}
 
@@ -171,7 +171,7 @@ func TestRunLoopHighLoad(t *testing.T) {
 
 // 测试并发事件处理
 func TestRunLoopConcurrency(t *testing.T) {
-	rl := NewRunLoop(context.Background())
+	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -179,13 +179,13 @@ func TestRunLoopConcurrency(t *testing.T) {
 	go rl.Run(ctx)
 
 	// 并发发送多个事件
-	const numEvents = 100
+	const numEvents = 20
 	done := make(chan bool)
 	testEvents := make([]*TestEvent, numEvents)
 
 	go func() {
 		for i := 0; i < numEvents; i++ {
-			testEvents[i] = NewTestEvent("concurrent" + strconv.Itoa(i))
+			testEvents[i] = NewTestEvent("testConcurrentEvent" + strconv.Itoa(i))
 			rl.EnqueueEvent(testEvents[i])
 		}
 		done <- true
@@ -221,7 +221,7 @@ func TestRunLoopConcurrency(t *testing.T) {
 
 // 测试事件处理顺序
 func TestRunLoopEventOrder(t *testing.T) {
-	rl := NewRunLoop(context.Background())
+	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

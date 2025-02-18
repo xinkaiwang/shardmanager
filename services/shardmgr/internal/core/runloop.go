@@ -14,7 +14,7 @@ var (
 
 type IEvent interface {
 	GetName() string
-	Execute(ctx context.Context)
+	Execute(ctx context.Context, ss *ServiceState)
 }
 
 // DummyEvent: implement IEvent
@@ -26,7 +26,7 @@ func (de DummyEvent) GetName() string {
 	return "DummyEvent"
 }
 
-func (de DummyEvent) Execute(ctx context.Context) {
+func (de DummyEvent) Execute(ctx context.Context, _ *ServiceState) {
 	klogging.Info(ctx).Log("DummyEvent", de.Msg)
 }
 
@@ -35,12 +35,14 @@ func NewDummyEvent(msg string) DummyEvent {
 }
 
 type RunLoop struct {
+	ss               *ServiceState
 	queue            *UnboundedQueue
 	currentEventName string
 }
 
-func NewRunLoop(ctx context.Context) *RunLoop {
+func NewRunLoop(ctx context.Context, ss *ServiceState) *RunLoop {
 	rl := &RunLoop{
+		ss:    ss,
 		queue: NewUnboundedQueue(context.Background()),
 	}
 	NewRunloopSampler(ctx, func() string { return rl.currentEventName })
@@ -74,7 +76,7 @@ func (rl *RunLoop) Run(ctx context.Context) {
 				elapsedMs := kcommon.GetMonoTimeMs() - start
 				RunLoopElapsedMsMetric.GetTimeSequence(ctx, eveName).Add(elapsedMs)
 			}()
-			event.Execute(ctx)
+			event.Execute(ctx, rl.ss)
 		}
 	}
 }
