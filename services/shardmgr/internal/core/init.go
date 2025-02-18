@@ -1,0 +1,47 @@
+package core
+
+import (
+	"context"
+
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+)
+
+func (ss *ServiceState) Init(ctx context.Context) {
+	// step 1: load ServiceInfo
+	ss.ServiceInfo = LoadServiceInfo(ctx)
+	// step 2: load all shard state
+	ss.AllShards = ss.LoadAllShardState(ctx)
+	// setp 3: load all worker state
+	ss.AllWorkers = ss.LoadAllWorkerState(ctx)
+
+	ss.runloop = NewRunLoop(ctx, ss)
+}
+
+func (ss *ServiceState) LoadAllShardState(ctx context.Context) map[data.ShardId]*ShardState {
+	pathPrefix := "/smg/shard_state/"
+	dict := map[data.ShardId]*ShardState{}
+	// load all from etcd
+	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
+	for _, item := range list {
+		shardStateJson := smgjson.ShardStateJsonFromJson(item.Value)
+		shardObj := NewShardState(shardStateJson.ShardName)
+		dict[data.ShardId(shardObj.ShardId)] = shardObj
+	}
+	return dict
+}
+
+func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) map[data.WorkerFullId]*WorkerState {
+	pathPrefix := "/smg/worker_state/"
+	dict := map[data.WorkerFullId]*WorkerState{}
+	// load all from etcd
+	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
+	for _, item := range list {
+		shardStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
+		obj := NewWorkerState(shardStateJson.WorkerId, shardStateJson.SessionId)
+		workerFullId := data.NewWorkerFullId(obj.WorkerId, obj.SessionId, ss.IsStateInMemory())
+		dict[workerFullId] = obj
+	}
+	return dict
+}
