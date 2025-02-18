@@ -45,7 +45,7 @@ func TestUnboundedQueueBasicOperations(t *testing.T) {
 
 	// 验证出队顺序
 	for i := 1; i <= 3; i++ {
-		item, ok := q.Dequeue()
+		item, ok := <-q.GetOutputChan()
 		if !ok {
 			t.Errorf("Dequeue 返回 ok = false, 期望 true")
 			continue
@@ -88,7 +88,7 @@ func TestUnboundedQueueClose(t *testing.T) {
 	// 验证可以读取所有数据
 	count := 0
 	for {
-		_, ok := q.Dequeue()
+		_, ok := <-q.GetOutputChan()
 		if !ok {
 			break
 		}
@@ -125,7 +125,7 @@ func TestUnboundedQueueContextCancellation(t *testing.T) {
 	}
 
 	// 验证 Dequeue 返回 false
-	_, ok := q.Dequeue()
+	_, ok := <-q.GetOutputChan()
 	if ok {
 		t.Error("上下文取消后 Dequeue 返回 ok = true")
 	}

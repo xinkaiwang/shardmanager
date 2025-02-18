@@ -76,9 +76,8 @@ func (q *UnboundedQueue) Enqueue(item IEvent) {
 }
 
 // Dequeue 从队列中获取一个元素。如果队列为空，此调用会阻塞。
-func (q *UnboundedQueue) Dequeue() (IEvent, bool) {
-	item, ok := <-q.output
-	return item, ok
+func (q *UnboundedQueue) GetOutputChan() chan IEvent {
+	return q.output
 }
 
 // GetSize 返回当前队列中的元素数量
@@ -92,5 +91,4 @@ func (q *UnboundedQueue) Close() {
 		return
 	}
 	close(q.input) // 关闭输入通道
-	<-q.doneCh     // 等待处理完成
 }

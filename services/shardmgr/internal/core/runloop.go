@@ -46,8 +46,7 @@ func (rl *RunLoop) Run(ctx context.Context) {
 		case <-ctx.Done():
 			klogging.Info(ctx).Log("RunLoopCtxCanceled", "run loop stopped")
 			return
-		default:
-			event, ok := rl.queue.Dequeue()
+		case event, ok := <-rl.queue.GetOutputChan():
 			if !ok {
 				klogging.Info(ctx).Log("EventQueueClosed", "event queue closed")
 				return
