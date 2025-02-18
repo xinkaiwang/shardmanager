@@ -15,6 +15,10 @@ type TestEvent struct {
 	executed chan bool // 用于验证事件是否被执行
 }
 
+func (te *TestEvent) GetName() string {
+	return "TestEvent"
+}
+
 func NewTestEvent(msg string) *TestEvent {
 	return &TestEvent{
 		Message:  msg,
@@ -33,7 +37,7 @@ func (te *TestEvent) Execute(ctx context.Context) {
 
 // 测试 RunLoop 的创建
 func TestNewRunLoop(t *testing.T) {
-	rl := NewRunLoop()
+	rl := NewRunLoop(context.Background())
 	if rl == nil {
 		t.Fatal("RunLoop should not be nil")
 	}
@@ -44,7 +48,7 @@ func TestNewRunLoop(t *testing.T) {
 
 // 测试事件入队
 func TestEnqueueEvent(t *testing.T) {
-	rl := NewRunLoop()
+	rl := NewRunLoop(context.Background())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -78,7 +82,7 @@ func TestEnqueueEvent(t *testing.T) {
 
 // 测试 RunLoop 的运行和事件处理
 func TestRunLoop(t *testing.T) {
-	rl := NewRunLoop()
+	rl := NewRunLoop(context.Background())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -115,7 +119,7 @@ func TestRunLoop(t *testing.T) {
 
 // 测试上下文取消
 func TestRunLoopContextCancellation(t *testing.T) {
-	rl := NewRunLoop()
+	rl := NewRunLoop(context.Background())
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// 启动 RunLoop
@@ -139,7 +143,7 @@ func TestRunLoopContextCancellation(t *testing.T) {
 
 // 测试大量事件的处理
 func TestRunLoopHighLoad(t *testing.T) {
-	rl := NewRunLoop()
+	rl := NewRunLoop(context.Background())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -167,7 +171,7 @@ func TestRunLoopHighLoad(t *testing.T) {
 
 // 测试并发事件处理
 func TestRunLoopConcurrency(t *testing.T) {
-	rl := NewRunLoop()
+	rl := NewRunLoop(context.Background())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -217,7 +221,7 @@ func TestRunLoopConcurrency(t *testing.T) {
 
 // 测试事件处理顺序
 func TestRunLoopEventOrder(t *testing.T) {
-	rl := NewRunLoop()
+	rl := NewRunLoop(context.Background())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

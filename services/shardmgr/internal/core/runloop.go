@@ -3,16 +3,27 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
+)
+
+var (
+	RunLoopElapsedMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"event"})
 )
 
 type IEvent interface {
+	GetName() string
 	Execute(ctx context.Context)
 }
 
 // DummyEvent: implement IEvent
 type DummyEvent struct {
 	Msg string
+}
+
+func (de DummyEvent) GetName() string {
+	return "DummyEvent"
 }
 
 func (de DummyEvent) Execute(ctx context.Context) {
@@ -24,13 +35,16 @@ func NewDummyEvent(msg string) DummyEvent {
 }
 
 type RunLoop struct {
-	queue *UnboundedQueue
+	queue            *UnboundedQueue
+	currentEventName string
 }
 
-func NewRunLoop() *RunLoop {
-	return &RunLoop{
+func NewRunLoop(ctx context.Context) *RunLoop {
+	rl := &RunLoop{
 		queue: NewUnboundedQueue(context.Background()),
 	}
+	NewRunloopSampler(ctx, func() string { return rl.currentEventName })
+	return rl
 }
 
 // EnqueueEvent: Enqueue an event to the run loop. This call never blocks.
@@ -52,6 +66,14 @@ func (rl *RunLoop) Run(ctx context.Context) {
 				return
 			}
 			// Handle event
+			start := kcommon.GetMonoTimeMs()
+			eveName := event.GetName()
+			rl.currentEventName = eveName
+			defer func() {
+				rl.currentEventName = ""
+				elapsedMs := kcommon.GetMonoTimeMs() - start
+				RunLoopElapsedMsMetric.GetTimeSequence(ctx, eveName).Add(elapsedMs)
+			}()
 			event.Execute(ctx)
 		}
 	}

@@ -14,6 +14,10 @@ type testEvent struct {
 	execCh chan int // 用于验证执行
 }
 
+func (e *testEvent) GetName() string {
+	return "testEvent"
+}
+
 func (e *testEvent) Execute(ctx context.Context) {
 	select {
 	case e.execCh <- e.value:
