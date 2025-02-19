@@ -8,7 +8,12 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	clientv3 "go.etcd.io/etcd/client/v3"
+)
+
+var (
+	timeoutMs = common.GetEnvInt("ETCD_TIMEOUT_MS", 5000)
 )
 
 // etcdDefaultProvider 是默认的 etcd 客户端实现
@@ -54,9 +59,13 @@ func NewDefaultEtcdProvider(_ context.Context) EtcdProvider {
 // 错误处理：
 // - 如果发生网络错误或其他 etcd 错误，将返回 EtcdGetError
 func (pvd *etcdDefaultProvider) Get(ctx context.Context, key string) EtcdKvItem {
-	resp, err := pvd.client.Get(ctx, key)
+	// 设置超时时间
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	resp, err := pvd.client.Get(timeoutCtx, key)
 	if err != nil {
-		panic(kerror.Create("EtcdGetError", "failed to get key from etcd").
+		panic(kerror.Create("EtcdGetError", "failed to get by key from etcd").
 			WithErrorCode(kerror.EC_INTERNAL_ERROR).
 			With("key", key).
 			With("error", err.Error()))
@@ -138,7 +147,11 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, startKey string, maxCo
 // 错误处理：
 // - 如果发生网络错误或其他 etcd 错误，将返回 EtcdPutError
 func (pvd *etcdDefaultProvider) Set(ctx context.Context, key, value string) {
-	_, err := pvd.client.Put(ctx, key, value)
+	// 设置超时时间
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	_, err := pvd.client.Put(timeoutCtx, key, value)
 	if err != nil {
 		panic(kerror.Create("EtcdPutError", "failed to set key in etcd").
 			WithErrorCode(kerror.EC_INTERNAL_ERROR).

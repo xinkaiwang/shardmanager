@@ -3,6 +3,8 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -27,6 +29,31 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/status", ErrorHandlingMiddleware(http.HandlerFunc(h.StatusHandler)))
 	mux.Handle("/api/keys", ErrorHandlingMiddleware(http.HandlerFunc(h.KeysHandler)))
 	mux.Handle("/api/key/", ErrorHandlingMiddleware(http.HandlerFunc(h.KeyHandler)))
+	mux.Handle("/api/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.PingHandler)))
+
+	// 添加静态文件服务，使用 SPA 处理器
+	mux.Handle("/", h.SPAHandler(http.FileServer(http.Dir("web/dist"))))
+}
+
+// SPAHandler 包装静态文件服务器以支持 SPA 路由
+func (h *Handler) SPAHandler(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 如果请求的是 API 路径，直接返回
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
+		// 检查文件是否存在
+		path := "web/dist" + r.URL.Path
+		_, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			// 文件不存在，返回 index.html
+			r.URL.Path = "/"
+		}
+
+		handler.ServeHTTP(w, r)
+	})
 }
 
 // StatusHandler 处理 /api/status 请求
@@ -54,6 +81,40 @@ func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 		With("status", resp.Status).
 		With("version", resp.Version).
 		Log("StatusResponse", "sending status response")
+
+	// 返回响应
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		panic(kerror.Create("EncodingError", "failed to encode response").
+			WithErrorCode(kerror.EC_INTERNAL_ERROR).
+			With("error", err.Error()))
+	}
+}
+
+// PingHandler 处理 /api/ping 请求
+func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 只允许 GET 方法
+	if r.Method != http.MethodGet {
+		panic(kerror.Create("MethodNotAllowed", "only GET method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 记录请求信息
+	klogging.Verbose(r.Context()).Log("PingRequest", "received ping request")
+
+	// 处理请求
+	var resp api.PingResponse
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.Ping", func() {
+		resp = h.app.Ping(r.Context())
+	}, "")
+
+	// 记录响应信息
+	klogging.Info(r.Context()).
+		With("status", resp.Status).
+		With("version", resp.Version).
+		Log("PingResponse", "sending ping response")
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

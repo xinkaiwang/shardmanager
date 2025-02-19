@@ -7,12 +7,21 @@ import (
 )
 
 // etcd path is /smg/config/service_info.json
+/*
+{
+	"service_name": "shardmgr",
+	"service_type": "soft_stateful",
+	"move_type": "start_before_kill",
+	"max_replica_count": 10,
+	"min_replica_count": 1
+}
+*/
 type ServiceInfoJson struct {
 	// ServiceName 是服务的名称
 	ServiceName string `json:"service_name"`
 
 	// ServiceType 服务的类型 (stateless, softStateful, hardStateful)
-	ServiceType ServiceType `json:"service_type"`
+	ServiceType *ServiceType `json:"service_type"`
 
 	// MoveType 服务的迁移类型 (killBeforeStart, startBeforeKill, concurrent)
 	MoveType *MovePolicy `json:"move_type"`

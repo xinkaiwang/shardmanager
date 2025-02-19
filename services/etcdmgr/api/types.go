@@ -24,3 +24,10 @@ type StatusResponse struct {
 	Version   string `json:"version"`
 	Timestamp string `json:"timestamp"`
 }
+
+// PingResponse 定义了 ping 接口的响应
+type PingResponse struct {
+	Status    string `json:"status"`
+	Timestamp string `json:"timestamp"`
+	Version   string `json:"version"`
+}

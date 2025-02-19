@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -20,16 +19,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/handler"
 	"go.opencensus.io/metric/metricproducer"
 )
-
-// getEnvInt 从环境变量获取整数值，如果不存在或无效则返回默认值
-func getEnvInt(key string, defaultValue int) int {
-	if value, exists := os.LookupEnv(key); exists {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}
 
 func main() {
 	ctx := context.Background()
@@ -75,8 +64,8 @@ func main() {
 	ksysmetrics.StartSysMetricsCollector(ctx, 15*time.Second, Version)
 
 	// 获取端口配置
-	apiPort := getEnvInt("API_PORT", 8080)
-	metricsPort := getEnvInt("METRICS_PORT", 9090)
+	apiPort := common.GetEnvInt("API_PORT", 8080)
+	metricsPort := common.GetEnvInt("METRICS_PORT", 9090)
 
 	// 创建 metrics 路由
 	metricsMux := http.NewServeMux()

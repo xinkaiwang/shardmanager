@@ -45,6 +45,15 @@ func (app *App) Status(ctx context.Context) api.StatusResponse {
 	}
 }
 
+// Ping 返回服务 ping 响应
+func (app *App) Ping(ctx context.Context) api.PingResponse {
+	return api.PingResponse{
+		Status:    "ok",
+		Version:   app.GetVersion(),
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+}
+
 // GetKey 获取指定 key 的值
 func (app *App) GetKey(ctx context.Context, key string) (*api.EtcdKeyResponse, error) {
 	item := app.provider.Get(ctx, key)

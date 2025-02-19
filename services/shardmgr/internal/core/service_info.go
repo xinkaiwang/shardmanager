@@ -22,10 +22,9 @@ type ServiceInfo struct {
 	DefaultHints smgjson.ShardHints
 }
 
-func NewServiceInfo(serviceName string, serviceType smgjson.ServiceType) *ServiceInfo {
+func NewServiceInfo(serviceName string) *ServiceInfo {
 	return &ServiceInfo{
 		ServiceName: serviceName,
-		ServiceType: serviceType,
 	}
 }
 
@@ -36,7 +35,13 @@ func LoadServiceInfo(ctx context.Context) *ServiceInfo {
 		panic(ke)
 	}
 	siObj := smgjson.ParseServiceInfoJson(node.Value)
-	si := NewServiceInfo(siObj.ServiceName, siObj.ServiceType)
+	si := NewServiceInfo(siObj.ServiceName)
+	// ServiceType (default softStateful)
+	if siObj.ServiceType != nil {
+		si.ServiceType = *siObj.ServiceType
+	} else {
+		si.ServiceType = smgjson.ST_SOFT_STATEFUL
+	}
 	// MoveType (default 先启后杀)
 	if siObj.MoveType != nil {
 		si.DefaultHints.MoveType = *siObj.MoveType
