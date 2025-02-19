@@ -27,9 +27,13 @@ func NewHandler(app *biz.App) *Handler {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// 包装所有处理器以添加错误处理中间件
 	mux.Handle("/api/status", ErrorHandlingMiddleware(http.HandlerFunc(h.StatusHandler)))
-	mux.Handle("/api/keys", ErrorHandlingMiddleware(http.HandlerFunc(h.KeysHandler)))
-	mux.Handle("/api/key/", ErrorHandlingMiddleware(http.HandlerFunc(h.KeyHandler)))
 	mux.Handle("/api/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.PingHandler)))
+
+	// 新的 etcd 操作 API
+	mux.Handle("/api/list_keys", ErrorHandlingMiddleware(http.HandlerFunc(h.ListKeysHandler)))
+	mux.Handle("/api/get_key", ErrorHandlingMiddleware(http.HandlerFunc(h.GetKeyHandler)))
+	mux.Handle("/api/set_key", ErrorHandlingMiddleware(http.HandlerFunc(h.SetKeyHandler)))
+	mux.Handle("/api/delete_key", ErrorHandlingMiddleware(http.HandlerFunc(h.DeleteKeyHandler)))
 
 	// 添加静态文件服务，使用 SPA 处理器
 	mux.Handle("/", h.SPAHandler(http.FileServer(http.Dir("web/dist"))))
@@ -124,8 +128,8 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// KeysHandler 处理 /api/keys 请求，用于列出键值对
-func (h *Handler) KeysHandler(w http.ResponseWriter, r *http.Request) {
+// ListKeysHandler 处理 /api/list_keys 请求，用于列出键值对
+func (h *Handler) ListKeysHandler(w http.ResponseWriter, r *http.Request) {
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
@@ -170,34 +174,24 @@ func (h *Handler) KeysHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// KeyHandler 处理 /api/key/{key} 请求，用于获取、设置或删除单个键值对
-func (h *Handler) KeyHandler(w http.ResponseWriter, r *http.Request) {
+// GetKeyHandler 处理 /api/get_key 请求
+func (h *Handler) GetKeyHandler(w http.ResponseWriter, r *http.Request) {
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
-	// 从路径中提取键名
-	key := r.URL.Path[len("/api/key/"):]
+	// 只允许 GET 方法
+	if r.Method != http.MethodGet {
+		panic(kerror.Create("MethodNotAllowed", "only GET method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 从查询参数获取键名
+	key := r.URL.Query().Get("key")
 	if key == "" {
 		panic(kerror.Create("InvalidKey", "key is required").
 			WithErrorCode(kerror.EC_INVALID_PARAMETER))
 	}
 
-	switch r.Method {
-	case http.MethodGet:
-		h.handleGetKey(w, r, key)
-	case http.MethodPut:
-		h.handlePutKey(w, r, key)
-	case http.MethodDelete:
-		h.handleDeleteKey(w, r, key)
-	default:
-		panic(kerror.Create("MethodNotAllowed", "method not allowed").
-			WithErrorCode(kerror.EC_INVALID_PARAMETER).
-			With("method", r.Method))
-	}
-}
-
-// handleGetKey 处理获取键值的请求
-func (h *Handler) handleGetKey(w http.ResponseWriter, r *http.Request, key string) {
 	klogging.Verbose(r.Context()).
 		With("key", key).
 		Log("GetKeyRequest", "received get key request")
@@ -223,8 +217,24 @@ func (h *Handler) handleGetKey(w http.ResponseWriter, r *http.Request, key strin
 	}
 }
 
-// handlePutKey 处理设置键值的请求
-func (h *Handler) handlePutKey(w http.ResponseWriter, r *http.Request, key string) {
+// SetKeyHandler 处理 /api/set_key 请求
+func (h *Handler) SetKeyHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 只允许 POST 方法
+	if r.Method != http.MethodPost {
+		panic(kerror.Create("MethodNotAllowed", "only POST method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 从查询参数获取键名
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		panic(kerror.Create("InvalidKey", "key is required").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
 	var req api.EtcdKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		panic(kerror.Create("InvalidRequest", "invalid request format").
@@ -234,7 +244,7 @@ func (h *Handler) handlePutKey(w http.ResponseWriter, r *http.Request, key strin
 
 	klogging.Verbose(r.Context()).
 		With("key", key).
-		Log("PutKeyRequest", "received put key request")
+		Log("SetKeyRequest", "received set key request")
 
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.PutKey", func() {
 		if err := h.app.PutKey(r.Context(), key, req.Value); err != nil {
@@ -244,13 +254,29 @@ func (h *Handler) handlePutKey(w http.ResponseWriter, r *http.Request, key strin
 
 	klogging.Info(r.Context()).
 		With("key", key).
-		Log("PutKeyResponse", "key updated successfully")
+		Log("SetKeyResponse", "key updated successfully")
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleDeleteKey 处理删除键值的请求
-func (h *Handler) handleDeleteKey(w http.ResponseWriter, r *http.Request, key string) {
+// DeleteKeyHandler 处理 /api/delete_key 请求
+func (h *Handler) DeleteKeyHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 只允许 POST 方法
+	if r.Method != http.MethodPost {
+		panic(kerror.Create("MethodNotAllowed", "only POST method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 从查询参数获取键名
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		panic(kerror.Create("InvalidKey", "key is required").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
 	klogging.Verbose(r.Context()).
 		With("key", key).
 		Log("DeleteKeyRequest", "received delete key request")

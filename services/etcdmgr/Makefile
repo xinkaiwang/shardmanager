@@ -11,19 +11,24 @@ DOCKER_IMAGE := xinkaiw/etcdmgr
 # 所有命令行工具
 CMDS := hello
 
-.PHONY: all fmt lint build test clean help docker-build docker-push $(CMDS)
+.PHONY: all fmt lint build test clean help docker-build docker-push build-ui build-service build-cmds $(CMDS) run
 
 # 默认目标
 all: fmt lint build test
 
 # 构建所有组件
-build: build-service build-cmds
+build: build-service build-ui build-cmds
 
 # 构建服务
 build-service:
 	@echo "Building etcdmgr service..."
 	@mkdir -p bin
 	go build -ldflags "$(LDFLAGS)" -o bin/etcdmgr ./service/etcdmgr
+
+# 构建前端
+build-ui:
+	@echo "Building web UI..."
+	@cd web && npm install && npm run build
 
 # 构建命令行工具
 build-cmds: $(CMDS)
@@ -49,9 +54,9 @@ test:
 	go test -v ./...
 
 # 运行服务
-run:
+run: build
 	@echo "Starting etcdmgr service..."
-	go run -ldflags "$(LDFLAGS)" service/etcdmgr/main.go
+	./bin/etcdmgr
 
 # 代码格式化
 fmt:
@@ -74,6 +79,8 @@ clean:
 	@echo "Cleaning build artifacts..."
 	go clean
 	rm -rf bin
+	@echo "Cleaning web build artifacts..."
+	rm -rf web/dist web/node_modules
 
 # 帮助信息
 help:
@@ -81,9 +88,10 @@ help:
 	@echo "  all          - Default target: fmt, lint, build, test"
 	@echo "  build        - Build all components"
 	@echo "  build-service - Build etcdmgr service"
+	@echo "  build-ui     - Build web UI"
 	@echo "  build-cmds   - Build all command line tools"
 	@echo "  test         - Run tests"
-	@echo "  run          - Run the service"
+	@echo "  run          - Build and run the service"
 	@echo "  fmt          - Format code"
 	@echo "  lint         - Run linters"
 	@echo "  clean        - Clean build artifacts"

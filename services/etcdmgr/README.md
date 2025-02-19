@@ -50,7 +50,7 @@ export ETCD_ENDPOINTS=localhost:2379
 2. 构建并运行服务：
 ```bash
 cd services/etcdmgr
-make build-service
+make build
 ./bin/etcdmgr
 ```
 
@@ -115,19 +115,52 @@ GET /api/status
 
 ### 列出键值对
 ```http
-GET /api/keys?prefix={prefix}
+GET /api/list_keys?prefix={prefix}
 ```
 列出指定前缀的所有键值对。
 
+参数：
+- `prefix`（可选）：键的前缀，用于过滤结果
+
+响应示例：
+```json
+{
+  "keys": [
+    {
+      "key": "my/key1",
+      "value": "value1",
+      "version": 123
+    },
+    {
+      "key": "my/key2",
+      "value": "value2",
+      "version": 124
+    }
+  ]
+}
+```
+
 ### 获取单个键值
 ```http
-GET /api/key/{key}
+GET /api/get_key?key={key}
 ```
 获取指定键的值。
 
+参数：
+- `key`（必需）：要获取的键名
+
+响应示例：
+```json
+{
+  "key": "my/key1",
+  "value": "value1",
+  "version": 123
+}
+```
+
 ### 设置键值
 ```http
-PUT /api/key/{key}
+POST /api/set_key?key={key}
 Content-Type: application/json
 
 {
@@ -136,11 +169,18 @@ Content-Type: application/json
 ```
 设置指定键的值。
 
+参数：
+- `key`（必需）：要设置的键名
+- 请求体：包含新值的 JSON 对象
+
 ### 删除键值
 ```http
-DELETE /api/key/{key}
+POST /api/delete_key?key={key}
 ```
 删除指定的键。
+
+参数：
+- `key`（必需）：要删除的键名
 
 ## 监控
 

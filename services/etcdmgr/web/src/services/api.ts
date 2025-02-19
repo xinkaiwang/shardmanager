@@ -14,21 +14,23 @@ export const getStatus = async (): Promise<StatusResponse> => {
 };
 
 export const getKeys = async (prefix?: string): Promise<EtcdKeysResponse> => {
-  const response = await api.get<EtcdKeysResponse>('/keys', {
+  const response = await api.get<EtcdKeysResponse>('/list_keys', {
     params: { prefix },
   });
   return response.data;
 };
 
 export const getKey = async (key: string): Promise<EtcdKeyResponse> => {
-  const response = await api.get<EtcdKeyResponse>(`/key/${key}`);
+  const response = await api.get<EtcdKeyResponse>('/get_key', {
+    params: { key },
+  });
   return response.data;
 };
 
 export const setKey = async (key: string, value: string): Promise<void> => {
-  await api.put(`/key/${key}`, { value } as EtcdKeyRequest);
+  await api.post(`/set_key?key=${encodeURIComponent(key)}`, { value } as EtcdKeyRequest);
 };
 
 export const deleteKey = async (key: string): Promise<void> => {
-  await api.delete(`/key/${key}`);
+  await api.post(`/delete_key?key=${encodeURIComponent(key)}`);
 }; 

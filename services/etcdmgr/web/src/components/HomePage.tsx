@@ -75,12 +75,13 @@ export default function HomePage() {
   const loadKeys = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await api.getKeys(searchPrefix);
       setKeys(response.keys);
-      setError(null);
     } catch (err) {
-      setError('加载键值对列表失败');
       console.error('Failed to load keys:', err);
+      setError('加载键值对列表失败');
+      showMessage('加载键值对列表失败', 'error');
     } finally {
       setLoading(false);
     }
@@ -107,8 +108,8 @@ export default function HomePage() {
       await loadKeys();
       showMessage('保存成功', 'success');
     } catch (err) {
-      showMessage('保存失败', 'error');
       console.error('Failed to save key:', err);
+      showMessage('保存失败', 'error');
     }
   };
 
@@ -119,8 +120,8 @@ export default function HomePage() {
       await loadKeys();
       showMessage('删除成功', 'success');
     } catch (err) {
-      showMessage('删除失败', 'error');
       console.error('Failed to delete key:', err);
+      showMessage('删除失败', 'error');
     }
   };
 
@@ -146,8 +147,8 @@ export default function HomePage() {
       await loadKeys();
       showMessage('添加成功', 'success');
     } catch (err) {
-      showMessage('添加失败', 'error');
       console.error('Failed to add key:', err);
+      showMessage('添加失败', 'error');
     }
   };
 
@@ -320,6 +321,7 @@ export default function HomePage() {
               onChange={(e) => setNewKey(e.target.value)}
               variant="outlined"
               sx={{ mb: 2 }}
+              placeholder="例如: /smg/config/service_info"
             />
             <TextField
               fullWidth
