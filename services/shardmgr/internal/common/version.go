@@ -8,7 +8,7 @@ import (
 
 var (
 	version     = "unknown"
-	sessionId   = kcommon.RandomString(context.Background(), 8)
+	sessionId   = ""
 	startTimeMs = kcommon.GetWallTimeMs()
 )
 
@@ -17,6 +17,9 @@ func GetVersion() string {
 }
 
 func GetSessionId() string {
+	if sessionId == "" {
+		sessionId = kcommon.RandomString(context.Background(), 8)
+	}
 	return sessionId
 }
 

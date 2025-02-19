@@ -10,14 +10,15 @@ DOCKER_IMAGE := xinkaiw/etcdmgr
 
 # 所有命令行工具
 CMDS := hello
+SVCS := shardmgr
 
-.PHONY: all fmt lint build test clean help docker-build docker-push $(CMDS)
+.PHONY: all fmt lint build test clean help docker-build docker-push $(CMDS) $(SVCS)
 
 # 默认目标
 all: fmt lint build test
 
 # 构建所有组件
-build: build-cmds
+build: build-cmds build-svcs
 
 # 构建服务
 build-service:
@@ -33,6 +34,15 @@ $(CMDS):
 	@echo "Building $@..."
 	@mkdir -p bin
 	go build -ldflags "$(LDFLAGS)" -o bin/$@ ./cmd/$@
+
+# 构建命令行工具
+build-svcs: $(SVCS)
+
+# 为每个命令行工具创建目标
+$(SVCS):
+	@echo "Building $@..."
+	@mkdir -p bin
+	go build -ldflags "$(LDFLAGS)" -o bin/$@ ./service/$@
 
 # Docker 相关目标
 docker-build:
