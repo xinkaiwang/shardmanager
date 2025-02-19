@@ -14,7 +14,7 @@ var ErrKeyNotFound = kerror.Create("KeyNotFound", "key not found").
 type EtcdKvItem struct {
 	Key         string
 	Value       string
-	ModRevision int64
+	ModRevision EtcdRevision
 }
 
 type EtcdRevision int64

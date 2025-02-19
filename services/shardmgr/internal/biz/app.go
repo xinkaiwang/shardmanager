@@ -22,5 +22,5 @@ func NewApp(ctx context.Context) *App {
 func (app *App) Ping(ctx context.Context) string {
 	// klogging.Info(ctx).Log("Hello", "ping")
 	ver := common.GetVersion()
-	return ver
+	return "shardmgr:" + ver
 }

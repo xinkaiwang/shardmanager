@@ -47,7 +47,7 @@ func main() {
 
 	// 创建 Prometheus 导出器
 	pe, err := prometheus.NewExporter(prometheus.Options{
-		Namespace: "hellosvc",
+		Namespace: "shardmgr",
 	})
 	if err != nil {
 		log.Fatalf("Failed to create Prometheus exporter: %v", err)

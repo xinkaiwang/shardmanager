@@ -84,7 +84,7 @@ func (pvd *etcdDefaultProvider) Get(ctx context.Context, key string) EtcdKvItem 
 	return EtcdKvItem{
 		Key:         string(kv.Key),
 		Value:       string(kv.Value),
-		ModRevision: kv.ModRevision,
+		ModRevision: EtcdRevision(kv.ModRevision),
 	}
 }
 
@@ -129,7 +129,7 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, startKey string, maxCo
 		items = append(items, EtcdKvItem{
 			Key:         string(kv.Key),
 			Value:       string(kv.Value),
-			ModRevision: kv.ModRevision,
+			ModRevision: EtcdRevision(kv.ModRevision),
 		})
 		klogging.Debug(ctx).
 			With("key", string(kv.Key)).
@@ -277,7 +277,7 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 			items = append(items, EtcdKvItem{
 				Key:         string(kv.Key),
 				Value:       string(kv.Value),
-				ModRevision: kv.ModRevision,
+				ModRevision: EtcdRevision(kv.ModRevision),
 			})
 		}
 
@@ -360,7 +360,7 @@ func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix st
 				for _, event := range wresp.Events {
 					item := &EtcdKvItem{
 						Key:         string(event.Kv.Key),
-						ModRevision: event.Kv.ModRevision,
+						ModRevision: EtcdRevision(event.Kv.ModRevision),
 					}
 
 					switch event.Type {

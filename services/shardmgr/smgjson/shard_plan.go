@@ -2,22 +2,13 @@ package smgjson
 
 import "strings"
 
-// ShardPlan is a file, each line in this file is a shard line.
-// etcd path is /smg/config/shard_plan.txt
-type ShardPlan struct {
-	// ShardLines 是 shard 的列表
-	ShardLines []*ShardLine
-}
-
-func ParseShardPlan(plan string, defVal ShardHints) *ShardPlan {
+// ParseShardPlan: ShardLine 表示一个 shard 的配置.
+// list of ShardLine is a ShardPlan.
+func ParseShardPlan(plan string, defVal ShardHints) []*ShardLine {
 	// 按行分割
 	lines := strings.Split(plan, "\n")
 
-	// 创建 ShardPlan
-	sp := &ShardPlan{
-		ShardLines: make([]*ShardLine, 0, len(lines)),
-	}
-
+	var list []*ShardLine
 	// 逐行解析
 	for _, line := range lines {
 		// 去除前后空白
@@ -37,8 +28,8 @@ func ParseShardPlan(plan string, defVal ShardHints) *ShardPlan {
 		sl := ParseShardLine(line)
 
 		// 添加到 ShardPlan
-		sp.ShardLines = append(sp.ShardLines, sl.ToShardLine(defVal))
+		list = append(list, sl.ToShardLine(defVal))
 	}
 
-	return sp
+	return list
 }

@@ -45,3 +45,10 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) map[data.WorkerF
 	}
 	return dict
 }
+
+func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.ShardLine, etcdprov.EtcdRevision) {
+	path := "/smg/config/shard_plan.txt"
+	item := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path)
+	list := smgjson.ParseShardPlan(item.Value, ss.ServiceInfo.DefaultHints)
+	return list, item.ModRevision
+}

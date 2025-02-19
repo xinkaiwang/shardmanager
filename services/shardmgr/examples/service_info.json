@@ -1,0 +1,7 @@
+{
+	"service_name": "shardmgr",
+	"service_type": "soft_stateful",
+	"move_type": "start_before_kill",
+	"max_replica_count": 10,
+	"min_replica_count": 1
+}
