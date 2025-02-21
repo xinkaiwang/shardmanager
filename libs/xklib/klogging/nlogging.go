@@ -266,3 +266,22 @@ var lastLoggedMessage string
 func GetLastLoggedMessage() string {
 	return lastLoggedMessage
 }
+
+// GetDefaultLogger returns the current default logger
+func GetDefaultLogger() Logger {
+	return getCurrentLogger()
+}
+
+// NullLogger is a logger that discards all log entries
+type NullLogger struct{}
+
+func (nl *NullLogger) Log(entry *LogEntry, shouldLog bool) {}
+
+func (nl *NullLogger) Level() Level {
+	return VerboseLevel
+}
+
+// NewNullLogger creates a new NullLogger that discards all log entries
+func NewNullLogger() Logger {
+	return &NullLogger{}
+}

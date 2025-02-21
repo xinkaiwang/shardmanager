@@ -14,10 +14,18 @@ type ServiceState struct {
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
 	AllShards  map[data.ShardId]*ShardState
 	AllWorkers map[data.WorkerFullId]*WorkerState
+
+	PathManager      *PathManager
+	ShardPlanWatcher *ShardPlanWatcher
+	WorkerEphWatcher *WorkerEphWatcher
 }
 
 func NewServiceState(ctx context.Context) *ServiceState {
-	ss := &ServiceState{}
+	ss := &ServiceState{
+		AllShards:  map[data.ShardId]*ShardState{},
+		AllWorkers: map[data.WorkerFullId]*WorkerState{},
+	}
+	ss.PathManager = NewPathManager()
 	ss.Init(ctx)
 	return ss
 }

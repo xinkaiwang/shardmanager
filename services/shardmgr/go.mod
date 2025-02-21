@@ -26,6 +26,7 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/prometheus/statsd_exporter v0.22.7 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/xinkaiwang/shardmanager/services/cougar v0.0.0-20250219071034-f0f83f414d39 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.11 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.11 // indirect
 	go.uber.org/atomic v1.7.0 // indirect

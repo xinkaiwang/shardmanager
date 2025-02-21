@@ -15,7 +15,20 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.AllShards = ss.LoadAllShardState(ctx)
 	// setp 3: load all worker state
 	ss.AllWorkers = ss.LoadAllWorkerState(ctx)
+	// step 4: load current shard plan
+	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
+	ss.syncShardPlan(ctx, currentShardPlan)
+	// step 5: start listening to shard plan changes
+	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision)
+	// step 6: load current worker eph
+	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
+	for _, workerEph := range currentWorkerEph {
+		ss.syncWorkerEph(ctx, workerEph)
+	}
+	// step 7: start listening to worker state changes
+	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
 
+	// step 10: start runloop
 	ss.runloop = NewRunLoop(ctx, ss)
 }
 

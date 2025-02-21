@@ -38,6 +38,7 @@ type RunLoop struct {
 	ss               *ServiceState
 	queue            *UnboundedQueue
 	currentEventName string
+	sampler          *RunloopSampler
 }
 
 func NewRunLoop(ctx context.Context, ss *ServiceState) *RunLoop {
@@ -45,7 +46,8 @@ func NewRunLoop(ctx context.Context, ss *ServiceState) *RunLoop {
 		ss:    ss,
 		queue: NewUnboundedQueue(context.Background()),
 	}
-	NewRunloopSampler(ctx, func() string { return rl.currentEventName })
+	rl.sampler = NewRunloopSampler(ctx, func() string { return rl.currentEventName })
+	go rl.Run(ctx)
 	return rl
 }
 
