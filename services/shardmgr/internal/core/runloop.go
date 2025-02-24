@@ -47,7 +47,6 @@ func NewRunLoop(ctx context.Context, ss *ServiceState) *RunLoop {
 		queue: NewUnboundedQueue(context.Background()),
 	}
 	rl.sampler = NewRunloopSampler(ctx, func() string { return rl.currentEventName })
-	go rl.Run(ctx)
 	return rl
 }
 

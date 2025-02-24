@@ -25,8 +25,11 @@ func NewServiceState(ctx context.Context) *ServiceState {
 		AllShards:  map[data.ShardId]*ShardState{},
 		AllWorkers: map[data.WorkerFullId]*WorkerState{},
 	}
+	ss.runloop = NewRunLoop(ctx, ss)
 	ss.PathManager = NewPathManager()
 	ss.Init(ctx)
+	// strt runloop
+	go ss.runloop.Run(ctx)
 	return ss
 }
 

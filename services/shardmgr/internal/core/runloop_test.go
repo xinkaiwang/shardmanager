@@ -48,24 +48,28 @@ func TestNewRunLoop(t *testing.T) {
 
 // 测试事件入队
 func TestEnqueueEvent(t *testing.T) {
-	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 启动 RunLoop
-	go rl.Run(ctx)
-
+	rl := NewRunLoop(ctx, nil)
 	event := NewTestEvent("test")
 
-	// 事件入队不应该阻塞
+	// 启动 RunLoop
 	done := make(chan bool)
 	go func() {
-		rl.EnqueueEvent(event)
+		rl.Run(ctx)
 		done <- true
 	}()
 
+	// 事件入队不应该阻塞
+	enqueued := make(chan bool)
+	go func() {
+		rl.EnqueueEvent(event)
+		enqueued <- true
+	}()
+
 	select {
-	case <-done:
+	case <-enqueued:
 		// 成功
 	case <-time.After(time.Second):
 		t.Fatal("EnqueueEvent 超时")
@@ -82,9 +86,10 @@ func TestEnqueueEvent(t *testing.T) {
 
 // 测试 RunLoop 的运行和事件处理
 func TestRunLoop(t *testing.T) {
-	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	rl := NewRunLoop(ctx, nil)
 
 	// 启动 RunLoop
 	done := make(chan bool)
@@ -119,8 +124,8 @@ func TestRunLoop(t *testing.T) {
 
 // 测试上下文取消
 func TestRunLoopContextCancellation(t *testing.T) {
-	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
+	rl := NewRunLoop(ctx, nil)
 
 	// 启动 RunLoop
 	done := make(chan bool)
@@ -143,9 +148,10 @@ func TestRunLoopContextCancellation(t *testing.T) {
 
 // 测试大量事件的处理
 func TestRunLoopHighLoad(t *testing.T) {
-	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	rl := NewRunLoop(ctx, nil)
 
 	// 启动 RunLoop
 	go rl.Run(ctx)
@@ -171,9 +177,10 @@ func TestRunLoopHighLoad(t *testing.T) {
 
 // 测试并发事件处理
 func TestRunLoopConcurrency(t *testing.T) {
-	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	rl := NewRunLoop(ctx, nil)
 
 	// 启动 RunLoop
 	go rl.Run(ctx)
@@ -221,9 +228,10 @@ func TestRunLoopConcurrency(t *testing.T) {
 
 // 测试事件处理顺序
 func TestRunLoopEventOrder(t *testing.T) {
-	rl := NewRunLoop(context.Background(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	rl := NewRunLoop(ctx, nil)
 
 	// 启动 RunLoop
 	go rl.Run(ctx)

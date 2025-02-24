@@ -2,6 +2,11 @@ package data
 
 type ShardId string
 
-type ReplicaId int
+type ReplicaIdx int
 
 type AssignmentId string
+
+type ReplicaFullId struct {
+	ShardId    ShardId
+	ReplicaIdx ReplicaIdx
+}

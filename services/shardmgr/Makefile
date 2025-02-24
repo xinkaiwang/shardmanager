@@ -60,8 +60,8 @@ test:
 
 # 运行服务
 run:
-	@echo "Starting etcdmgr service..."
-	go run -ldflags "$(LDFLAGS)" service/etcdmgr/main.go
+	@echo "Starting shardmgr service..."
+	go run -ldflags "$(LDFLAGS)" service/shardmgr/shardmgr.go
 
 # 代码格式化
 fmt:

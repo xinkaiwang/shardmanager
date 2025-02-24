@@ -17,7 +17,9 @@ func NewShardState(shardId data.ShardId) *ShardState {
 
 func NewShardStateByPlan(shardLine *smgjson.ShardLine) *ShardState {
 	// TODO
-	return nil
+	return &ShardState{
+		ShardId: data.ShardId(shardLine.ShardName),
+	}
 }
 
 // return 1 if shard state is updated, 0 if not
