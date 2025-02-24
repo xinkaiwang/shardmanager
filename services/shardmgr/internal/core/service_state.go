@@ -37,3 +37,7 @@ func (ss *ServiceState) IsStateInMemory() bool {
 	// SOFT_STATEFUL = state is in memory = state lost after restarts
 	return ss.ServiceInfo.ServiceType == smgjson.ST_SOFT_STATEFUL
 }
+
+func (ss *ServiceState) EnqueueEvent(event IEvent) {
+	ss.runloop.EnqueueEvent(event)
+}
