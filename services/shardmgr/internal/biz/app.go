@@ -51,14 +51,23 @@ func (eve *GetStateEvent) GetName() string {
 
 func (gse *GetStateEvent) Execute(ctx context.Context, ss *core.ServiceState) {
 	klogging.Info(ctx).Log("GetStateEvent", "getting state")
-	list := make([]api.ShardState, 0)
+	shards := make([]api.ShardState, 0)
 	for _, shardState := range ss.AllShards {
-		list = append(list, api.ShardState{
+		shards = append(shards, api.ShardState{
 			ShardId: string(shardState.ShardId),
 		})
 	}
+	workers := make([]api.WorkerState, 0)
+	for _, workerState := range ss.AllWorkers {
+		worker := api.WorkerState{
+			WorkerFullId: workerState.GetWorkerFullId(ss).String(),
+		}
+		workers = append(workers, worker)
+	}
+
 	gse.resp <- &api.GetStatusResponse{
-		Shards: list,
+		Shards:  shards,
+		Workers: workers,
 	}
 	close(gse.resp)
 }

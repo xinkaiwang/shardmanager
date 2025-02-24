@@ -13,3 +13,7 @@ func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId) *WorkerSta
 		SessionId: sessionId,
 	}
 }
+
+func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
+	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ss.IsStateInMemory())
+}
