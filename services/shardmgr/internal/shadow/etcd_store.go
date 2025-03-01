@@ -1,8 +1,9 @@
-package storeprov
+package shadow
 
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 )
@@ -37,6 +38,10 @@ type KvItem struct {
 	Value string
 	Name  string // for logging/metrics purposes only
 }
+
+var (
+	EtcdStoreWriteSizeMetrics = kmetrics.CreateKmetric(context.Background(), "etcd_write_size", "desc", []string{"name"})
+)
 
 // BufferedEtcdStore implements EtcdStore and buffers writes to etcd
 type BufferedEtcdStore struct {
@@ -81,5 +86,11 @@ func (eve *WriteEvent) GetName() string {
 }
 
 func (eve *WriteEvent) Process(ctx context.Context, resource *BufferedEtcdStore) {
+	size := len(eve.Value) + len(eve.Key)
+	EtcdStoreWriteSizeMetrics.GetTimeSequence(ctx, eve.Name).Add(int64(size))
+	if eve.Value == "" {
+		resource.etcd.Delete(ctx, eve.Key)
+		return
+	}
 	resource.etcd.Set(ctx, eve.Key, eve.Value)
 }

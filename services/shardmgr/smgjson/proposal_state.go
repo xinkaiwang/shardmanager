@@ -4,18 +4,22 @@ import (
 	"encoding/json"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
 type ProposalStateJson struct {
-	ProposalId string           `json:"proposal_id"`
-	Moves      []*MoveStateJson `json:"moves"`
+	ProposalId  string            `json:"proposal_id"`
+	Description string            `json:"description"`
+	Moves       []*MicroMovesJson `json:"moves"`
+	NextMove    int               `json:"next_move"` // NextMove 是下一个要执行的 move 的索引
 }
 
-type MoveStateJson struct {
-	MoveIdx       int    `json:"move_idx"`
-	ReplicaFullId string `json:"replica"`
-	From          string `json:"from"`
-	To            string `json:"to"`
+type MicroMovesJson struct {
+	ShardId      data.ShardId      `json:"shard"`
+	ReplicaIdx   data.ReplicaIdx   `json:"replica"`
+	AssignmentId data.AssignmentId `json:"assignment"`
+	From         data.WorkerFullId `json:"from"`
+	To           data.WorkerFullId `json:"to"`
 }
 
 func ProposalStateJsonParse(data []byte) *ProposalStateJson {

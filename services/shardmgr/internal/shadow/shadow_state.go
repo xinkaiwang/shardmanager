@@ -1,0 +1,124 @@
+package shadow
+
+import (
+	"context"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+)
+
+// ShadowState implements StoreProvider
+type ShadowState struct {
+	AllShards    map[data.ShardId]*smgjson.ShardStateJson
+	AllWorkers   map[data.WorkerFullId]*smgjson.WorkerStateJson
+	AllProposals map[data.ProposalId]*smgjson.ProposalStateJson
+	runloop      *krunloop.RunLoop[*ShadowState]
+}
+
+func NewShadowState(ctx context.Context) *ShadowState {
+	shadow := &ShadowState{
+		AllShards:    make(map[data.ShardId]*smgjson.ShardStateJson),
+		AllWorkers:   make(map[data.WorkerFullId]*smgjson.WorkerStateJson),
+		AllProposals: make(map[data.ProposalId]*smgjson.ProposalStateJson),
+	}
+	shadow.runloop = krunloop.NewRunLoop(ctx, shadow, "shadow")
+	go shadow.runloop.Run(ctx)
+	return shadow
+}
+
+func (shadow *ShadowState) IsResource() {}
+
+// InitShardState is only called once when the service starts, that's why it doesn't need to be thread-safe
+func (shadow *ShadowState) InitShardState(shardId data.ShardId, shardState *smgjson.ShardStateJson) {
+	shadow.AllShards[shardId] = shardState
+}
+
+// InitWorkerState is only called once when the service starts, that's why it doesn't need to be thread-safe
+func (shadow *ShadowState) InitWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson) {
+	shadow.AllWorkers[workerFullId] = workerState
+}
+
+// InitProposalState is only called once when the service starts, that's why it doesn't need to be thread-safe
+func (shadow *ShadowState) InitProposalState(proposalId data.ProposalId, proposalState *smgjson.ProposalStateJson) {
+	shadow.AllProposals[proposalId] = proposalState
+}
+
+// InitDone is called once when init is done, non-thread-safe operation is not allowed after this
+func (shadow *ShadowState) InitDone() {
+}
+
+func (shadow *ShadowState) StoreShardState(shardId data.ShardId, shardState *smgjson.ShardStateJson) {
+	eve := &ShardStateJsonEvent{
+		ShardId:    shardId,
+		ShardState: shardState,
+	}
+	shadow.runloop.EnqueueEvent(eve)
+}
+
+func (shadow *ShadowState) StoreWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson) {
+	eve := &WorkerStateJsonEvent{
+		WorkerFullId: workerFullId,
+		WorkerState:  workerState,
+	}
+	shadow.runloop.EnqueueEvent(eve)
+}
+
+func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.ProposalStateJson) {
+	eve := &ProposalStateJsonEvent{
+		ProposalId:    proposalId,
+		ProposalState: proposalState,
+	}
+	shadow.runloop.EnqueueEvent(eve)
+}
+
+// ShardStateJsonEvent implements krunloop.IEvent[*ShadowState]
+type ShardStateJsonEvent struct {
+	ShardId    data.ShardId
+	ShardState *smgjson.ShardStateJson
+}
+
+func (eve *ShardStateJsonEvent) GetName() string {
+	return "ShardStateJsonEvent"
+}
+func (eve *ShardStateJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
+	if eve.ShardState == nil {
+		delete(shadow.AllShards, eve.ShardId)
+		return
+	}
+	shadow.AllShards[eve.ShardState.ShardName] = eve.ShardState
+}
+
+// WorkerStateJsonEvent implements krunloop.IEvent[*ShadowState]
+type WorkerStateJsonEvent struct {
+	WorkerFullId data.WorkerFullId
+	WorkerState  *smgjson.WorkerStateJson
+}
+
+func (eve *WorkerStateJsonEvent) GetName() string {
+	return "WorkerStateJsonEvent"
+}
+func (eve *WorkerStateJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
+	if eve.WorkerState == nil {
+		delete(shadow.AllWorkers, eve.WorkerFullId)
+		return
+	}
+	shadow.AllWorkers[eve.WorkerFullId] = eve.WorkerState
+}
+
+// ProposalStateJsonEvent implements krunloop.IEvent[*ShadowState]
+type ProposalStateJsonEvent struct {
+	ProposalId    data.ProposalId
+	ProposalState *smgjson.ProposalStateJson
+}
+
+func (eve *ProposalStateJsonEvent) GetName() string {
+	return "ProposalStateJsonEvent"
+}
+func (eve *ProposalStateJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
+	if eve.ProposalState == nil {
+		delete(shadow.AllProposals, eve.ProposalId)
+		return
+	}
+	shadow.AllProposals[eve.ProposalId] = eve.ProposalState
+}

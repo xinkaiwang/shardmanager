@@ -7,6 +7,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
@@ -16,6 +17,7 @@ type ServiceState struct {
 	PathManager   *PathManager
 	ServiceInfo   *ServiceInfo
 	ServiceConfig *ServiceConfig
+	ShadowState   *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
 	AllShards  map[data.ShardId]*ShardState
@@ -34,6 +36,7 @@ func NewServiceState(ctx context.Context) *ServiceState {
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
+		ShadowState:      shadow.NewShadowState(ctx),
 	}
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.PathManager = NewPathManager()

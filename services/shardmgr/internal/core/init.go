@@ -17,6 +17,8 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.AllShards = ss.LoadAllShardState(ctx)
 	// setp 3: load all worker state
 	ss.AllWorkers = ss.LoadAllWorkerState(ctx)
+	ss.ShadowState.InitDone()
+
 	// step 4: load current shard plan
 	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
 	ss.syncShardPlan(ctx, currentShardPlan)
@@ -45,6 +47,7 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) map[data.ShardId]
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
 		shardStateJson := smgjson.ShardStateJsonFromJson(item.Value)
+		ss.ShadowState.InitShardState(shardStateJson.ShardName, shardStateJson)
 		shardObj := NewShardState(shardStateJson.ShardName)
 		dict[data.ShardId(shardObj.ShardId)] = shardObj
 	}
@@ -60,6 +63,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) map[data.WorkerF
 		shardStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
 		obj := NewWorkerState(shardStateJson.WorkerId, shardStateJson.SessionId, nil)
 		workerFullId := data.NewWorkerFullId(obj.WorkerId, obj.SessionId, ss.IsStateInMemory())
+		ss.ShadowState.InitWorkerState(workerFullId, shardStateJson)
 		dict[workerFullId] = obj
 	}
 	return dict

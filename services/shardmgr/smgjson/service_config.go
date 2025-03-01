@@ -9,6 +9,7 @@ import (
 type ServiceConfigJson struct {
 	ShardConfig *ShardConfigJson       `json:"shard_config"`
 	SystemLimit *SystemLimitConfigJson `json:"system_limit"`
+	CostFuncCfg *CostFuncConfigJson    `json:"cost_func_cfg"`
 }
 
 type ShardConfigJson struct {
@@ -28,6 +29,12 @@ type SystemLimitConfigJson struct {
 	MaxAssignmentCountLimit *int32 `json:"max_assignment_count_limit"`
 	// MaxAssignmentCount 是 per worker 的最大 assignment 数量限制
 	MaxAssignmentCountPerWorker *int32 `json:"max_assignment_count_per_worker"`
+}
+
+type CostFuncConfigJson struct {
+	QpmNormFactor *float64 `json:"qpm_norm_factor"`
+	CpuNormFactor *float64 `json:"cpu_norm_factor"`
+	MemNormFactor *float64 `json:"mem_norm_factor"`
 }
 
 func (sc *ServiceConfigJson) ToJson() string {

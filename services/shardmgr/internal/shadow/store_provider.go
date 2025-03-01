@@ -1,4 +1,4 @@
-package storeprov
+package shadow
 
 import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -7,11 +7,11 @@ import (
 
 type StoreProvider interface {
 	// StoreShardState: store shard state to etcd
-	StoreShardState(shardId data.ShardId, shardState smgjson.ShardStateJson)
+	StoreShardState(shardId data.ShardId, shardState *smgjson.ShardStateJson)
 
 	// StoreWorkerState: store worker state to etcd
-	StoreWorkerState(workerFullId data.WorkerFullId, workerState smgjson.WorkerStateJson)
+	StoreWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson)
 
 	// StoreProposalState: store Proposal state to etcd
-	StoreProposalState(proposalId data.ProposalId, proposalState smgjson.ProposalStateJson)
+	StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.ProposalStateJson)
 }
