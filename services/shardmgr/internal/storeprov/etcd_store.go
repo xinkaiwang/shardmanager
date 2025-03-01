@@ -7,13 +7,35 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 )
 
+var (
+	currentEtcdStore EtcdStore
+)
+
+func GetCurrentEtcdStore(ctx context.Context) EtcdStore {
+	if currentEtcdStore == nil {
+		currentEtcdStore = NewBufferedEtcdStore(ctx)
+	}
+	return currentEtcdStore
+}
+
+func RunWithEtcdStore(store EtcdStore, fn func()) {
+	oldStore := currentEtcdStore
+	currentEtcdStore = store
+	defer func() {
+		currentEtcdStore = oldStore
+	}()
+	fn()
+}
+
 type EtcdStore interface {
-	Put(ctx context.Context, key string, value string)
+	// Put: put key-value pair to etcd. name is used for logging/metrics purposes only
+	Put(ctx context.Context, key string, value string, name string)
 }
 
 type KvItem struct {
 	Key   string
 	Value string
+	Name  string // for logging/metrics purposes only
 }
 
 // BufferedEtcdStore implements EtcdStore and buffers writes to etcd
@@ -31,8 +53,8 @@ func NewBufferedEtcdStore(ctx context.Context) *BufferedEtcdStore {
 	return store
 }
 
-func (store *BufferedEtcdStore) Put(ctx context.Context, key string, value string) {
-	eve := NewWriteEvent(key, value)
+func (store *BufferedEtcdStore) Put(ctx context.Context, key string, value string, name string) {
+	eve := NewWriteEvent(key, value, name)
 	store.runloop.EnqueueEvent(eve)
 }
 
@@ -43,17 +65,19 @@ func (store *BufferedEtcdStore) IsResource() {}
 type WriteEvent struct {
 	Key   string
 	Value string
+	Name  string // for logging/metrics purposes only
 }
 
-func NewWriteEvent(key string, value string) *WriteEvent {
+func NewWriteEvent(key string, value string, name string) *WriteEvent {
 	return &WriteEvent{
 		Key:   key,
 		Value: value,
+		Name:  name,
 	}
 }
 
 func (eve *WriteEvent) GetName() string {
-	return "WriteEvent"
+	return eve.Name
 }
 
 func (eve *WriteEvent) Process(ctx context.Context, resource *BufferedEtcdStore) {
