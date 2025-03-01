@@ -14,7 +14,7 @@ var (
 
 type IEvent interface {
 	GetName() string
-	Execute(ctx context.Context, ss *ServiceState)
+	Process(ctx context.Context, ss *ServiceState)
 }
 
 // DummyEvent: implement IEvent
@@ -26,7 +26,7 @@ func (de DummyEvent) GetName() string {
 	return "DummyEvent"
 }
 
-func (de DummyEvent) Execute(ctx context.Context, _ *ServiceState) {
+func (de DummyEvent) Process(ctx context.Context, _ *ServiceState) {
 	klogging.Info(ctx).Log("DummyEvent", de.Msg)
 }
 
@@ -77,7 +77,7 @@ func (rl *RunLoop) Run(ctx context.Context) {
 				elapsedMs := kcommon.GetMonoTimeMs() - start
 				RunLoopElapsedMsMetric.GetTimeSequence(ctx, eveName).Add(elapsedMs)
 			}()
-			event.Execute(ctx, rl.ss)
+			event.Process(ctx, rl.ss)
 		}
 	}
 }

@@ -18,7 +18,7 @@ func (e *testEvent) GetName() string {
 	return "testEvent"
 }
 
-func (e *testEvent) Execute(ctx context.Context, _ *ServiceState) {
+func (e *testEvent) Process(ctx context.Context, _ *ServiceState) {
 	select {
 	case e.execCh <- e.value:
 	default:

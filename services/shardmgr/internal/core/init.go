@@ -10,7 +10,9 @@ import (
 
 func (ss *ServiceState) Init(ctx context.Context) {
 	// step 1: load ServiceInfo
-	ss.ServiceInfo = LoadServiceInfo(ctx)
+	ss.PathManager = NewPathManager()
+	ss.ServiceInfo = ss.LoadServiceInfo(ctx)
+	ss.ServiceConfig = ss.LoadServiceConfig(ctx)
 	// step 2: load all shard state
 	ss.AllShards = ss.LoadAllShardState(ctx)
 	// setp 3: load all worker state
@@ -18,14 +20,18 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 4: load current shard plan
 	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
 	ss.syncShardPlan(ctx, currentShardPlan)
-	// step 5: start listening to shard plan changes
-	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision)
-	// step 6: load current worker eph
+	// step 5: load current worker eph
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
 	for _, workerEph := range currentWorkerEph {
-		ss.syncWorkerEph(ctx, workerEph)
+		workerFullId := data.NewWorkerFullId(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), ss.IsStateInMemory())
+		ss.writeWorkerEphToStaging(ctx, workerFullId, workerEph)
 	}
-	// step 7: start listening to worker state changes
+	// step 6: sync workerEph to workerState
+	ss.syncEphStagingToWorkerState(ctx)
+
+	// step 6: start listening to shard plan changes
+	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision)
+	// step 7: start listening to worker eph changes
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
 
 	// step 10: start runloop
@@ -52,7 +58,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) map[data.WorkerF
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
 		shardStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
-		obj := NewWorkerState(shardStateJson.WorkerId, shardStateJson.SessionId)
+		obj := NewWorkerState(shardStateJson.WorkerId, shardStateJson.SessionId, nil)
 		workerFullId := data.NewWorkerFullId(obj.WorkerId, obj.SessionId, ss.IsStateInMemory())
 		dict[workerFullId] = obj
 	}

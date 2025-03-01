@@ -48,7 +48,7 @@ func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.
 
 type ShardPlanWatcher struct {
 	parent *ServiceState
-	ch     chan *etcdprov.EtcdKvItem
+	ch     chan etcdprov.EtcdKvItem
 }
 
 func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShardPlanRevision etcdprov.EtcdRevision) *ShardPlanWatcher {
@@ -84,6 +84,6 @@ func (spue *ShardPlanUpdateEvent) GetName() string {
 	return "ShardPlanUpdateEvent"
 }
 
-func (spue *ShardPlanUpdateEvent) Execute(ctx context.Context, ss *ServiceState) {
+func (spue *ShardPlanUpdateEvent) Process(ctx context.Context, ss *ServiceState) {
 	ss.syncShardPlan(ctx, spue.ShardPlan)
 }

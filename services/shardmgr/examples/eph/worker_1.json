@@ -1,0 +1,21 @@
+{
+    "worker_id": "worker_1",
+    "session_id": "12345678",
+    "addr_port": "10.0.0.32:8080",
+    "start_time_ms": 1740371674001,
+    "capacity": 10,
+    "properties": {
+      "region": "us-west",
+      "type": "compute"
+    },
+    "assignments": [
+      {
+        "shd": "shard-1",
+        "idx": 1,
+        "asg": "asg-1",
+        "sts": "active"
+      }
+    ],
+    "update_time_ms": 1234567891000,
+    "update_reason": "periodic update"
+  }

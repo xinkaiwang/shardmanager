@@ -21,7 +21,7 @@ type EtcdRevision int64
 
 // EtcdProvider 定义了 etcd 操作的接口
 type EtcdProvider interface {
-	// Get 获取指定键的值
+	// Get 获取指定键的值, 如果键不存在，返回空值的 EtcdKvItem
 	Get(ctx context.Context, key string) EtcdKvItem
 
 	// List 列出指定前缀的键值对
@@ -38,7 +38,7 @@ type EtcdProvider interface {
 	LoadAllByPrefix(ctx context.Context, pathPrefix string) ([]EtcdKvItem, EtcdRevision)
 
 	// WatchPrefix
-	WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan *EtcdKvItem
+	WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan EtcdKvItem
 }
 
 var (

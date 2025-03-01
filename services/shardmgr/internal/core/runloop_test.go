@@ -26,7 +26,7 @@ func NewTestEvent(msg string) *TestEvent {
 	}
 }
 
-func (te *TestEvent) Execute(ctx context.Context, _ *ServiceState) {
+func (te *TestEvent) Process(ctx context.Context, _ *ServiceState) {
 	klogging.Info(ctx).Log("TestEvent", te.Message)
 	select {
 	case te.executed <- true:

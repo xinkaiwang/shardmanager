@@ -49,7 +49,7 @@ func (eve *GetStateEvent) GetName() string {
 	return "GetStateEvent"
 }
 
-func (gse *GetStateEvent) Execute(ctx context.Context, ss *core.ServiceState) {
+func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 	klogging.Info(ctx).Log("GetStateEvent", "getting state")
 	shards := make([]api.ShardState, 0)
 	for _, shardState := range ss.AllShards {

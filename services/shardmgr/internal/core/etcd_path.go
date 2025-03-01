@@ -10,6 +10,12 @@ func NewPathManager() *PathManager {
 func (pm *PathManager) GetShardPlanPath() string {
 	return "/smg/config/shard_plan.txt"
 }
+func (pm *PathManager) GetServiceInfoPath() string {
+	return "/smg/config/service_info.json"
+}
+func (pm *PathManager) GetServiceConfigPath() string {
+	return "/smg/config/service_config.json"
+}
 
 func (pm *PathManager) GetShardStatePathPrefix() string {
 	return "/smg/shard_state/"
@@ -20,5 +26,5 @@ func (pm *PathManager) GetWorkerStatePathPrefix() string {
 }
 
 func (pm *PathManager) GetWorkerEphPathPrefix() string {
-	return "/smg/discover/"
+	return "/smg/eph/"
 }

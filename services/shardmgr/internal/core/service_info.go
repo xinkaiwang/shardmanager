@@ -8,10 +8,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
-const (
-	serviceInfoPath = "/smg/config/service_info.json"
-)
-
 type ServiceInfo struct {
 	// ServiceName 是服务的名称
 	ServiceName string
@@ -28,10 +24,11 @@ func NewServiceInfo(serviceName string) *ServiceInfo {
 	}
 }
 
-func LoadServiceInfo(ctx context.Context) *ServiceInfo {
-	node := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, serviceInfoPath)
+func (ss *ServiceState) LoadServiceInfo(ctx context.Context) *ServiceInfo {
+	path := ss.PathManager.GetServiceInfoPath()
+	node := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path)
 	if node.Value == "" {
-		ke := kerror.Create("ServiceInfoNotFound", "service info not found path="+serviceInfoPath)
+		ke := kerror.Create("ServiceInfoNotFound", "service info not found path="+path)
 		panic(ke)
 	}
 	siObj := smgjson.ParseServiceInfoJson(node.Value)

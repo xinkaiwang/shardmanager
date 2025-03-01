@@ -14,6 +14,8 @@ type WorkerStateJson struct {
 
 	SessionId data.SessionId `json:"session_id"`
 
+	WorkerState data.WorkerStateEnum `json:"worker_state,omitempty"`
+
 	Assignments map[data.AssignmentId]*AssignmentStateJson `json:"assignments"`
 }
 

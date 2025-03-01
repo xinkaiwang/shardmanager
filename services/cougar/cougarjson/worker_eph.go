@@ -6,7 +6,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
-// etcd path is "/smg/discover/{worker_id}:{session_id}"
+// etcd path is "/smg/eph/{worker_id}:{session_id}"
 type WorkerEphJson struct {
 	// WorkerId 是工作节点的唯一标识符, 通常是 hostname，也就是 pod name
 	WorkerId string `json:"worker_id"`

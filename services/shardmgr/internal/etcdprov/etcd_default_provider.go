@@ -294,8 +294,8 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 }
 
 // WatchByPrefix
-func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan *EtcdKvItem {
-	eventChan := make(chan *EtcdKvItem, 100)
+func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan EtcdKvItem {
+	eventChan := make(chan EtcdKvItem, 100)
 
 	go func() {
 		defer close(eventChan)
@@ -358,7 +358,7 @@ func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix st
 
 				// 处理事件
 				for _, event := range wresp.Events {
-					item := &EtcdKvItem{
+					item := EtcdKvItem{
 						Key:         string(event.Kv.Key),
 						ModRevision: EtcdRevision(event.Kv.ModRevision),
 					}
