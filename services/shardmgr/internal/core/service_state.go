@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -10,7 +11,7 @@ import (
 )
 
 type ServiceState struct {
-	runloop       *RunLoop
+	runloop       *krunloop.RunLoop[*ServiceState]
 	PathManager   *PathManager
 	ServiceInfo   *ServiceInfo
 	ServiceConfig *ServiceConfig
@@ -28,12 +29,12 @@ type ServiceState struct {
 
 func NewServiceState(ctx context.Context) *ServiceState {
 	ss := &ServiceState{
-		AllShards:        map[data.ShardId]*ShardState{},
-		AllWorkers:       map[data.WorkerFullId]*WorkerState{},
-		EphDirty:         map[data.WorkerFullId]common.Unit{},
-		EphWorkerStaging: map[data.WorkerFullId]*cougarjson.WorkerEphJson{},
+		AllShards:        make(map[data.ShardId]*ShardState),
+		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
+		EphDirty:         make(map[data.WorkerFullId]common.Unit),
+		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
 	}
-	ss.runloop = NewRunLoop(ctx, ss)
+	ss.runloop = krunloop.NewRunLoop[*ServiceState](ctx, ss)
 	ss.PathManager = NewPathManager()
 	ss.Init(ctx)
 	// strt runloop
@@ -46,6 +47,9 @@ func (ss *ServiceState) IsStateInMemory() bool {
 	return ss.ServiceInfo.ServiceType == smgjson.ST_SOFT_STATEFUL
 }
 
-func (ss *ServiceState) EnqueueEvent(event IEvent) {
+func (ss *ServiceState) EnqueueEvent(event krunloop.IEvent[*ServiceState]) {
 	ss.runloop.EnqueueEvent(event)
 }
+
+// IsResource implements the CriticalResource interface
+func (ss *ServiceState) IsResource() {}

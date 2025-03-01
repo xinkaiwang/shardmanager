@@ -75,7 +75,7 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 	}
 }
 
-// implements IEvent
+// implements IEvent[*ServiceState]
 type ShardPlanUpdateEvent struct {
 	ShardPlan []*smgjson.ShardLine
 }

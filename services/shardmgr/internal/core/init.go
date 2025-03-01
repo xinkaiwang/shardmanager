@@ -35,7 +35,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
 
 	// step 10: start runloop
-	ss.runloop = NewRunLoop(ctx, ss)
+	// Note: The runloop is now initialized in NewServiceState
 }
 
 func (ss *ServiceState) LoadAllShardState(ctx context.Context) map[data.ShardId]*ShardState {

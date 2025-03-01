@@ -75,7 +75,7 @@ func (ss *ServiceState) LoadCurrentWorkerEph(ctx context.Context) ([]*cougarjson
 	return workerEphs, version
 }
 
-// WorkerEphEvent: implements IEvent
+// WorkerEphEvent: implements IEvent[*ServiceState]
 type WorkerEphEvent struct {
 	WorkerFullId data.WorkerFullId
 	WorkerEph    *cougarjson.WorkerEphJson

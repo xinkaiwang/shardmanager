@@ -34,7 +34,7 @@ func (app *App) GetStatus(ctx context.Context) *api.GetStatusResponse {
 	return <-eve.resp
 }
 
-// GetStateEvent: implement IEvent
+// GetStateEvent: implement IEvent[*core.ServiceState]
 type GetStateEvent struct {
 	resp chan *api.GetStatusResponse
 }

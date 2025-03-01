@@ -1,4 +1,4 @@
-package core
+package krunloop
 
 import (
 	"context"
@@ -12,50 +12,43 @@ var (
 	RunLoopElapsedMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"event"})
 )
 
-type IEvent interface {
+// CriticalResource is an interface that represents resources that can be processed by events
+// in a RunLoop. This provides better type safety than using 'any'.
+type CriticalResource interface {
+	// IsResource is a marker method to identify types that can be used as critical resources
+	IsResource()
+}
+
+// IEvent is a generic interface for events that can be processed by a RunLoop
+type IEvent[T CriticalResource] interface {
 	GetName() string
-	Process(ctx context.Context, ss *ServiceState)
+	Process(ctx context.Context, resource T)
 }
 
-// DummyEvent: implement IEvent
-type DummyEvent struct {
-	Msg string
-}
-
-func (de DummyEvent) GetName() string {
-	return "DummyEvent"
-}
-
-func (de DummyEvent) Process(ctx context.Context, _ *ServiceState) {
-	klogging.Info(ctx).Log("DummyEvent", de.Msg)
-}
-
-func NewDummyEvent(msg string) DummyEvent {
-	return DummyEvent{Msg: msg}
-}
-
-type RunLoop struct {
-	ss               *ServiceState
-	queue            *UnboundedQueue
+// RunLoop is a generic event processing loop for any resource type
+type RunLoop[T CriticalResource] struct {
+	resource         T
+	queue            *UnboundedQueue[T]
 	currentEventName string
 	sampler          *RunloopSampler
 }
 
-func NewRunLoop(ctx context.Context, ss *ServiceState) *RunLoop {
-	rl := &RunLoop{
-		ss:    ss,
-		queue: NewUnboundedQueue(context.Background()),
+// NewRunLoop creates a new RunLoop for the given resource
+func NewRunLoop[T CriticalResource](ctx context.Context, resource T) *RunLoop[T] {
+	rl := &RunLoop[T]{
+		resource: resource,
+		queue:    NewUnboundedQueue[T](ctx),
 	}
 	rl.sampler = NewRunloopSampler(ctx, func() string { return rl.currentEventName })
 	return rl
 }
 
 // EnqueueEvent: Enqueue an event to the run loop. This call never blocks.
-func (rl *RunLoop) EnqueueEvent(event IEvent) {
+func (rl *RunLoop[T]) EnqueueEvent(event IEvent[T]) {
 	rl.queue.Enqueue(event)
 }
 
-func (rl *RunLoop) Run(ctx context.Context) {
+func (rl *RunLoop[T]) Run(ctx context.Context) {
 	defer rl.queue.Close()
 
 	for {
@@ -77,7 +70,7 @@ func (rl *RunLoop) Run(ctx context.Context) {
 				elapsedMs := kcommon.GetMonoTimeMs() - start
 				RunLoopElapsedMsMetric.GetTimeSequence(ctx, eveName).Add(elapsedMs)
 			}()
-			event.Process(ctx, rl.ss)
+			event.Process(ctx, rl.resource)
 		}
 	}
 }
