@@ -10,6 +10,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
+// ServiceState implements the CriticalResource interface
 type ServiceState struct {
 	runloop       *krunloop.RunLoop[*ServiceState]
 	PathManager   *PathManager
@@ -34,7 +35,7 @@ func NewServiceState(ctx context.Context) *ServiceState {
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
 	}
-	ss.runloop = krunloop.NewRunLoop[*ServiceState](ctx, ss)
+	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.PathManager = NewPathManager()
 	ss.Init(ctx)
 	// strt runloop

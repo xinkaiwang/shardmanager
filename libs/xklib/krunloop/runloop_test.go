@@ -43,7 +43,7 @@ func NewRunLoopTestEvent(msg string) *RunLoopTestEvent {
 // Test RunLoop creation
 func TestNewRunLoop(t *testing.T) {
 	resource := &TestRunLoopResource{}
-	rl := NewRunLoop[*TestRunLoopResource](context.Background(), resource)
+	rl := NewRunLoop[*TestRunLoopResource](context.Background(), resource, "test")
 	if rl == nil {
 		t.Fatal("RunLoop should not be nil")
 	}
@@ -58,7 +58,7 @@ func TestEnqueueEvent(t *testing.T) {
 	defer cancel()
 
 	resource := &TestRunLoopResource{}
-	rl := NewRunLoop[*TestRunLoopResource](ctx, resource)
+	rl := NewRunLoop[*TestRunLoopResource](ctx, resource, "test")
 	event := NewRunLoopTestEvent("test")
 
 	// Start RunLoop
@@ -97,7 +97,7 @@ func TestRunLoop(t *testing.T) {
 	defer cancel()
 
 	resource := &TestRunLoopResource{}
-	rl := NewRunLoop[*TestRunLoopResource](ctx, resource)
+	rl := NewRunLoop[*TestRunLoopResource](ctx, resource, "test")
 
 	// Start RunLoop
 	done := make(chan bool)
@@ -134,7 +134,7 @@ func TestRunLoop(t *testing.T) {
 func TestRunLoopContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resource := &TestRunLoopResource{}
-	rl := NewRunLoop[*TestRunLoopResource](ctx, resource)
+	rl := NewRunLoop[*TestRunLoopResource](ctx, resource, "test")
 
 	// Start RunLoop
 	done := make(chan bool)
@@ -161,7 +161,7 @@ func TestRunLoopHighLoad(t *testing.T) {
 	defer cancel()
 
 	resource := &TestRunLoopResource{}
-	rl := NewRunLoop[*TestRunLoopResource](ctx, resource)
+	rl := NewRunLoop[*TestRunLoopResource](ctx, resource, "test")
 
 	// Start RunLoop
 	go rl.Run(ctx)
@@ -204,7 +204,7 @@ func TestRunLoopConcurrency(t *testing.T) {
 	defer cancel()
 
 	resource := &TestRunLoopResource{}
-	rl := NewRunLoop[*TestRunLoopResource](ctx, resource)
+	rl := NewRunLoop[*TestRunLoopResource](ctx, resource, "test")
 
 	// Start RunLoop
 	go rl.Run(ctx)
@@ -256,7 +256,7 @@ func TestRunLoopEventOrder(t *testing.T) {
 	defer cancel()
 
 	resource := &TestRunLoopResource{}
-	rl := NewRunLoop[*TestRunLoopResource](ctx, resource)
+	rl := NewRunLoop[*TestRunLoopResource](ctx, resource, "test")
 
 	// Start RunLoop
 	go rl.Run(ctx)

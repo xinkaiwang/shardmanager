@@ -69,7 +69,7 @@ func TestRunLoopWithExampleResource(t *testing.T) {
 	}
 
 	// Create a RunLoop for the custom resource
-	rl := NewRunLoop[*ExampleResource](ctx, resource)
+	rl := NewRunLoop[*ExampleResource](ctx, resource, "test")
 
 	// Start the RunLoop
 	done := make(chan bool)

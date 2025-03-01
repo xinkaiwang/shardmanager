@@ -8,30 +8,33 @@ import (
 )
 
 var (
-	RunLoopSamplerMetric = kmetrics.CreateKmetric(context.Background(), "runloop_sample_ct", "desc", []string{"event"}).CountOnly()
+	RunLoopSamplerMetric = kmetrics.CreateKmetric(context.Background(), "runloop_sample_ct", "desc", []string{"name", "event"}).CountOnly()
 )
 
 type RunloopSampler struct {
-	fn SampleFunc
+	name string
+	fn   SampleFunc
 }
 
 type SampleFunc func() string
 
-func NewRunloopSampler(ctx context.Context, fn SampleFunc) *RunloopSampler {
+// name is used for logging/metrics purposes only
+func NewRunloopSampler(ctx context.Context, fn SampleFunc, name string) *RunloopSampler {
 	sampler := &RunloopSampler{
-		fn: fn,
+		name: name,
+		fn:   fn,
 	}
 	go sampler.Run(ctx)
 	return sampler
 }
 
-func (s *RunloopSampler) Run(ctx context.Context) {
-	current := s.fn()
+func (rs *RunloopSampler) Run(ctx context.Context) {
+	current := rs.fn()
 	if current == "" {
 		current = "none"
 	}
-	RunLoopSamplerMetric.GetTimeSequence(ctx, current).Add(1)
+	RunLoopSamplerMetric.GetTimeSequence(ctx, rs.name, current).Add(1)
 	kcommon.ScheduleRun(20, func() { // sleep 20ms = 50Hz
-		s.Run(ctx)
+		rs.Run(ctx)
 	})
 }

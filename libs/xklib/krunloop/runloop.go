@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	RunLoopElapsedMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"event"})
+	RunLoopElapsedMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"name", "event"})
 )
 
 // CriticalResource is an interface that represents resources that can be processed by events
@@ -27,19 +27,22 @@ type IEvent[T CriticalResource] interface {
 
 // RunLoop is a generic event processing loop for any resource type
 type RunLoop[T CriticalResource] struct {
+	name             string // name of this runloop: for logging/metrics purposes only
 	resource         T
 	queue            *UnboundedQueue[T]
 	currentEventName string
 	sampler          *RunloopSampler
 }
 
-// NewRunLoop creates a new RunLoop for the given resource
-func NewRunLoop[T CriticalResource](ctx context.Context, resource T) *RunLoop[T] {
+// NewRunLoop creates a new RunLoop for the given resource.
+// name is used for logging/metrics purposes only
+func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string) *RunLoop[T] {
 	rl := &RunLoop[T]{
+		name:     name,
 		resource: resource,
 		queue:    NewUnboundedQueue[T](ctx),
 	}
-	rl.sampler = NewRunloopSampler(ctx, func() string { return rl.currentEventName })
+	rl.sampler = NewRunloopSampler(ctx, func() string { return rl.currentEventName }, name)
 	return rl
 }
 
@@ -68,7 +71,7 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			defer func() {
 				rl.currentEventName = ""
 				elapsedMs := kcommon.GetMonoTimeMs() - start
-				RunLoopElapsedMsMetric.GetTimeSequence(ctx, eveName).Add(elapsedMs)
+				RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
 			}()
 			event.Process(ctx, rl.resource)
 		}
