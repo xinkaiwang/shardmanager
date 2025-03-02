@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -30,7 +31,7 @@ func (m *MockItem) IsBetterThan(other OrderedListItem) bool {
 	return m.subValue > otherMock.subValue
 }
 
-func (m *MockItem) Dropped(reason EnqueueResult) {
+func (m *MockItem) Dropped(ctx context.Context, reason EnqueueResult) {
 	m.dropped = true
 	m.reason = reason
 }
@@ -45,6 +46,7 @@ func (m *MockItem) String() string {
 
 // 测试基本的入队和排序功能
 func TestOrderedList_BasicEnqueue(t *testing.T) {
+	ctx := context.Background()
 	list := NewOrderedList[*MockItem](3)
 
 	items := []*MockItem{
@@ -55,9 +57,9 @@ func TestOrderedList_BasicEnqueue(t *testing.T) {
 
 	// 测试正常入队
 	for i, item := range items {
-		result := list.Enqueue(item)
-		if result != ER_Success {
-			t.Errorf("第 %d 个项目入队失败，期望 %v，得到 %v", i, ER_Success, result)
+		result := list.Enqueue(ctx, item)
+		if result != ER_Enqueued {
+			t.Errorf("第 %d 个项目入队失败，期望 %v，得到 %v", i, ER_Enqueued, result)
 		}
 	}
 
@@ -71,18 +73,19 @@ func TestOrderedList_BasicEnqueue(t *testing.T) {
 
 // 测试重复项处理
 func TestOrderedList_DuplicateHandling(t *testing.T) {
+	ctx := context.Background()
 	list := NewOrderedList[*MockItem](3)
 
 	// 添加第一个项目
 	item1 := NewMockItem(1, 1.0, "same")
-	result := list.Enqueue(item1)
-	if result != ER_Success {
-		t.Errorf("第一个项目入队失败，期望 %v，得到 %v", ER_Success, result)
+	result := list.Enqueue(ctx, item1)
+	if result != ER_Enqueued {
+		t.Errorf("第一个项目入队失败，期望 %v，得到 %v", ER_Enqueued, result)
 	}
 
 	// 尝试添加具有相同签名的项目
 	item2 := NewMockItem(2, 2.0, "same")
-	result = list.Enqueue(item2)
+	result = list.Enqueue(ctx, item2)
 	if result != ER_Duplicate {
 		t.Errorf("重复项目应该被拒绝，期望 %v，得到 %v", ER_Duplicate, result)
 	}
@@ -95,6 +98,7 @@ func TestOrderedList_DuplicateHandling(t *testing.T) {
 
 // 测试容量限制和项目替换
 func TestOrderedList_CapacityAndReplacement(t *testing.T) {
+	ctx := context.Background()
 	list := NewOrderedList[*MockItem](3)
 
 	// 添加三个初始项目
@@ -105,14 +109,14 @@ func TestOrderedList_CapacityAndReplacement(t *testing.T) {
 	}
 
 	for _, item := range items {
-		list.Enqueue(item)
+		list.Enqueue(ctx, item)
 	}
 
 	// 尝试添加更好的项目
 	betterItem := NewMockItem(4, 1.0, "4")
-	result := list.Enqueue(betterItem)
-	if result != ER_Success {
-		t.Errorf("更好的项目应该被接受，期望 %v，得到 %v", ER_Success, result)
+	result := list.Enqueue(ctx, betterItem)
+	if result != ER_Enqueued {
+		t.Errorf("更好的项目应该被接受，期望 %v，得到 %v", ER_Enqueued, result)
 	}
 
 	// 验证最差的项目被移除
@@ -125,7 +129,7 @@ func TestOrderedList_CapacityAndReplacement(t *testing.T) {
 
 	// 尝试添加更差的项目
 	worseItem := NewMockItem(0, 1.0, "0")
-	result = list.Enqueue(worseItem)
+	result = list.Enqueue(ctx, worseItem)
 	if result != ER_LowGain {
 		t.Errorf("更差的项目应该被拒绝，期望 %v，得到 %v", ER_LowGain, result)
 	}
@@ -133,6 +137,8 @@ func TestOrderedList_CapacityAndReplacement(t *testing.T) {
 
 // 测试边界情况
 func TestOrderedList_EdgeCases(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("空列表", func(t *testing.T) {
 		list := NewOrderedList[*MockItem](3)
 		if len(list.Items) != 0 {
@@ -163,16 +169,16 @@ func TestOrderedList_EdgeCases(t *testing.T) {
 
 		// 添加第一个项目
 		item1 := NewMockItem(1, 1.0, "1")
-		result := list.Enqueue(item1)
-		if result != ER_Success {
-			t.Errorf("第一个项目入队失败，期望 %v，得到 %v", ER_Success, result)
+		result := list.Enqueue(ctx, item1)
+		if result != ER_Enqueued {
+			t.Errorf("第一个项目入队失败，期望 %v，得到 %v", ER_Enqueued, result)
 		}
 
 		// 添加更好的项目
 		item2 := NewMockItem(2, 1.0, "2")
-		result = list.Enqueue(item2)
-		if result != ER_Success {
-			t.Errorf("更好的项目应该被接受，期望 %v，得到 %v", ER_Success, result)
+		result = list.Enqueue(ctx, item2)
+		if result != ER_Enqueued {
+			t.Errorf("更好的项目应该被接受，期望 %v，得到 %v", ER_Enqueued, result)
 		}
 
 		// 验证只保留了更好的项目
@@ -191,7 +197,7 @@ func TestOrderedList_EdgeCases(t *testing.T) {
 		}
 
 		for _, item := range items {
-			list.Enqueue(item)
+			list.Enqueue(ctx, item)
 		}
 
 		// 验证按次值排序
@@ -207,6 +213,7 @@ func TestOrderedList_EdgeCases(t *testing.T) {
 
 // 测试 Peak 和 Pop 操作
 func TestOrderedList_PeakAndPop(t *testing.T) {
+	ctx := context.Background()
 	list := NewOrderedList[*MockItem](3)
 
 	// 添加项目
@@ -217,7 +224,7 @@ func TestOrderedList_PeakAndPop(t *testing.T) {
 	}
 
 	for _, item := range items {
-		list.Enqueue(item)
+		list.Enqueue(ctx, item)
 	}
 
 	// 测试 Peak
@@ -244,11 +251,12 @@ func TestOrderedList_PeakAndPop(t *testing.T) {
 
 // 测试签名管理
 func TestOrderedList_SignatureManagement(t *testing.T) {
+	ctx := context.Background()
 	list := NewOrderedList[*MockItem](3)
 
 	// 添加项目
 	item := NewMockItem(1, 1.0, "test")
-	list.Enqueue(item)
+	list.Enqueue(ctx, item)
 
 	// 验证签名已添加
 	if _, exists := list.signatures[item.GetSignature()]; !exists {
@@ -266,12 +274,13 @@ func TestOrderedList_SignatureManagement(t *testing.T) {
 
 // 测试大量操作的正确性
 func TestOrderedList_BulkOperations(t *testing.T) {
+	ctx := context.Background()
 	list := NewOrderedList[*MockItem](5)
 
 	// 添加 10 个项目
 	for i := 0; i < 10; i++ {
 		item := NewMockItem(i, float64(i), fmt.Sprintf("%d", i))
-		list.Enqueue(item)
+		list.Enqueue(ctx, item)
 	}
 
 	// 验证只保留了最好的 5 个项目
@@ -296,14 +305,15 @@ func TestOrderedList_BulkOperations(t *testing.T) {
 
 // 测试插入位置
 func TestOrderedList_InsertPosition(t *testing.T) {
+	ctx := context.Background()
 	list := NewOrderedList[*MockItem](5)
 
 	// 测试插入到最前面
 	t.Run("插入到最前面", func(t *testing.T) {
-		list.Enqueue(NewMockItem(1, 1.0, "1"))
-		list.Enqueue(NewMockItem(2, 1.0, "2"))
+		list.Enqueue(ctx, NewMockItem(1, 1.0, "1"))
+		list.Enqueue(ctx, NewMockItem(2, 1.0, "2"))
 		best := NewMockItem(3, 1.0, "3")
-		list.Enqueue(best)
+		list.Enqueue(ctx, best)
 		if list.Items[0] != best {
 			t.Error("最好的项目应该在最前面")
 		}
@@ -314,10 +324,10 @@ func TestOrderedList_InsertPosition(t *testing.T) {
 
 	// 测试插入到中间
 	t.Run("插入到中间", func(t *testing.T) {
-		list.Enqueue(NewMockItem(3, 1.0, "3"))
-		list.Enqueue(NewMockItem(1, 1.0, "1"))
+		list.Enqueue(ctx, NewMockItem(3, 1.0, "3"))
+		list.Enqueue(ctx, NewMockItem(1, 1.0, "1"))
 		middle := NewMockItem(2, 1.0, "2")
-		list.Enqueue(middle)
+		list.Enqueue(ctx, middle)
 		if list.Items[1] != middle {
 			t.Error("项目应该插入到中间位置")
 		}
@@ -328,10 +338,10 @@ func TestOrderedList_InsertPosition(t *testing.T) {
 
 	// 测试插入到最后
 	t.Run("插入到最后", func(t *testing.T) {
-		list.Enqueue(NewMockItem(3, 1.0, "3"))
-		list.Enqueue(NewMockItem(2, 1.0, "2"))
+		list.Enqueue(ctx, NewMockItem(3, 1.0, "3"))
+		list.Enqueue(ctx, NewMockItem(2, 1.0, "2"))
 		worst := NewMockItem(1, 1.0, "1")
-		list.Enqueue(worst)
+		list.Enqueue(ctx, worst)
 		if list.Items[2] != worst {
 			t.Error("最差的项目应该在最后面")
 		}

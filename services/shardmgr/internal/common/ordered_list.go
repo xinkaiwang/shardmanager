@@ -1,8 +1,10 @@
 package common
 
+import "context"
+
 type OrderedListItem interface {
 	IsBetterThan(other OrderedListItem) bool
-	Dropped(reason EnqueueResult) // get called when the item is dropped from the list
+	Dropped(ctx context.Context, reason EnqueueResult) // get called when the item is dropped from the list
 	GetSignature() string
 }
 
@@ -25,7 +27,7 @@ func NewOrderedList[T OrderedListItem](maxSize int) *OrderedList[T] {
 type EnqueueResult string
 
 const (
-	ER_Success   EnqueueResult = "success"
+	ER_Enqueued  EnqueueResult = "enqueued"
 	ER_LowGain   EnqueueResult = "low_gain"
 	ER_Duplicate EnqueueResult = "duplicate"
 	ER_Accepted  EnqueueResult = "accepted"
@@ -35,7 +37,7 @@ const (
 // Add adds an item to the list, and returns true if the item is added successfully.
 // If the list is full, the item will only be added if it's better than the worst item in the list.
 // If the item is added, the worst item in the list will be removed.
-func (ol *OrderedList[T]) Enqueue(item T) EnqueueResult {
+func (ol *OrderedList[T]) Enqueue(ctx context.Context, item T) EnqueueResult {
 	sig := item.GetSignature()
 	if _, ok := ol.signatures[sig]; ok {
 		return ER_Duplicate
@@ -45,7 +47,7 @@ func (ol *OrderedList[T]) Enqueue(item T) EnqueueResult {
 	ol.signatures[sig] = Unit{}
 
 	if len(ol.Items) <= ol.maxSize {
-		return ER_Success
+		return ER_Enqueued
 	}
 
 	// need to drop the last item
@@ -58,8 +60,8 @@ func (ol *OrderedList[T]) Enqueue(item T) EnqueueResult {
 		return ER_LowGain
 	} else {
 		delete(ol.signatures, lastSig)
-		last.Dropped(ER_LowGain)
-		return ER_Success
+		last.Dropped(ctx, ER_LowGain)
+		return ER_Enqueued
 	}
 }
 
