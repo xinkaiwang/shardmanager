@@ -43,5 +43,6 @@ func CostFuncSimple(snap *Snapshot) Cost {
 		cost.HardScore += hard
 	}
 
+	cost.SoftScore *= 5000 // this makes soft score more readable
 	return cost
 }

@@ -54,5 +54,5 @@ func (g Gain) IsLowerThan(other Gain) bool {
 }
 
 func (g Gain) String() string {
-	return fmt.Sprintf("{%d, %f}", g.HardScore, g.SoftScore)
+	return fmt.Sprintf("{%d, %.3f}", g.HardScore, g.SoftScore)
 }

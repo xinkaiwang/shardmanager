@@ -2,7 +2,10 @@ package costfunc
 
 import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 
+type SnapshotId string
+
 type Snapshot struct {
+	SnapshotId  SnapshotId
 	CostfuncCfg CostfuncCfg
 	AllShards   map[data.ShardId]*ShardSnap
 	AllWorkers  map[data.WorkerFullId]*WorkerSnap
