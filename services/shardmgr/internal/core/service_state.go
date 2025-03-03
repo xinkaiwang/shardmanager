@@ -6,6 +6,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -16,7 +17,7 @@ type ServiceState struct {
 	runloop       *krunloop.RunLoop[*ServiceState]
 	PathManager   *PathManager
 	ServiceInfo   *ServiceInfo
-	ServiceConfig *ServiceConfig
+	ServiceConfig *config.ServiceConfig
 	ShadowState   *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.

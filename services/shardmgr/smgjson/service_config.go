@@ -7,9 +7,10 @@ import (
 )
 
 type ServiceConfigJson struct {
-	ShardConfig *ShardConfigJson       `json:"shard_config"`
-	SystemLimit *SystemLimitConfigJson `json:"system_limit"`
-	CostFuncCfg *CostFuncConfigJson    `json:"cost_func_cfg"`
+	ShardConfig  *ShardConfigJson       `json:"shard_config"`
+	SystemLimit  *SystemLimitConfigJson `json:"system_limit"`
+	CostFuncCfg  *CostFuncConfigJson    `json:"cost_func_cfg"`
+	SolverConfig *SolverConfigJson      `json:"solver_config"`
 }
 
 type ShardConfigJson struct {
@@ -32,9 +33,34 @@ type SystemLimitConfigJson struct {
 }
 
 type CostFuncConfigJson struct {
-	QpmNormFactor *float64 `json:"qpm_norm_factor"`
-	CpuNormFactor *float64 `json:"cpu_norm_factor"`
-	MemNormFactor *float64 `json:"mem_norm_factor"`
+	ShardCountCostEnable *bool  `json:"shard_count_cost_enable"`
+	ShardCountCostNorm   *int32 `json:"shard_count_cost_norm"`
+
+	WorkerMaxAssignments *int32 `json:"worker_max_assignments"`
+}
+
+type SolverConfigJson struct {
+	SoftSolverConfig     *SoftSolverConfigJson     `json:"soft_solver_config"`
+	AssignSolverConfig   *AssignSolverConfigJson   `json:"assign_solver_config"`
+	UnassignSolverConfig *UnassignSolverConfigJson `json:"unassign_solver_config"`
+}
+
+type SoftSolverConfigJson struct {
+	SoftSolverEnabled *bool  `json:"soft_solver_enabled"`
+	RunPerMinute      *int32 `json:"run_per_minute"`
+	ExplorePerRun     *int32 `json:"explore_per_run"`
+}
+
+type AssignSolverConfigJson struct {
+	AssignSolverEnabled *bool  `json:"assign_solver_enabled"`
+	RunPerMinute        *int32 `json:"run_per_minute"`
+	ExplorePerRun       *int32 `json:"explore_per_run"`
+}
+
+type UnassignSolverConfigJson struct {
+	UnassignSolverEnabled *bool  `json:"unassign_solver_enabled"`
+	RunPerMinute          *int32 `json:"run_per_minute"`
+	ExplorePerRun         *int32 `json:"explore_per_run"`
 }
 
 func (sc *ServiceConfigJson) ToJson() string {

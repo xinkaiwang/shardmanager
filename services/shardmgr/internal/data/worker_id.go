@@ -12,6 +12,8 @@ type WorkerFullId struct {
 	SessionId SessionId
 }
 
+var WorkerFullIdZero = WorkerFullId{WorkerId: "", SessionId: ""}
+
 func NewWorkerFullId(workerId WorkerId, sessionId SessionId, stateInMemory bool) WorkerFullId {
 	if stateInMemory {
 		// If state is in memory, sessionId is required

@@ -1,31 +1,44 @@
 package costfunc
 
-import (
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+var (
+	currentCostFuncProvider CostFuncProvider
 )
 
-type CostFunc func(*Snapshot) Cost
+func GetCurrentCostFuncProvider() CostFuncProvider {
+	if currentCostFuncProvider == nil {
+		currentCostFuncProvider = NewCostFuncSimpleProvider()
+	}
+	return currentCostFuncProvider
+}
 
-func CostFuncSimple(snap *Snapshot) Cost {
+type CostFuncProvider interface {
+	CalCost(snap *Snapshot) Cost
+}
+
+// CostFuncSimpleProvider implements the CostFuncProvider interface
+type CostFuncSimpleProvider struct {
+}
+
+func NewCostFuncSimpleProvider() *CostFuncSimpleProvider {
+	return &CostFuncSimpleProvider{}
+}
+
+// CalCost implements the CostFuncProvider interface
+func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 	cost := Cost{HardScore: 0, SoftScore: 0}
 
 	// Part 1: Hard score
 	// all those replicas that are not assigned to any worker got 1 point (penalty)
 	{
 		hard := int32(0)
-		allReplicas := map[data.ReplicaFullId]common.Unit{}
+		// allReplicas := map[data.ReplicaFullId]common.Unit{}
 		for _, shard := range snap.AllShards {
 			for _, replica := range shard.Replicas {
-				allReplicas[replica.GetReplicaFullId()] = common.Unit{}
+				if len(replica.Assignments) == 0 {
+					hard++
+				}
 			}
 		}
-		for _, worker := range snap.AllWorkers {
-			for _, assignment := range worker.Assignments {
-				delete(allReplicas, assignment.GetReplicaFullId())
-			}
-		}
-		hard += int32(len(allReplicas))
 		cost.HardScore += hard
 	}
 
@@ -35,7 +48,7 @@ func CostFuncSimple(snap *Snapshot) Cost {
 		hard := int32(0)
 		for _, worker := range snap.AllWorkers {
 			soft += float64(len(worker.Assignments)) / float64(snap.CostfuncCfg.ShardCountCostNorm)
-			if len(worker.Assignments) > snap.CostfuncCfg.WorkerMaxAssignments {
+			if len(worker.Assignments) > int(snap.CostfuncCfg.WorkerMaxAssignments) {
 				hard++
 			}
 		}

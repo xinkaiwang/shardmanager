@@ -26,6 +26,13 @@ func (c Cost) IsGreaterThan(other Cost) bool {
 	return !c.IsLowerThan(other) && !c.IsEqualTo(other)
 }
 
+func (c Cost) Substract(other Cost) Gain {
+	return Gain{
+		HardScore: c.HardScore - other.HardScore,
+		SoftScore: c.SoftScore - other.SoftScore,
+	}
+}
+
 // Gain: evaluates the benifit of a move. positive number means good move, the larger the better.
 // Note: a good move is a move that reduces the cost.
 type Gain struct {
