@@ -17,12 +17,8 @@ type Proposal struct {
 	BasedOn     SnapshotId
 	StartTimeMs int64 // epoch time in ms
 
-	// one of them is not nil
-	SimpleMove  *SimpleMove
-	AssignMove  *AssignMove
-	SwapMove    *SwapMove
-	ReplaceMove *ReplaceMove
-	OnClose     func(reason common.EnqueueResult) // will get called when proposal is closed
+	Move    Move
+	OnClose func(reason common.EnqueueResult) // will get called when proposal is closed
 }
 
 func NewProposal(ctx context.Context, solverType string, gain Gain, basedOn SnapshotId) *Proposal {
@@ -33,20 +29,16 @@ func NewProposal(ctx context.Context, solverType string, gain Gain, basedOn Snap
 	}
 }
 
-func (proposal *Proposal) GetSignature() string {
-	if proposal.SimpleMove != nil {
-		return proposal.SimpleMove.GetSignature()
-	} else if proposal.AssignMove != nil {
-		return proposal.AssignMove.GetSignature()
-	} else if proposal.SwapMove != nil {
-		return proposal.SwapMove.GetSignature()
-	} else if proposal.ReplaceMove != nil {
-		return proposal.ReplaceMove.GetSignature()
-	} else {
-		return ""
-	}
+type Move interface {
+	GetSignature() string
+	Apply(snapshot *Snapshot)
 }
 
+func (proposal *Proposal) GetSignature() string {
+	return proposal.Move.GetSignature()
+}
+
+// SimpleMove implements Move
 type SimpleMove struct {
 	Replica          data.ReplicaFullId
 	SrcAssignmentId  data.AssignmentId
@@ -72,6 +64,7 @@ func (move *SimpleMove) Apply(snapshot *Snapshot) {
 	dstWorker.Assignments[move.Replica.ShardId] = move.DestAssignmentId
 }
 
+// AssignMove implements Move
 type AssignMove struct {
 	Replica      data.ReplicaFullId
 	AssignmentId data.AssignmentId
@@ -94,6 +87,25 @@ func (move *AssignMove) Apply(snapshot *Snapshot) {
 	shard.Replicas[move.Replica.ReplicaIdx].Assignments[move.AssignmentId] = common.Unit{}
 }
 
+// UnassignMove implements Move
+type UnassignMove struct {
+	Worker       data.WorkerFullId
+	Replica      data.ReplicaFullId
+	AssignmentId data.AssignmentId
+}
+
+func (move *UnassignMove) GetSignature() string {
+	return move.Worker.String() + "/" + move.Replica.String()
+}
+
+func (move *UnassignMove) Apply(snapshot *Snapshot) {
+	delete(snapshot.AllAssigns, move.AssignmentId)
+	delete(snapshot.AllWorkers[move.Worker].Assignments, move.Replica.ShardId)
+	shardSnap := snapshot.AllShards[move.Replica.ShardId]
+	delete(shardSnap.Replicas[move.Replica.ReplicaIdx].Assignments, move.AssignmentId)
+}
+
+// SwapMove implements Move
 type SwapMove struct {
 	Replica1 data.ReplicaFullId
 	Replica2 data.ReplicaFullId
@@ -105,6 +117,7 @@ func (move *SwapMove) GetSignature() string {
 	return move.Replica1.String() + "/" + move.Replica2.String() + "/" + move.Src.String() + "/" + move.Dst.String()
 }
 
+// ReplaceMove implements Move
 type ReplaceMove struct {
 	ReplicaOut data.ReplicaFullId
 	ReplicaIn  data.ReplicaFullId

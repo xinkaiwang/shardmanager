@@ -85,7 +85,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	}
 	if bestMove != nil {
 		proposal := costfunc.NewProposal(ctx, "AssignMove", baseCost.Substract(bestCost), snapshot.SnapshotId)
-		proposal.AssignMove = bestMove
+		proposal.Move = bestMove
 		proposal.OnClose = func(reason common.EnqueueResult) {
 			elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
 			klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "AssignSolver").Log("ProposalClosed", "")
