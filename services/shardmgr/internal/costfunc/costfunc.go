@@ -13,6 +13,13 @@ func GetCurrentCostFuncProvider() CostFuncProvider {
 	return currentCostFuncProvider
 }
 
+func RunWithCostFuncProvider(provider CostFuncProvider, fn func()) {
+	oldProvider := currentCostFuncProvider
+	currentCostFuncProvider = provider
+	fn()
+	currentCostFuncProvider = oldProvider
+}
+
 type CostFuncProvider interface {
 	CalCost(snap *Snapshot) Cost
 }
@@ -35,7 +42,7 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 		hard := int32(0)
 		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
 			for _, replica := range shard.Replicas {
-				if len(replica.Assignments) == 0 {
+				if !replica.LameDuck && len(replica.Assignments) == 0 {
 					hard++
 				}
 			}

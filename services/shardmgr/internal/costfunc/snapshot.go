@@ -40,6 +40,7 @@ type ReplicaSnap struct {
 	ShardId     data.ShardId
 	ReplicaIdx  data.ReplicaIdx
 	Assignments map[data.AssignmentId]common.Unit
+	LameDuck    bool
 }
 
 func (rep *ReplicaSnap) GetReplicaFullId() data.ReplicaFullId {
@@ -65,16 +66,17 @@ type AssignmentSnap struct {
 	ShardId      data.ShardId
 	ReplicaIdx   data.ReplicaIdx
 	AssignmentId data.AssignmentId
-	// WorkerFullId data.WorkerFullId
+	WorkerFullId data.WorkerFullId // the benefit of have this info: unassign solver can keep list a assignment as candidate
 }
 
 func (asgn AssignmentSnap) IsValueTypeT2() {}
 
-func NewAssignmentSnap(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId) *AssignmentSnap {
+func NewAssignmentSnap(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, workerFullId data.WorkerFullId) *AssignmentSnap {
 	return &AssignmentSnap{
 		ShardId:      shardId,
 		ReplicaIdx:   replicaIdx,
 		AssignmentId: assignmentId,
+		WorkerFullId: workerFullId,
 	}
 }
 
@@ -159,7 +161,7 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 	newWorkerSnap.Assignments[shardId] = assignmentId
 	snap.AllWorkers.Set(workerFullId, newWorkerSnap)
 	// update assignmentSnap
-	newAssignmentSnap := NewAssignmentSnap(shardId, replicaIdx, assignmentId)
+	newAssignmentSnap := NewAssignmentSnap(shardId, replicaIdx, assignmentId, workerFullId)
 	snap.AllAssigns.Set(assignmentId, newAssignmentSnap)
 }
 

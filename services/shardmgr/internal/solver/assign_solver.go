@@ -83,14 +83,14 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 			bestMove = move
 		}
 	}
-	if bestMove != nil {
-		proposal := costfunc.NewProposal(ctx, "AssignMove", baseCost.Substract(bestCost), snapshot.SnapshotId)
-		proposal.Move = bestMove
-		proposal.OnClose = func(reason common.EnqueueResult) {
-			elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
-			klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "AssignSolver").Log("ProposalClosed", "")
-		}
-		return proposal
+	if bestMove == nil {
+		return nil
 	}
-	return nil
+	proposal := costfunc.NewProposal(ctx, "AssignMove", baseCost.Substract(bestCost), snapshot.SnapshotId)
+	proposal.Move = bestMove
+	proposal.OnClose = func(reason common.EnqueueResult) {
+		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
+		klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "AssignSolver").Log("ProposalClosed", "")
+	}
+	return proposal
 }
