@@ -29,7 +29,6 @@ import "github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 
 // 任何实现此接口的类型都可以用作 FastMap 的值类型
 type TypeT2 interface {
-	comparable
 	IsValueTypeT2()
 }
 

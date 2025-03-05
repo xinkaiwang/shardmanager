@@ -34,14 +34,14 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 			// step 2: which shard?
 			// candidate replica list
 			candidateReplicas := []data.ReplicaFullId{}
-			for _, shard := range snapshot.AllShards {
+			snapshot.AllShards.VisitAll(func(shardId data.ShardId, shard *costfunc.ShardSnap) {
 				for _, replica := range shard.Replicas {
 					if len(replica.Assignments) > 0 {
 						continue
 					}
 					candidateReplicas = append(candidateReplicas, replica.GetReplicaFullId())
 				}
-			}
+			})
 			if len(candidateReplicas) == 0 {
 				// no replica needs new assignment
 				return nil
@@ -54,11 +54,11 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 			// step 3: which dest worker?
 			// candidate worker list
 			candidateWorkers := []data.WorkerFullId{}
-			for fullId, worker := range snapshot.AllWorkers {
+			snapshot.AllWorkers.VisitAll(func(fullId data.WorkerFullId, worker *costfunc.WorkerSnap) {
 				if worker.CanAcceptAssignment(replicaCandidate.ShardId) {
 					candidateWorkers = append(candidateWorkers, fullId)
 				}
-			}
+			})
 			if len(candidateWorkers) == 0 {
 				// no worker can accept this assignment
 				return nil

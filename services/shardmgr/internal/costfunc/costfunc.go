@@ -1,5 +1,7 @@
 package costfunc
 
+import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+
 var (
 	currentCostFuncProvider CostFuncProvider
 )
@@ -31,14 +33,20 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 	// all those replicas that are not assigned to any worker got 1 point (penalty)
 	{
 		hard := int32(0)
-		// allReplicas := map[data.ReplicaFullId]common.Unit{}
-		for _, shard := range snap.AllShards {
+		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
 			for _, replica := range shard.Replicas {
 				if len(replica.Assignments) == 0 {
 					hard++
 				}
 			}
-		}
+		})
+		// for _, shard := range snap.AllShards {
+		// 	for _, replica := range shard.Replicas {
+		// 		if len(replica.Assignments) == 0 {
+		// 			hard++
+		// 		}
+		// 	}
+		// }
 		cost.HardScore += hard
 	}
 
@@ -46,12 +54,12 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 	{
 		soft := float64(0)
 		hard := int32(0)
-		for _, worker := range snap.AllWorkers {
+		snap.AllWorkers.VisitAll(func(workerId data.WorkerFullId, worker *WorkerSnap) {
 			soft += float64(len(worker.Assignments)) / float64(snap.CostfuncCfg.ShardCountCostNorm)
 			if len(worker.Assignments) > int(snap.CostfuncCfg.WorkerMaxAssignments) {
 				hard++
 			}
-		}
+		})
 		cost.SoftScore += soft
 		cost.HardScore += hard
 	}

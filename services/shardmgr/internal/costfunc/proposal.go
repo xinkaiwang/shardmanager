@@ -52,16 +52,8 @@ func (move *SimpleMove) GetSignature() string {
 }
 
 func (move *SimpleMove) Apply(snapshot *Snapshot) {
-	srcWorker := snapshot.AllWorkers[move.Src]
-	dstWorker := snapshot.AllWorkers[move.Dst]
-	delete(srcWorker.Assignments, move.Replica.ShardId)
-	delete(snapshot.AllAssigns, move.SrcAssignmentId)
-	snapshot.AllAssigns[move.DestAssignmentId] = &AssignmentSnap{
-		ShardId:      move.Replica.ShardId,
-		ReplicaIdx:   move.Replica.ReplicaIdx,
-		AssignmentId: move.DestAssignmentId,
-	}
-	dstWorker.Assignments[move.Replica.ShardId] = move.DestAssignmentId
+	snapshot.Unassign(move.Src, move.Replica.ShardId, move.Replica.ReplicaIdx, move.SrcAssignmentId)
+	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.DestAssignmentId, move.Dst)
 }
 
 // AssignMove implements Move
@@ -76,15 +68,7 @@ func (move *AssignMove) GetSignature() string {
 }
 
 func (move *AssignMove) Apply(snapshot *Snapshot) {
-	snapshot.AllAssigns[move.AssignmentId] = &AssignmentSnap{
-		ShardId:      move.Replica.ShardId,
-		ReplicaIdx:   move.Replica.ReplicaIdx,
-		AssignmentId: move.AssignmentId,
-	}
-	worker := snapshot.AllWorkers[move.Worker]
-	worker.Assignments[move.Replica.ShardId] = move.AssignmentId
-	shard := snapshot.AllShards[move.Replica.ShardId]
-	shard.Replicas[move.Replica.ReplicaIdx].Assignments[move.AssignmentId] = common.Unit{}
+	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId, move.Worker)
 }
 
 // UnassignMove implements Move
@@ -99,10 +83,7 @@ func (move *UnassignMove) GetSignature() string {
 }
 
 func (move *UnassignMove) Apply(snapshot *Snapshot) {
-	delete(snapshot.AllAssigns, move.AssignmentId)
-	delete(snapshot.AllWorkers[move.Worker].Assignments, move.Replica.ShardId)
-	shardSnap := snapshot.AllShards[move.Replica.ShardId]
-	delete(shardSnap.Replicas[move.Replica.ReplicaIdx].Assignments, move.AssignmentId)
+	snapshot.Unassign(move.Worker, move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId)
 }
 
 // SwapMove implements Move

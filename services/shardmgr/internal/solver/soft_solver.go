@@ -36,11 +36,11 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 			// Step 3: which source worker?
 			// candidate worker list
 			candidateWorkers := []data.WorkerFullId{}
-			for fullId, worker := range snapshot.AllWorkers {
+			snapshot.AllWorkers.VisitAll(func(fullId data.WorkerFullId, worker *costfunc.WorkerSnap) {
 				if len(worker.Assignments) > 0 {
 					candidateWorkers = append(candidateWorkers, fullId)
 				}
-			}
+			})
 			if len(candidateWorkers) == 0 {
 				// no worker has any assignment
 				stop = true
@@ -52,11 +52,11 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 		var assignment *costfunc.AssignmentSnap
 		{
 			// Step 4: which replica?
-			srcWorker := snapshot.AllWorkers[srcWorkerId]
+			srcWorker, _ := snapshot.AllWorkers.Get(srcWorkerId)
 			// candidate replica list
 			candidateReplicas := []*costfunc.AssignmentSnap{}
 			for _, assignment := range srcWorker.Assignments {
-				asgnSnap := snapshot.AllAssigns[assignment]
+				asgnSnap, _ := snapshot.AllAssigns.Get(assignment)
 				candidateReplicas = append(candidateReplicas, asgnSnap)
 			}
 			if len(candidateReplicas) == 0 {
@@ -71,11 +71,11 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 			// Step 5: which target worker?
 			// candidate worker list
 			candidateWorkers := []data.WorkerFullId{}
-			for fullId, worker := range snapshot.AllWorkers {
+			snapshot.AllWorkers.VisitAll(func(fullId data.WorkerFullId, worker *costfunc.WorkerSnap) {
 				if fullId != srcWorkerId && worker.CanAcceptAssignment(assignment.ShardId) {
 					candidateWorkers = append(candidateWorkers, fullId)
 				}
-			}
+			})
 			if len(candidateWorkers) == 0 {
 				// no worker has can take this replica
 				continue
