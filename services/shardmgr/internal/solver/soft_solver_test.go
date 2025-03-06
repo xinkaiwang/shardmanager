@@ -45,7 +45,7 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 	// 使用 RunWithCostFuncProvider 来运行测试
 	costfunc.RunWithCostFuncProvider(&testCostProvider{}, func() {
 		// 设置 SoftSolver 配置
-		config.GetCurrentSolverConfigProvider().SetConfig(&smgjson.SolverConfigJson{
+		GetCurrentSolverConfigProvider().SetConfig(&smgjson.SolverConfigJson{
 			SoftSolverConfig: &smgjson.SoftSolverConfigJson{
 				ExplorePerRun: func() *int32 { v := int32(100); return &v }(), // 增加探索次数以提高找到好方案的概率
 			},

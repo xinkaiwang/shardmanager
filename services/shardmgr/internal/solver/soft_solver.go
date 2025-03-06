@@ -6,7 +6,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -23,7 +22,7 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 	// step 1: get the cost of the current snapshot
 	costProvider := costfunc.GetCurrentCostFuncProvider()
 	baseCost := costProvider.CalCost(snapshot)
-	softSolverCfg := config.GetCurrentSolverConfigProvider().GetSoftSolverConfig()
+	softSolverCfg := GetCurrentSolverConfigProvider().GetSoftSolverConfig()
 
 	var bestMove *costfunc.SimpleMove
 	bestCost := baseCost

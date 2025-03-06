@@ -8,22 +8,22 @@ type SolverConfig struct {
 	UnassignSolverConfig UnassignSolverConfig
 }
 
+type BaseSolverConfig struct {
+	SolverEnabled bool
+	RunPerMinute  int
+	ExplorePerRun int
+}
+
 type SoftSolverConfig struct {
-	SoftSolverEnabled bool
-	RunPerMinute      int
-	ExplorePerRun     int
+	BaseSolverConfig
 }
 
 type AssignSolverConfig struct {
-	AssignSolverEnabled bool
-	RunPerMinute        int
-	ExplorePerRun       int
+	BaseSolverConfig
 }
 
 type UnassignSolverConfig struct {
-	UnassignSolverEnabled bool
-	RunPerMinute          int
-	ExplorePerRun         int
+	BaseSolverConfig
 }
 
 func SolverConfigJsonToConfig(sjc *smgjson.SolverConfigJson) SolverConfig {
@@ -37,15 +37,17 @@ func SolverConfigJsonToConfig(sjc *smgjson.SolverConfigJson) SolverConfig {
 
 func SoftSolverConfigJsonToConfig(ssc *smgjson.SoftSolverConfigJson) SoftSolverConfig {
 	cfg := SoftSolverConfig{
-		SoftSolverEnabled: false,
-		RunPerMinute:      10,
-		ExplorePerRun:     10,
+		BaseSolverConfig: BaseSolverConfig{
+			SolverEnabled: false,
+			RunPerMinute:  10,
+			ExplorePerRun: 10,
+		},
 	}
 	if ssc == nil {
 		return cfg
 	}
 	if ssc.SoftSolverEnabled != nil {
-		cfg.SoftSolverEnabled = *ssc.SoftSolverEnabled
+		cfg.SolverEnabled = *ssc.SoftSolverEnabled
 	}
 	if ssc.RunPerMinute != nil {
 		cfg.RunPerMinute = int(*ssc.RunPerMinute)
@@ -58,15 +60,17 @@ func SoftSolverConfigJsonToConfig(ssc *smgjson.SoftSolverConfigJson) SoftSolverC
 
 func AssignSolverConfigJsonToConfig(asc *smgjson.AssignSolverConfigJson) AssignSolverConfig {
 	cfg := AssignSolverConfig{
-		AssignSolverEnabled: false,
-		RunPerMinute:        10,
-		ExplorePerRun:       10,
+		BaseSolverConfig: BaseSolverConfig{
+			SolverEnabled: false,
+			RunPerMinute:  10,
+			ExplorePerRun: 10,
+		},
 	}
 	if asc == nil {
 		return cfg
 	}
 	if asc.AssignSolverEnabled != nil {
-		cfg.AssignSolverEnabled = *asc.AssignSolverEnabled
+		cfg.SolverEnabled = *asc.AssignSolverEnabled
 	}
 	if asc.RunPerMinute != nil {
 		cfg.RunPerMinute = int(*asc.RunPerMinute)
@@ -79,15 +83,17 @@ func AssignSolverConfigJsonToConfig(asc *smgjson.AssignSolverConfigJson) AssignS
 
 func UnassignSolverConfigJsonToConfig(usc *smgjson.UnassignSolverConfigJson) UnassignSolverConfig {
 	cfg := UnassignSolverConfig{
-		UnassignSolverEnabled: false,
-		RunPerMinute:          10,
-		ExplorePerRun:         10,
+		BaseSolverConfig: BaseSolverConfig{
+			SolverEnabled: false,
+			RunPerMinute:  10,
+			ExplorePerRun: 10,
+		},
 	}
 	if usc == nil {
 		return cfg
 	}
 	if usc.UnassignSolverEnabled != nil {
-		cfg.UnassignSolverEnabled = *usc.UnassignSolverEnabled
+		cfg.SolverEnabled = *usc.UnassignSolverEnabled
 	}
 	if usc.RunPerMinute != nil {
 		cfg.RunPerMinute = int(*usc.RunPerMinute)
