@@ -18,6 +18,10 @@ func NewSoftSolver() *SoftSolver {
 	return &SoftSolver{}
 }
 
+func (ss *SoftSolver) GetType() SolverType {
+	return ST_SoftSolver
+}
+
 func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snapshot) *costfunc.Proposal {
 	// step 1: get the cost of the current snapshot
 	costProvider := costfunc.GetCurrentCostFuncProvider()

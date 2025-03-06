@@ -4,23 +4,34 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 )
 
 // SolverGroup manages multiple SolverDrivers
 type SolverGroup struct {
-	ThreadPool    *ThreadPool
-	Snapshot      *costfunc.Snapshot
-	SolverDrivers map[SolverType]*SolverDriver
+	ThreadPool       *ThreadPool
+	Snapshot         *costfunc.Snapshot
+	SolverDrivers    map[SolverType]*SolverDriver
+	enqueueProposals func(proposal *costfunc.Proposal) common.EnqueueResult
 }
 
-func NewSolverGroup(ctx context.Context) *SolverGroup {
-	return &SolverGroup{
-		ThreadPool: NewThreadPool(ctx, 2, "SolverGroup"),
+func NewSolverGroup(ctx context.Context, snapshot *costfunc.Snapshot, enqueueProposals func(proposal *costfunc.Proposal) common.EnqueueResult) *SolverGroup {
+	group := &SolverGroup{
+		ThreadPool:       NewThreadPool(ctx, 2 /* how many CPU cores */, "SolverGroup"),
+		Snapshot:         snapshot,
+		SolverDrivers:    map[SolverType]*SolverDriver{},
+		enqueueProposals: enqueueProposals,
 	}
+	// group.AddSolver(ctx, NewSoftSolver())
+	// group.AddSolver(ctx, NewAssignSolver())
+	// group.AddSolver(ctx, NewUnassignSolver())
+	return group
 }
 
-func (sa *SolverGroup) AddSolver(ctx context.Context, solverName SolverType, solver Solver) {
+func (sa *SolverGroup) AddSolver(ctx context.Context, solver Solver) {
+	solverName := solver.GetType()
 	driver := NewSolverDriver(ctx, solverName, sa, solver, sa.ThreadPool.EnqueueTask)
 	sa.SolverDrivers[solverName] = driver
 }
@@ -37,26 +48,27 @@ type SolverDriver struct {
 
 func NewSolverDriver(ctx context.Context, name SolverType, parent *SolverGroup, solver Solver, enqueue func(task Task)) *SolverDriver {
 	driver := &SolverDriver{
+		ctx:         ctx,
 		name:        name,
 		parent:      parent,
 		solver:      solver,
 		enqueueTask: enqueue,
 	}
-	driver.threadCountWatcher()
+	driver.threadCountWatcher(ctx)
 	return driver
 }
 
-func (sd *SolverDriver) threadCountWatcher() {
+func (sd *SolverDriver) threadCountWatcher(ctx context.Context) {
 	expectedThreadCount := sd.expectedThreadCount()
 	for len(sd.threads) < expectedThreadCount {
-		sd.threads = append(sd.threads, NewDriverThread(sd, 10*1000))
+		sd.threads = append(sd.threads, NewDriverThread(ctx, sd, 1*1000))
 	}
 	for len(sd.threads) > expectedThreadCount {
 		sd.threads[len(sd.threads)-1].Stop()
 		sd.threads = sd.threads[:len(sd.threads)-1]
 	}
-	kcommon.ScheduleRun(60*1000, func() {
-		sd.threadCountWatcher()
+	kcommon.ScheduleRun(1*1000, func() {
+		sd.threadCountWatcher(ctx)
 	})
 }
 
@@ -72,17 +84,19 @@ func (sd *SolverDriver) expectedThreadCount() int {
 	if qpm <= 0 {
 		return 0
 	}
-	return int(float64(qpm)/6.0 + 0.5) // each thread runs every 10 seconds, so 6 threads per minute
+	return int(float64(qpm)/60.0 + 0.5) // each thread runs every 1 seconds, so 1 threads = 60 QPM
 }
 
 type DriverThread struct {
+	ctx            context.Context
 	parent         *SolverDriver
 	sleepPerLoopMs int
 	stop           bool
 }
 
-func NewDriverThread(parent *SolverDriver, sleepPerLoopMs int) *DriverThread {
+func NewDriverThread(ctx context.Context, parent *SolverDriver, sleepPerLoopMs int) *DriverThread {
 	dt := &DriverThread{
+		ctx:            ctx,
 		parent:         parent,
 		sleepPerLoopMs: sleepPerLoopMs,
 		stop:           false,
@@ -97,7 +111,7 @@ func (dt *DriverThread) Stop() {
 
 func (dt *DriverThread) run() {
 	for !dt.stop {
-		task := NewDriverThreadTask(dt, dt.parent.name)
+		task := NewDriverThreadTask(dt.ctx, dt, dt.parent.name)
 		dt.parent.enqueueTask(task)
 		<-task.done
 
@@ -112,13 +126,15 @@ func (dt *DriverThread) run() {
 
 // DriverThreadTask implements Task interface
 type DriverThreadTask struct {
+	ctx    context.Context
 	name   SolverType
 	parent *DriverThread
 	done   chan struct{}
 }
 
-func NewDriverThreadTask(parent *DriverThread, name SolverType) *DriverThreadTask {
+func NewDriverThreadTask(ctx context.Context, parent *DriverThread, name SolverType) *DriverThreadTask {
 	return &DriverThreadTask{
+		ctx:    ctx,
 		parent: parent,
 		name:   name,
 		done:   make(chan struct{}),
@@ -130,6 +146,10 @@ func (dtt *DriverThreadTask) GetName() string {
 }
 
 func (dtt *DriverThreadTask) Execute() {
-	dtt.parent.parent.solver.FindProposal(dtt.parent.parent.ctx, dtt.parent.parent.parent.Snapshot)
+	proposal := dtt.parent.parent.solver.FindProposal(dtt.parent.parent.ctx, dtt.parent.parent.parent.Snapshot)
+	result := dtt.parent.parent.parent.enqueueProposals(proposal)
+	if result != common.ER_Enqueued {
+		klogging.Debug(dtt.ctx).With("solver", dtt.name).With("result", result).Log("SolverGroup", "EnqueueProposal")
+	}
 	close(dtt.done)
 }

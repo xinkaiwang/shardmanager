@@ -17,6 +17,9 @@ func NewAssignSolver() *AssignSolver {
 	return &AssignSolver{}
 }
 
+func (as *AssignSolver) GetType() SolverType {
+	return ST_AssignSolver
+}
 func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snapshot) *costfunc.Proposal {
 	// step 1: get the cost of the current snapshot
 	costProvider := costfunc.GetCurrentCostFuncProvider()

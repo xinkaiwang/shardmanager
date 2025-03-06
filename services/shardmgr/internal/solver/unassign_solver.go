@@ -18,6 +18,10 @@ func NewUnassignSolver() *UnassignSolver {
 	return &UnassignSolver{}
 }
 
+func (us *UnassignSolver) GetType() SolverType {
+	return ST_UnassignSolver
+}
+
 func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snapshot) *costfunc.Proposal {
 	// step 1: get the cost of the current snapshot
 	costProvider := costfunc.GetCurrentCostFuncProvider()

@@ -16,6 +16,15 @@ func GetCurrentSolverConfigProvider() SolverConfigProvider {
 	return currentSolverConfigProvider
 }
 
+func RunWithSolverConfigProvider(solverConfigProvider SolverConfigProvider, f func()) {
+	oldProvider := currentSolverConfigProvider
+	currentSolverConfigProvider = solverConfigProvider
+	defer func() {
+		currentSolverConfigProvider = oldProvider
+	}()
+	f()
+}
+
 type SolverConfigProvider interface {
 	SetConfig(solverConfig *smgjson.SolverConfigJson)
 	GetByName(solverName SolverType) *config.BaseSolverConfig
