@@ -30,8 +30,8 @@ type ShardConfig struct {
 	// MoveType 服务的迁移类型 (killBeforeStart, startBeforeKill, concurrent)
 	MovePolicy smgjson.MovePolicy
 	// max/min replica count per shard (can be override by per shard config)
-	MaxResplicaCount int32 // default max replica count per shard (default 10)
-	MinResplicaCount int32 // default min replica count per shard (default 1)
+	MaxReplicaCount int32 // default max replica count per shard (default 10)
+	MinReplicaCount int32 // default min replica count per shard (default 1)
 }
 
 type SystemLimitConfig struct {
@@ -56,9 +56,9 @@ func ServiceConfigJsonToServiceConfig(si *smgjson.ServiceConfigJson) *ServiceCon
 
 func ShardConfigJsonToConfig(sc *smgjson.ShardConfigJson) ShardConfig {
 	cfg := ShardConfig{
-		MovePolicy:       smgjson.MP_StartBeforeKill, // default 先启后杀
-		MaxResplicaCount: 10,                         // default 10
-		MinResplicaCount: 1,                          // default 1
+		MovePolicy:      smgjson.MP_StartBeforeKill, // default 先启后杀
+		MaxReplicaCount: 10,                         // default 10
+		MinReplicaCount: 1,                          // default 1
 
 	}
 	if sc == nil {
@@ -67,11 +67,11 @@ func ShardConfigJsonToConfig(sc *smgjson.ShardConfigJson) ShardConfig {
 	if sc.MoveType != nil {
 		cfg.MovePolicy = *sc.MoveType
 	}
-	if sc.MaxResplicaCount != nil {
-		cfg.MaxResplicaCount = *sc.MaxResplicaCount
+	if sc.MaxReplicaCount != nil {
+		cfg.MaxReplicaCount = *sc.MaxReplicaCount
 	}
-	if sc.MinResplicaCount != nil {
-		cfg.MinResplicaCount = *sc.MinResplicaCount
+	if sc.MinReplicaCount != nil {
+		cfg.MinReplicaCount = *sc.MinReplicaCount
 	}
 	return cfg
 }
@@ -109,9 +109,9 @@ func (cfg *ServiceConfig) ToServiceConfigJson() *smgjson.ServiceConfigJson {
 }
 func (cfg *ShardConfig) ToShardConfigJson() *smgjson.ShardConfigJson {
 	return &smgjson.ShardConfigJson{
-		MoveType:         &cfg.MovePolicy,
-		MaxResplicaCount: &cfg.MaxResplicaCount,
-		MinResplicaCount: &cfg.MinResplicaCount,
+		MoveType:        &cfg.MovePolicy,
+		MaxReplicaCount: &cfg.MaxReplicaCount,
+		MinReplicaCount: &cfg.MinReplicaCount,
 	}
 }
 func (cfg *SystemLimitConfig) ToSystemLimitConfigJson() *smgjson.SystemLimitConfigJson {

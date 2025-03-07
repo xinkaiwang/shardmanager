@@ -19,6 +19,7 @@ type ServiceState struct {
 	PathManager   *PathManager
 	ServiceInfo   *ServiceInfo
 	ServiceConfig *config.ServiceConfig
+	StoreProvider shadow.StoreProvider
 	ShadowState   *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
@@ -45,6 +46,7 @@ func NewServiceState(ctx context.Context) *ServiceState {
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
 		ShadowState:      shadow.NewShadowState(ctx),
 	}
+	ss.StoreProvider = ss.ShadowState
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.PathManager = NewPathManager()
 	ss.Init(ctx)

@@ -34,40 +34,40 @@ func NewShardLineJson(shardName string) *ShardLineJson {
 	}
 }
 
-func (sl *ShardLineJson) ToShardLine(defVal ShardHints) *ShardLine {
-	return &ShardLine{
-		ShardName:        sl.ShardName,
-		Hints:            sl.GetHints(defVal),
-		CustomProperties: sl.CustomProperties,
-	}
-}
+// func (sl *ShardLineJson) ToShardLine() *ShardLine {
+// 	return &ShardLine{
+// 		ShardName:        sl.ShardName,
+// 		Hints:            sl.Hints,
+// 		CustomProperties: sl.CustomProperties,
+// 	}
+// }
 
-func (sl *ShardLineJson) GetHints(defVal ShardHints) ShardHints {
-	if sl.Hints == nil {
-		return defVal
-	}
+// func (sl *ShardLineJson) GetHints(defVal ShardHints) ShardHints {
+// 	if sl.Hints == nil {
+// 		return defVal
+// 	}
 
-	hints := ShardHints{}
-	// MinReplicaCount (如果 hints 为空，则使用默认值)
-	if sl.Hints.MinReplicaCount != nil {
-		hints.MinReplicaCount = *sl.Hints.MinReplicaCount
-	} else {
-		hints.MinReplicaCount = defVal.MinReplicaCount
-	}
-	// MaxReplicaCount (如果 hints 为空，则使用默认值)
-	if sl.Hints.MaxReplicaCount != nil {
-		hints.MaxReplicaCount = *sl.Hints.MaxReplicaCount
-	} else {
-		hints.MaxReplicaCount = defVal.MaxReplicaCount
-	}
-	// MoveType (如果 hints 为空，则使用默认值)
-	if sl.Hints.MoveType != nil {
-		hints.MoveType = *sl.Hints.MoveType
-	} else {
-		hints.MoveType = defVal.MoveType
-	}
-	return hints
-}
+// 	hints := ShardHints{}
+// 	// MinReplicaCount (如果 hints 为空，则使用默认值)
+// 	if sl.Hints.MinReplicaCount != nil {
+// 		hints.MinReplicaCount = *sl.Hints.MinReplicaCount
+// 	} else {
+// 		hints.MinReplicaCount = defVal.MinReplicaCount
+// 	}
+// 	// MaxReplicaCount (如果 hints 为空，则使用默认值)
+// 	if sl.Hints.MaxReplicaCount != nil {
+// 		hints.MaxReplicaCount = *sl.Hints.MaxReplicaCount
+// 	} else {
+// 		hints.MaxReplicaCount = defVal.MaxReplicaCount
+// 	}
+// 	// MoveType (如果 hints 为空，则使用默认值)
+// 	if sl.Hints.MoveType != nil {
+// 		hints.MoveType = *sl.Hints.MoveType
+// 	} else {
+// 		hints.MoveType = defVal.MoveType
+// 	}
+// 	return hints
+// }
 
 type ShardHintsJson struct {
 	// MinReplicaCount 是 shard 的最小副本数
@@ -90,16 +90,16 @@ func ShardHintsJsonFromJson(stringJson string) *ShardHintsJson {
 	return &obj
 }
 
-type ShardHints struct {
-	// MinReplicaCount 是 shard 的最小副本数
-	MinReplicaCount int32
+// type ShardHints struct {
+// 	// MinReplicaCount 是 shard 的最小副本数
+// 	MinReplicaCount *int32
 
-	// MaxReplicaCount 是 shard 的最大副本数
-	MaxReplicaCount int32
+// 	// MaxReplicaCount 是 shard 的最大副本数
+// 	MaxReplicaCount *int32
 
-	// MoveType 是 shard 的迁移类型
-	MoveType MovePolicy
-}
+// 	// MoveType 是 shard 的迁移类型
+// 	MoveType *MovePolicy
+// }
 
 func ParseShardLine(shardLine string) *ShardLineJson {
 	parts := strings.SplitN(shardLine, "|", 3)
@@ -151,12 +151,12 @@ func ParseCustomProperties(customPropertiesStr string) map[string]string {
 	return customProperties
 }
 
-type ShardLine struct {
-	// ShardName 是 shard 的名称
-	ShardName string
+// type ShardLine struct {
+// 	// ShardName 是 shard 的名称
+// 	ShardName string
 
-	Hints ShardHints
+// 	Hints *ShardHints
 
-	// CustomProperties 是 shard 的自定义属性
-	CustomProperties map[string]string
-}
+// 	// CustomProperties 是 shard 的自定义属性
+// 	CustomProperties map[string]string
+// }

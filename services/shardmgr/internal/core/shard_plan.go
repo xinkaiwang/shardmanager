@@ -10,7 +10,8 @@ import (
 )
 
 // syncShardPlan: this must called in runloop
-func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.ShardLine) {
+// this will modify AllShards, and call FlushShardState
+func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.ShardLineJson) {
 	// compare with current shard state
 	needRemove := map[data.ShardId]*ShardState{}
 	for _, shard := range ss.AllShards {
@@ -24,7 +25,7 @@ func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.
 		shardId := data.ShardId(shardLine.ShardName)
 		if shard, ok := ss.AllShards[shardId]; ok {
 			// update shard state
-			if shard.UpdateShardStateByPlan(shardLine) {
+			if ss.UpdateShardStateByPlan(shard, shardLine) {
 				updated = append(updated, shard.ShardId)
 			}
 			delete(needRemove, shard.ShardId)
@@ -69,7 +70,7 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			shardPlan := smgjson.ParseShardPlan(item.Value, sp.parent.ServiceInfo.DefaultHints)
+			shardPlan := smgjson.ParseShardPlan(item.Value)
 			sp.parent.runloop.EnqueueEvent(&ShardPlanUpdateEvent{ShardPlan: shardPlan})
 		}
 	}
@@ -77,7 +78,7 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 
 // implements IEvent[*ServiceState]
 type ShardPlanUpdateEvent struct {
-	ShardPlan []*smgjson.ShardLine
+	ShardPlan []*smgjson.ShardLineJson
 }
 
 func (spue *ShardPlanUpdateEvent) GetName() string {

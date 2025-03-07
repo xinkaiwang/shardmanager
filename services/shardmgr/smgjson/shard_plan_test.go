@@ -5,16 +5,10 @@ import (
 )
 
 func TestParseShardPlan(t *testing.T) {
-	defaultHints := ShardHints{
-		MinReplicaCount: 1,
-		MaxReplicaCount: 10,
-		MoveType:        MP_StartBeforeKill,
-	}
-
 	tests := []struct {
 		name        string
 		input       string
-		want        []*ShardLine
+		want        []*ShardLineJson
 		description string
 	}{
 		{
@@ -22,25 +16,22 @@ func TestParseShardPlan(t *testing.T) {
 			input: `shard_1
 shard_2|{"min_replica_count":2,"max_replica_count":20}
 shard_3|{"min_replica_count":3}|{"pip":"xformer"}`,
-			want: []*ShardLine{
+			want: []*ShardLineJson{
 				{
 					ShardName: "shard_1",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 				{
 					ShardName: "shard_2",
-					Hints: ShardHints{
-						MinReplicaCount: 2,
-						MaxReplicaCount: 20,
-						MoveType:        MP_StartBeforeKill,
+					Hints: &ShardHintsJson{
+						MinReplicaCount: func() *int32 { v := int32(2); return &v }(),
+						MaxReplicaCount: func() *int32 { v := int32(20); return &v }(),
 					},
 				},
 				{
 					ShardName: "shard_3",
-					Hints: ShardHints{
-						MinReplicaCount: 3,
-						MaxReplicaCount: 10,
-						MoveType:        MP_StartBeforeKill,
+					Hints: &ShardHintsJson{
+						MinReplicaCount: func() *int32 { v := int32(3); return &v }(),
 					},
 					CustomProperties: map[string]string{
 						"pip": "xformer",
@@ -56,14 +47,14 @@ shard_3|{"min_replica_count":3}|{"pip":"xformer"}`,
 shard_2
 
 `,
-			want: []*ShardLine{
+			want: []*ShardLineJson{
 				{
 					ShardName: "shard_1",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 				{
 					ShardName: "shard_2",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 			},
 			description: "包含空行，应该被正确处理",
@@ -71,7 +62,7 @@ shard_2
 		{
 			name:        "空输入",
 			input:       "",
-			want:        []*ShardLine{},
+			want:        []*ShardLineJson{},
 			description: "空输入应该返回空的切片",
 		},
 		{
@@ -80,18 +71,18 @@ shard_2
 shard_1  # 行尾注释
   shard_2  # 前导和尾随空格
 	shard_3	# 制表符`,
-			want: []*ShardLine{
+			want: []*ShardLineJson{
 				{
 					ShardName: "shard_1",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 				{
 					ShardName: "shard_2",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 				{
 					ShardName: "shard_3",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 			},
 			description: "正确处理注释和各种空白字符",
@@ -104,21 +95,18 @@ shard_1|{"min_replica_count":2}  # 基本配置
 shard_2|{"max_replica_count":20,"move_type":"kill_before_start"}|{"region":"us-west"}  # 带自定义属性
   # 中间的注释
 shard_3  # 使用默认值`,
-			want: []*ShardLine{
+			want: []*ShardLineJson{
 				{
 					ShardName: "shard_1",
-					Hints: ShardHints{
-						MinReplicaCount: 2,
-						MaxReplicaCount: 10,
-						MoveType:        MP_StartBeforeKill,
+					Hints: &ShardHintsJson{
+						MinReplicaCount: func() *int32 { v := int32(2); return &v }(),
 					},
 				},
 				{
 					ShardName: "shard_2",
-					Hints: ShardHints{
-						MinReplicaCount: 1,
-						MaxReplicaCount: 20,
-						MoveType:        MP_KillBeforeStart,
+					Hints: &ShardHintsJson{
+						MaxReplicaCount: func() *int32 { v := int32(20); return &v }(),
+						MoveType:        func() *MovePolicy { v := MP_KillBeforeStart; return &v }(),
 					},
 					CustomProperties: map[string]string{
 						"region": "us-west",
@@ -126,7 +114,7 @@ shard_3  # 使用默认值`,
 				},
 				{
 					ShardName: "shard_3",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 			},
 			description: "混合使用不同格式和注释",
@@ -140,17 +128,15 @@ shard_1
 
 # 下一个配置
 shard_2|{"min_replica_count":5}|{"env":"prod"}  # 带注释`,
-			want: []*ShardLine{
+			want: []*ShardLineJson{
 				{
 					ShardName: "shard_1",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 				{
 					ShardName: "shard_2",
-					Hints: ShardHints{
-						MinReplicaCount: 5,
-						MaxReplicaCount: 10,
-						MoveType:        MP_StartBeforeKill,
+					Hints: &ShardHintsJson{
+						MinReplicaCount: func() *int32 { v := int32(5); return &v }(),
 					},
 					CustomProperties: map[string]string{
 						"env": "prod",
@@ -166,7 +152,7 @@ shard_2|{"min_replica_count":5}|{"env":"prod"}  # 带注释`,
 	# 这是制表符注释
 
 # 最后一行注释`,
-			want:        []*ShardLine{},
+			want:        []*ShardLineJson{},
 			description: "文件只包含注释和空白字符",
 		},
 		{
@@ -175,34 +161,28 @@ shard_2|{"min_replica_count":5}|{"env":"prod"}  # 带注释`,
 shard_2|{"move_type":"kill_before_start"}
 shard_3|{"move_type":"concurrent"}
 shard_4  # 默认移动策略`,
-			want: []*ShardLine{
+			want: []*ShardLineJson{
 				{
 					ShardName: "shard_1",
-					Hints: ShardHints{
-						MinReplicaCount: 1,
-						MaxReplicaCount: 10,
-						MoveType:        MP_StartBeforeKill,
+					Hints: &ShardHintsJson{
+						MoveType: func() *MovePolicy { v := MP_StartBeforeKill; return &v }(),
 					},
 				},
 				{
 					ShardName: "shard_2",
-					Hints: ShardHints{
-						MinReplicaCount: 1,
-						MaxReplicaCount: 10,
-						MoveType:        MP_KillBeforeStart,
+					Hints: &ShardHintsJson{
+						MoveType: func() *MovePolicy { v := MP_KillBeforeStart; return &v }(),
 					},
 				},
 				{
 					ShardName: "shard_3",
-					Hints: ShardHints{
-						MinReplicaCount: 1,
-						MaxReplicaCount: 10,
-						MoveType:        MP_Cocurrent,
+					Hints: &ShardHintsJson{
+						MoveType: func() *MovePolicy { v := MP_Cocurrent; return &v }(),
 					},
 				},
 				{
 					ShardName: "shard_4",
-					Hints:     defaultHints,
+					Hints:     nil,
 				},
 			},
 			description: "测试不同的移动策略配置",
@@ -211,7 +191,7 @@ shard_4  # 默认移动策略`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ParseShardPlan(tt.input, defaultHints)
+			got := ParseShardPlan(tt.input)
 
 			if len(got) != len(tt.want) {
 				t.Errorf("ShardLines length = %v, want %v", len(got), len(tt.want))
@@ -227,14 +207,35 @@ shard_4  # 默认移动策略`,
 				}
 
 				// 验证 Hints
-				if gotLine.Hints.MinReplicaCount != wantLine.Hints.MinReplicaCount {
-					t.Errorf("ShardLines[%d].Hints.MinReplicaCount = %v, want %v", i, gotLine.Hints.MinReplicaCount, wantLine.Hints.MinReplicaCount)
-				}
-				if gotLine.Hints.MaxReplicaCount != wantLine.Hints.MaxReplicaCount {
-					t.Errorf("ShardLines[%d].Hints.MaxReplicaCount = %v, want %v", i, gotLine.Hints.MaxReplicaCount, wantLine.Hints.MaxReplicaCount)
-				}
-				if gotLine.Hints.MoveType != wantLine.Hints.MoveType {
-					t.Errorf("ShardLines[%d].Hints.MoveType = %v, want %v", i, gotLine.Hints.MoveType, wantLine.Hints.MoveType)
+				if wantLine.Hints == nil {
+					if gotLine.Hints != nil {
+						t.Errorf("ShardLines[%d].Hints = %+v, want nil", i, gotLine.Hints)
+					}
+				} else {
+					if gotLine.Hints == nil {
+						t.Errorf("ShardLines[%d].Hints is nil, want %+v", i, wantLine.Hints)
+					} else {
+						// 验证 MinReplicaCount
+						if (gotLine.Hints.MinReplicaCount == nil) != (wantLine.Hints.MinReplicaCount == nil) {
+							t.Errorf("ShardLines[%d].Hints.MinReplicaCount nil status mismatch", i)
+						} else if gotLine.Hints.MinReplicaCount != nil && *gotLine.Hints.MinReplicaCount != *wantLine.Hints.MinReplicaCount {
+							t.Errorf("ShardLines[%d].Hints.MinReplicaCount = %v, want %v", i, *gotLine.Hints.MinReplicaCount, *wantLine.Hints.MinReplicaCount)
+						}
+
+						// 验证 MaxReplicaCount
+						if (gotLine.Hints.MaxReplicaCount == nil) != (wantLine.Hints.MaxReplicaCount == nil) {
+							t.Errorf("ShardLines[%d].Hints.MaxReplicaCount nil status mismatch", i)
+						} else if gotLine.Hints.MaxReplicaCount != nil && *gotLine.Hints.MaxReplicaCount != *wantLine.Hints.MaxReplicaCount {
+							t.Errorf("ShardLines[%d].Hints.MaxReplicaCount = %v, want %v", i, *gotLine.Hints.MaxReplicaCount, *wantLine.Hints.MaxReplicaCount)
+						}
+
+						// 验证 MoveType
+						if (gotLine.Hints.MoveType == nil) != (wantLine.Hints.MoveType == nil) {
+							t.Errorf("ShardLines[%d].Hints.MoveType nil status mismatch", i)
+						} else if gotLine.Hints.MoveType != nil && *gotLine.Hints.MoveType != *wantLine.Hints.MoveType {
+							t.Errorf("ShardLines[%d].Hints.MoveType = %v, want %v", i, *gotLine.Hints.MoveType, *wantLine.Hints.MoveType)
+						}
+					}
 				}
 
 				// 验证 CustomProperties

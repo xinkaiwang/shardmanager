@@ -17,8 +17,8 @@ type ShardConfigJson struct {
 	// MoveType 服务的迁移类型 (killBeforeStart, startBeforeKill, concurrent)
 	MoveType *MovePolicy `json:"move_policy"`
 	// max/min replica count per shard (can be override by per shard config)
-	MaxResplicaCount *int32 `json:"max_replica_count"` // default max replica count per shard (default 10)
-	MinResplicaCount *int32 `json:"min_replica_count"` // default min replica count per shard (default 1)
+	MaxReplicaCount *int32 `json:"max_replica_count"` // default max replica count per shard (default 10)
+	MinReplicaCount *int32 `json:"min_replica_count"` // default min replica count per shard (default 1)
 }
 
 type SystemLimitConfigJson struct {

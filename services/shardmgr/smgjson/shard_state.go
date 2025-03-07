@@ -12,13 +12,13 @@ type ShardStateJson struct {
 	ShardName data.ShardId `json:"shard_name"`
 
 	// key is replicaIdx
-	Resplicas map[int]*ReplicaStateJson `json:"resplicas"`
+	Resplicas map[data.ReplicaIdx]*ReplicaStateJson `json:"resplicas"`
 }
 
 func NewShardStateJson(shardName data.ShardId) *ShardStateJson {
 	return &ShardStateJson{
 		ShardName: shardName,
-		Resplicas: make(map[int]*ReplicaStateJson),
+		Resplicas: make(map[data.ReplicaIdx]*ReplicaStateJson),
 	}
 }
 
@@ -44,8 +44,7 @@ func ShardStateJsonFromJson(stringJson string) *ShardStateJson {
 		panic(kerror.Create("UnmarshalError", "missing required field: shard_name"))
 	}
 	if obj.Resplicas == nil {
-		obj.Resplicas = make(map[int]*ReplicaStateJson)
+		obj.Resplicas = make(map[data.ReplicaIdx]*ReplicaStateJson)
 	}
-
 	return &obj
 }

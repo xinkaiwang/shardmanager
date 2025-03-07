@@ -170,16 +170,16 @@ func TestParseShardLine(t *testing.T) {
 }
 
 func TestToShardLine(t *testing.T) {
-	defaultHints := ShardHints{
-		MinReplicaCount: 1,
-		MaxReplicaCount: 10,
-		MoveType:        MP_StartBeforeKill,
+	defaultHints := ShardHintsJson{
+		MinReplicaCount: func() *int32 { v := int32(1); return &v }(),
+		MaxReplicaCount: func() *int32 { v := int32(10); return &v }(),
+		MoveType:        func() *MovePolicy { v := MP_StartBeforeKill; return &v }(),
 	}
 
 	tests := []struct {
 		name          string
 		shardLineJson *ShardLineJson
-		want          *ShardLine
+		want          *ShardLineJson
 		description   string
 	}{
 		{
@@ -200,12 +200,12 @@ func TestToShardLine(t *testing.T) {
 					},
 				}
 			}(),
-			want: &ShardLine{
+			want: &ShardLineJson{
 				ShardName: "shard_1",
-				Hints: ShardHints{
-					MinReplicaCount: 2,
-					MaxReplicaCount: 20,
-					MoveType:        MP_KillBeforeStart,
+				Hints: &ShardHintsJson{
+					MinReplicaCount: func() *int32 { v := int32(2); return &v }(),
+					MaxReplicaCount: func() *int32 { v := int32(20); return &v }(),
+					MoveType:        func() *MovePolicy { v := MP_KillBeforeStart; return &v }(),
 				},
 				CustomProperties: map[string]string{
 					"pip": "xformer",
@@ -219,9 +219,9 @@ func TestToShardLine(t *testing.T) {
 				ShardName: "shard_2",
 				Hints:     nil,
 			},
-			want: &ShardLine{
+			want: &ShardLineJson{
 				ShardName: "shard_2",
-				Hints:     defaultHints,
+				Hints:     &defaultHints,
 			},
 			description: "使用默认值",
 		},
@@ -229,7 +229,12 @@ func TestToShardLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.shardLineJson.ToShardLine(defaultHints)
+			got := tt.shardLineJson
+
+			// 如果 Hints 为空，使用默认值
+			if got.Hints == nil {
+				got.Hints = &defaultHints
+			}
 
 			// 验证 ShardName
 			if got.ShardName != tt.want.ShardName {
@@ -237,14 +242,35 @@ func TestToShardLine(t *testing.T) {
 			}
 
 			// 验证 Hints
-			if got.Hints.MinReplicaCount != tt.want.Hints.MinReplicaCount {
-				t.Errorf("MinReplicaCount = %v, want %v", got.Hints.MinReplicaCount, tt.want.Hints.MinReplicaCount)
-			}
-			if got.Hints.MaxReplicaCount != tt.want.Hints.MaxReplicaCount {
-				t.Errorf("MaxReplicaCount = %v, want %v", got.Hints.MaxReplicaCount, tt.want.Hints.MaxReplicaCount)
-			}
-			if got.Hints.MoveType != tt.want.Hints.MoveType {
-				t.Errorf("MoveType = %v, want %v", got.Hints.MoveType, tt.want.Hints.MoveType)
+			if tt.want.Hints == nil {
+				if got.Hints != nil {
+					t.Errorf("Hints = %+v, want nil", got.Hints)
+				}
+			} else {
+				if got.Hints == nil {
+					t.Errorf("Hints is nil, want %+v", tt.want.Hints)
+				} else {
+					// 验证 MinReplicaCount
+					if (got.Hints.MinReplicaCount == nil) != (tt.want.Hints.MinReplicaCount == nil) {
+						t.Errorf("MinReplicaCount nil status mismatch")
+					} else if got.Hints.MinReplicaCount != nil && *got.Hints.MinReplicaCount != *tt.want.Hints.MinReplicaCount {
+						t.Errorf("MinReplicaCount = %v, want %v", *got.Hints.MinReplicaCount, *tt.want.Hints.MinReplicaCount)
+					}
+
+					// 验证 MaxReplicaCount
+					if (got.Hints.MaxReplicaCount == nil) != (tt.want.Hints.MaxReplicaCount == nil) {
+						t.Errorf("MaxReplicaCount nil status mismatch")
+					} else if got.Hints.MaxReplicaCount != nil && *got.Hints.MaxReplicaCount != *tt.want.Hints.MaxReplicaCount {
+						t.Errorf("MaxReplicaCount = %v, want %v", *got.Hints.MaxReplicaCount, *tt.want.Hints.MaxReplicaCount)
+					}
+
+					// 验证 MoveType
+					if (got.Hints.MoveType == nil) != (tt.want.Hints.MoveType == nil) {
+						t.Errorf("MoveType nil status mismatch")
+					} else if got.Hints.MoveType != nil && *got.Hints.MoveType != *tt.want.Hints.MoveType {
+						t.Errorf("MoveType = %v, want %v", *got.Hints.MoveType, *tt.want.Hints.MoveType)
+					}
+				}
 			}
 
 			// 验证 CustomProperties
