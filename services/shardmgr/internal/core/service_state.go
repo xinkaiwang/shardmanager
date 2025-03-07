@@ -7,6 +7,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -23,6 +24,10 @@ type ServiceState struct {
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
 	AllShards  map[data.ShardId]*ShardState
 	AllWorkers map[data.WorkerFullId]*WorkerState
+	AllAssigns map[data.AssignmentId]*AssignmentState
+
+	SnapshotCurrent *costfunc.Snapshot // current means current state
+	SnapshotFuture  *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
 
 	EphDirty         map[data.WorkerFullId]common.Unit
 	EphWorkerStaging map[data.WorkerFullId]*cougarjson.WorkerEphJson
@@ -35,6 +40,7 @@ func NewServiceState(ctx context.Context) *ServiceState {
 	ss := &ServiceState{
 		AllShards:        make(map[data.ShardId]*ShardState),
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
+		AllAssigns:       make(map[data.AssignmentId]*AssignmentState),
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
 		ShadowState:      shadow.NewShadowState(ctx),

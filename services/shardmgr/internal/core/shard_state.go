@@ -8,7 +8,8 @@ import (
 )
 
 type ShardState struct {
-	ShardId data.ShardId
+	ShardId  data.ShardId
+	Replicas map[data.ReplicaIdx]*ReplicaState
 }
 
 func NewShardState(shardId data.ShardId) *ShardState {

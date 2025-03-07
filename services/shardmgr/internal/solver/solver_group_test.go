@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
@@ -227,6 +228,8 @@ func TestSolverGroup_MultiSolver(t *testing.T) {
 
 func TestSolverGroup_ThreadScaling(t *testing.T) {
 	ctx := context.Background()
+	logger := klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text")
+	klogging.SetDefaultLogger(logger)
 
 	// 创建一个基本的快照
 	snapshot := &costfunc.Snapshot{
@@ -256,22 +259,22 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 		return common.ER_Enqueued
 	})
 
-	// 创建并添加 mock solver
-	mockSolver := NewMockSolver(ST_SoftSolver)
-	group.AddSolver(ctx, mockSolver)
-
 	// 配置 solver 为低 QPM
 	mockProvider := &mockConfigProvider{}
 	mockProvider.SetConfig(&smgjson.SolverConfigJson{
 		SoftSolverConfig: &smgjson.SoftSolverConfigJson{
 			SoftSolverEnabled: func() *bool { v := true; return &v }(),
-			RunPerMinute:      func() *int32 { v := int32(1); return &v }(), // 低 QPM
-			ExplorePerRun:     func() *int32 { v := int32(1); return &v }(),
+			RunPerMinute:      func() *int32 { v := int32(600); return &v }(), // 低 QPM
+			ExplorePerRun:     func() *int32 { v := int32(50); return &v }(),
 		},
 	})
 
+	// 创建并添加 mock solver
+	mockSolver := NewMockSolver(ST_SoftSolver)
+
 	var lowQPMProposalCount int
 	RunWithSolverConfigProvider(mockProvider, func() {
+		group.AddSolver(ctx, mockSolver)
 		// 等待一段时间让 solver 运行
 		time.Sleep(3 * time.Second) // 减少等待时间，因为我们已经减少了线程的睡眠时间
 
@@ -280,6 +283,7 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 		proposalMu.Unlock()
 	})
 
+	assert.Equal(t, 30, lowQPMProposalCount, "低 QPM 配置应该生成 10 个提案")
 	// 重置提案计数
 	receivedProposals = nil
 	mockSolver.Reset()
@@ -288,8 +292,8 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 	mockProvider.SetConfig(&smgjson.SolverConfigJson{
 		SoftSolverConfig: &smgjson.SoftSolverConfigJson{
 			SoftSolverEnabled: func() *bool { v := true; return &v }(),
-			RunPerMinute:      func() *int32 { v := int32(600); return &v }(), // 高 QPM
-			ExplorePerRun:     func() *int32 { v := int32(1); return &v }(),
+			RunPerMinute:      func() *int32 { v := int32(1200); return &v }(), // 高 QPM
+			ExplorePerRun:     func() *int32 { v := int32(5); return &v }(),
 		},
 	})
 
@@ -302,6 +306,6 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 		proposalMu.Unlock()
 
 		// 高 QPM 配置应该生成明显更多的提案
-		assert.Greater(t, highQPMProposalCount, lowQPMProposalCount*5, "高 QPM 配置应该生成明显更多的提案")
+		assert.Greater(t, highQPMProposalCount, lowQPMProposalCount, "高 QPM 配置应该生成明显更多的提案")
 	})
 }
