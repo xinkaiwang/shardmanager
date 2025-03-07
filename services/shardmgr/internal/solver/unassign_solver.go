@@ -38,7 +38,7 @@ func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.S
 			// step 2: which assign?
 			// candidate assign list
 			candidateAssignment := []*costfunc.AssignmentSnap{}
-			snapshot.AllAssigns.VisitAll(func(assignmentId data.AssignmentId, asgnSnap *costfunc.AssignmentSnap) {
+			snapshot.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, asgnSnap *costfunc.AssignmentSnap) {
 				candidateAssignment = append(candidateAssignment, asgnSnap)
 			})
 			if len(candidateAssignment) == 0 {

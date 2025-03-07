@@ -103,9 +103,9 @@ func TestSolverGroup_Basic(t *testing.T) {
 			ShardCountCostNorm:   2,
 			WorkerMaxAssignments: 2,
 		},
-		AllShards:  costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
-		AllWorkers: costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
-		AllAssigns: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
+		AllShards:      costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
+		AllWorkers:     costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
+		AllAssignments: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
 	}
 
 	// 跟踪收到的提案
@@ -162,9 +162,9 @@ func TestSolverGroup_MultiSolver(t *testing.T) {
 			ShardCountCostNorm:   2,
 			WorkerMaxAssignments: 2,
 		},
-		AllShards:  costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
-		AllWorkers: costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
-		AllAssigns: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
+		AllShards:      costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
+		AllWorkers:     costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
+		AllAssignments: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
 	}
 
 	// 跟踪每个 solver 类型收到的提案
@@ -239,9 +239,9 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 			ShardCountCostNorm:   2,
 			WorkerMaxAssignments: 2,
 		},
-		AllShards:  costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
-		AllWorkers: costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
-		AllAssigns: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
+		AllShards:      costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
+		AllWorkers:     costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
+		AllAssignments: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
 	}
 
 	// 跟踪收到的提案

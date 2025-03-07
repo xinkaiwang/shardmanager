@@ -81,11 +81,11 @@ func TestSnapshot(t *testing.T) {
 	t.Run("Clone", func(t *testing.T) {
 		cfg := config.CostfuncConfig{}
 		snapshot := &Snapshot{
-			SnapshotId:  SnapshotId("snap1"),
-			CostfuncCfg: cfg,
-			AllShards:   NewFastMap[data.ShardId, ShardSnap](),
-			AllWorkers:  NewFastMap[data.WorkerFullId, WorkerSnap](),
-			AllAssigns:  NewFastMap[data.AssignmentId, AssignmentSnap](),
+			SnapshotId:     SnapshotId("snap1"),
+			CostfuncCfg:    cfg,
+			AllShards:      NewFastMap[data.ShardId, ShardSnap](),
+			AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
+			AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
 		}
 
 		// 添加一个 worker
@@ -116,18 +116,18 @@ func TestSnapshot(t *testing.T) {
 		assert.Equal(t, snapshot.CostfuncCfg, cloned.CostfuncCfg)
 		assert.NotSame(t, snapshot.AllShards, cloned.AllShards)
 		assert.NotSame(t, snapshot.AllWorkers, cloned.AllWorkers)
-		assert.NotSame(t, snapshot.AllAssigns, cloned.AllAssigns)
+		assert.NotSame(t, snapshot.AllAssignments, cloned.AllAssignments)
 	})
 
 	// 测试分配和取消分配功能
 	t.Run("AssignAndUnassign", func(t *testing.T) {
 		cfg := config.CostfuncConfig{}
 		snapshot := &Snapshot{
-			SnapshotId:  SnapshotId("snap1"),
-			CostfuncCfg: cfg,
-			AllShards:   NewFastMap[data.ShardId, ShardSnap](),
-			AllWorkers:  NewFastMap[data.WorkerFullId, WorkerSnap](),
-			AllAssigns:  NewFastMap[data.AssignmentId, AssignmentSnap](),
+			SnapshotId:     SnapshotId("snap1"),
+			CostfuncCfg:    cfg,
+			AllShards:      NewFastMap[data.ShardId, ShardSnap](),
+			AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
+			AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
 		}
 
 		// 添加一个 worker
@@ -157,7 +157,7 @@ func TestSnapshot(t *testing.T) {
 		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId)
 
 		// 验证分配是否成功
-		assignmentSnap, exists := snapshot.AllAssigns.Get(assignmentId)
+		assignmentSnap, exists := snapshot.AllAssignments.Get(assignmentId)
 		assert.True(t, exists)
 		assert.Equal(t, shardId, assignmentSnap.ShardId)
 		assert.Equal(t, replicaIdx, assignmentSnap.ReplicaIdx)
@@ -166,7 +166,7 @@ func TestSnapshot(t *testing.T) {
 		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId)
 
 		// 验证取消分配是否成功
-		_, exists = snapshot.AllAssigns.Get(assignmentId)
+		_, exists = snapshot.AllAssignments.Get(assignmentId)
 		assert.False(t, exists)
 	})
 
@@ -174,11 +174,11 @@ func TestSnapshot(t *testing.T) {
 	t.Run("ChainOfChanges", func(t *testing.T) {
 		cfg := config.CostfuncConfig{}
 		snapshot := &Snapshot{
-			SnapshotId:  SnapshotId("snap1"),
-			CostfuncCfg: cfg,
-			AllShards:   NewFastMap[data.ShardId, ShardSnap](),
-			AllWorkers:  NewFastMap[data.WorkerFullId, WorkerSnap](),
-			AllAssigns:  NewFastMap[data.AssignmentId, AssignmentSnap](),
+			SnapshotId:     SnapshotId("snap1"),
+			CostfuncCfg:    cfg,
+			AllShards:      NewFastMap[data.ShardId, ShardSnap](),
+			AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
+			AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
 		}
 
 		// 添加两个 worker
@@ -255,11 +255,11 @@ func TestSnapshot(t *testing.T) {
 		cloned.Assign(shard2, 1, assign4, worker2)
 
 		// 验证原始快照未被修改
-		_, exists := snapshot.AllAssigns.Get(assign4)
+		_, exists := snapshot.AllAssignments.Get(assign4)
 		assert.False(t, exists)
 
 		// 验证克隆快照包含新的分配
-		assign4Snap, exists := cloned.AllAssigns.Get(assign4)
+		assign4Snap, exists := cloned.AllAssignments.Get(assign4)
 		assert.True(t, exists)
 		assert.Equal(t, shard2, assign4Snap.ShardId)
 		assert.Equal(t, data.ReplicaIdx(1), assign4Snap.ReplicaIdx)
@@ -270,11 +270,11 @@ func TestSnapshotErrorCases(t *testing.T) {
 	cfg := config.CostfuncConfig{}
 
 	snapshot := &Snapshot{
-		SnapshotId:  SnapshotId("snap1"),
-		CostfuncCfg: cfg,
-		AllShards:   NewFastMap[data.ShardId, ShardSnap](),
-		AllWorkers:  NewFastMap[data.WorkerFullId, WorkerSnap](),
-		AllAssigns:  NewFastMap[data.AssignmentId, AssignmentSnap](),
+		SnapshotId:     SnapshotId("snap1"),
+		CostfuncCfg:    cfg,
+		AllShards:      NewFastMap[data.ShardId, ShardSnap](),
+		AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
+		AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
 	}
 
 	// 准备测试数据

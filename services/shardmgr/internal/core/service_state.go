@@ -22,9 +22,9 @@ type ServiceState struct {
 	ShadowState   *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
-	AllShards  map[data.ShardId]*ShardState
-	AllWorkers map[data.WorkerFullId]*WorkerState
-	AllAssigns map[data.AssignmentId]*AssignmentState
+	AllShards      map[data.ShardId]*ShardState
+	AllWorkers     map[data.WorkerFullId]*WorkerState
+	AllAssignments map[data.AssignmentId]*AssignmentState
 
 	SnapshotCurrent *costfunc.Snapshot // current means current state
 	SnapshotFuture  *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
@@ -40,7 +40,7 @@ func NewServiceState(ctx context.Context) *ServiceState {
 	ss := &ServiceState{
 		AllShards:        make(map[data.ShardId]*ShardState),
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
-		AllAssigns:       make(map[data.AssignmentId]*AssignmentState),
+		AllAssignments:   make(map[data.AssignmentId]*AssignmentState),
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
 		ShadowState:      shadow.NewShadowState(ctx),

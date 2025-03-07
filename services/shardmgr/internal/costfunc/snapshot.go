@@ -1,6 +1,9 @@
 package costfunc
 
 import (
+	"context"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
@@ -41,6 +44,14 @@ type ReplicaSnap struct {
 	ReplicaIdx  data.ReplicaIdx
 	Assignments map[data.AssignmentId]common.Unit
 	LameDuck    bool
+}
+
+func NewReplicaSnap(shardId data.ShardId, replicaIdx data.ReplicaIdx) *ReplicaSnap {
+	return &ReplicaSnap{
+		ShardId:     shardId,
+		ReplicaIdx:  replicaIdx,
+		Assignments: make(map[data.AssignmentId]common.Unit),
+	}
 }
 
 func (rep *ReplicaSnap) GetReplicaFullId() data.ReplicaFullId {
@@ -94,6 +105,13 @@ type WorkerSnap struct {
 
 func (ws WorkerSnap) IsValueTypeT2() {}
 
+func NewWorkerSnap(workerFullId data.WorkerFullId) *WorkerSnap {
+	return &WorkerSnap{
+		WorkerFullId: workerFullId,
+		Assignments:  make(map[data.ShardId]data.AssignmentId),
+	}
+}
+
 func (worker *WorkerSnap) CanAcceptAssignment(shardId data.ShardId) bool {
 	// in case this worker already has this shard (maybe from antoher replica)
 	_, ok := worker.Assignments[shardId]
@@ -115,21 +133,30 @@ func (worker *WorkerSnap) Clone() *WorkerSnap {
 type SnapshotId string
 
 type Snapshot struct {
-	SnapshotId  SnapshotId
-	CostfuncCfg config.CostfuncConfig
-	AllShards   *FastMap[data.ShardId, ShardSnap]
-	AllWorkers  *FastMap[data.WorkerFullId, WorkerSnap]
-	AllAssigns  *FastMap[data.AssignmentId, AssignmentSnap]
-	// AllAssigns map[data.AssignmentId]*AssignmentSnap
+	SnapshotId     SnapshotId
+	CostfuncCfg    config.CostfuncConfig
+	AllShards      *FastMap[data.ShardId, ShardSnap]
+	AllWorkers     *FastMap[data.WorkerFullId, WorkerSnap]
+	AllAssignments *FastMap[data.AssignmentId, AssignmentSnap]
+}
+
+func NewSnapshot(ctx context.Context, costfuncCfg config.CostfuncConfig) *Snapshot {
+	return &Snapshot{
+		SnapshotId:     SnapshotId(kcommon.RandomString(ctx, 8)),
+		CostfuncCfg:    costfuncCfg,
+		AllShards:      NewFastMap[data.ShardId, ShardSnap](),
+		AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
+		AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
+	}
 }
 
 func (snap *Snapshot) Clone() *Snapshot {
 	clone := &Snapshot{
-		SnapshotId:  snap.SnapshotId,
-		CostfuncCfg: snap.CostfuncCfg,
-		AllShards:   snap.AllShards.Clone(),
-		AllWorkers:  snap.AllWorkers.Clone(),
-		AllAssigns:  snap.AllAssigns.Clone(),
+		SnapshotId:     snap.SnapshotId,
+		CostfuncCfg:    snap.CostfuncCfg,
+		AllShards:      snap.AllShards.Clone(),
+		AllWorkers:     snap.AllWorkers.Clone(),
+		AllAssignments: snap.AllAssignments.Clone(),
 	}
 	return clone
 }
@@ -162,7 +189,7 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 	snap.AllWorkers.Set(workerFullId, newWorkerSnap)
 	// update assignmentSnap
 	newAssignmentSnap := NewAssignmentSnap(shardId, replicaIdx, assignmentId, workerFullId)
-	snap.AllAssigns.Set(assignmentId, newAssignmentSnap)
+	snap.AllAssignments.Set(assignmentId, newAssignmentSnap)
 }
 
 func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId) {
@@ -192,5 +219,5 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 	newShardSnap.Replicas[replicaIdx] = newReplicaSnap
 	snap.AllShards.Set(shardId, newShardSnap)
 	// update assignmentSnap
-	snap.AllAssigns.Delete(assignmentId)
+	snap.AllAssignments.Delete(assignmentId)
 }

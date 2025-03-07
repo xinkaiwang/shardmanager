@@ -59,9 +59,9 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 				ShardCountCostNorm:   2, // 我们有两个分片
 				WorkerMaxAssignments: 2, // 每个 worker 最多两个分片
 			},
-			AllShards:  costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
-			AllWorkers: costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
-			AllAssigns: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
+			AllShards:      costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
+			AllWorkers:     costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
+			AllAssignments: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
 		}
 
 		// 创建两个 worker

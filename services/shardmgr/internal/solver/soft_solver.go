@@ -59,7 +59,7 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 			// candidate replica list
 			candidateReplicas := []*costfunc.AssignmentSnap{}
 			for _, assignment := range srcWorker.Assignments {
-				asgnSnap, _ := snapshot.AllAssigns.Get(assignment)
+				asgnSnap, _ := snapshot.AllAssignments.Get(assignment)
 				candidateReplicas = append(candidateReplicas, asgnSnap)
 			}
 			if len(candidateReplicas) == 0 {

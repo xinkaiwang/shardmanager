@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -15,6 +16,8 @@ type WorkerState struct {
 	ShutdownRequesting bool
 	ShutdownPermited   bool
 
+	Assignments map[data.AssignmentId]common.Unit
+
 	NotifyMajorCh chan struct{} // notify when WorkerStateEnum changes
 	NotifyMinorCh chan struct{} // notify when WorkerStateEnum keeps the same but have some minor updates
 	WorkerInfo    smgjson.WorkerInfoJson
@@ -23,12 +26,15 @@ type WorkerState struct {
 
 func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId, workerEph *cougarjson.WorkerEphJson) *WorkerState {
 	return &WorkerState{
-		WorkerId:      workerId,
-		SessionId:     sessionId,
-		State:         data.WS_Online_healthy,
-		NotifyMajorCh: make(chan struct{}, 1),
-		NotifyMinorCh: make(chan struct{}, 1),
-		WorkerInfo:    smgjson.WorkerInfoFromWorkerEph(workerEph),
+		WorkerId:           workerId,
+		SessionId:          sessionId,
+		State:              data.WS_Online_healthy,
+		ShutdownRequesting: false,
+		ShutdownPermited:   false,
+		Assignments:        make(map[data.AssignmentId]common.Unit),
+		NotifyMajorCh:      make(chan struct{}, 1),
+		NotifyMinorCh:      make(chan struct{}, 1),
+		WorkerInfo:         smgjson.WorkerInfoFromWorkerEph(workerEph),
 	}
 }
 
