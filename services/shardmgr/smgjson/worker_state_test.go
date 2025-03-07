@@ -28,11 +28,11 @@ func TestWorkerStateJsonMarshal(t *testing.T) {
 					data.WorkerId("worker-2"),
 					data.SessionId("session-2"),
 				)
-				ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson()
-				ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson()
+				ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson(data.ShardId("shard-1"), data.ReplicaIdx(0))
+				ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson(data.ShardId("shard-2"), data.ReplicaIdx(0))
 				return ws
 			}(),
-			expected: `{"worker_id":"worker-2","session_id":"session-2","assignments":{"asg-1":{},"asg-2":{}}}`,
+			expected: `{"worker_id":"worker-2","session_id":"session-2","assignments":{"asg-1":{"sid":"shard-1"},"asg-2":{"sid":"shard-2"}}}`,
 		},
 	}
 
@@ -71,8 +71,8 @@ func TestWorkerStateJsonUnmarshal(t *testing.T) {
 					data.WorkerId("worker-2"),
 					data.SessionId("session-2"),
 				)
-				ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson()
-				ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson()
+				ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson(data.ShardId("shard-1"), data.ReplicaIdx(0))
+				ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson(data.ShardId("shard-2"), data.ReplicaIdx(0))
 				return ws
 			}(),
 			wantPanic: false,
@@ -151,8 +151,8 @@ func TestWorkerStateJsonRoundTrip(t *testing.T) {
 			data.WorkerId("worker-1"),
 			data.SessionId("session-1"),
 		)
-		ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson()
-		ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson()
+		ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson(data.ShardId("shard-1"), data.ReplicaIdx(0))
+		ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson(data.ShardId("shard-2"), data.ReplicaIdx(0))
 		return ws
 	}()
 

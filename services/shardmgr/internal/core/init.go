@@ -14,9 +14,9 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.ServiceInfo = ss.LoadServiceInfo(ctx)
 	ss.ServiceConfig = ss.LoadServiceConfig(ctx)
 	// step 2: load all shard state
-	ss.AllShards = ss.LoadAllShardState(ctx)
+	ss.LoadAllShardState(ctx)
 	// setp 3: load all worker state
-	ss.AllWorkers = ss.LoadAllWorkerState(ctx)
+	ss.LoadAllWorkerState(ctx)
 	ss.ShadowState.InitDone()
 
 	// step 4: load current shard plan
@@ -40,33 +40,33 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// Note: The runloop is now initialized in NewServiceState
 }
 
-func (ss *ServiceState) LoadAllShardState(ctx context.Context) map[data.ShardId]*ShardState {
+func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 	pathPrefix := "/smg/shard_state/"
-	dict := map[data.ShardId]*ShardState{}
 	// load all from etcd
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
 		shardStateJson := smgjson.ShardStateJsonFromJson(item.Value)
 		ss.ShadowState.InitShardState(shardStateJson.ShardName, shardStateJson)
 		shardObj := NewShardState(shardStateJson.ShardName)
-		dict[data.ShardId(shardObj.ShardId)] = shardObj
+		ss.AllShards[data.ShardId(shardObj.ShardId)] = shardObj
 	}
-	return dict
 }
 
-func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) map[data.WorkerFullId]*WorkerState {
+func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 	pathPrefix := "/smg/worker_state/"
-	dict := map[data.WorkerFullId]*WorkerState{}
 	// load all from etcd
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
-		shardStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
-		obj := NewWorkerState(shardStateJson.WorkerId, shardStateJson.SessionId, nil)
+		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
+		obj := NewWorkerState(workerStateJson.WorkerId, workerStateJson.SessionId, nil)
 		workerFullId := data.NewWorkerFullId(obj.WorkerId, obj.SessionId, ss.IsStateInMemory())
-		ss.ShadowState.InitWorkerState(workerFullId, shardStateJson)
-		dict[workerFullId] = obj
+		ss.ShadowState.InitWorkerState(workerFullId, workerStateJson)
+		ss.AllWorkers[workerFullId] = obj
+		// assignments
+		for assignmentId, assignement := range workerStateJson.Assignments {
+			ss.AllAssignments[assignmentId] = NewAssignmentState(assignmentId, assignement.ShardId, assignement.ReplicaIdx, workerFullId)
+		}
 	}
-	return dict
 }
 
 func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.ShardLine, etcdprov.EtcdRevision) {
