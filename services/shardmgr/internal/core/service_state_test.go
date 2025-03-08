@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -129,36 +128,13 @@ shard-3|{"move_type":"kill_before_start"}`
 	})
 }
 
-// waitForEtcdWrites 等待所有异步写入操作完成
-// 这是通过检查FakeEtcdProvider的内部数据来实现的
-func waitForEtcdWrites(t *testing.T, ctx context.Context, fakeEtcd *etcdprov.FakeEtcdProvider, retries int) {
-	// 这里我们使用一个简单的方法来等待异步操作完成
-	// 实际上，应该提供一个更好的机制来等待操作完成
-	for i := 0; i < retries; i++ {
-		time.Sleep(100 * time.Millisecond)
-		shardStateItems := fakeEtcd.List(ctx, "/smg/shard_state/", 100)
-		if len(shardStateItems) > 0 {
-			t.Logf("异步写入操作已完成，找到 %d 个分片状态", len(shardStateItems))
-			return
-		}
-		// 打印当前状态以便调试
-		t.Logf("等待异步写入操作完成 (尝试 %d/%d)", i+1, retries)
-		t.Logf("当前 FakeEtcdProvider 状态: %s", fakeEtcd.DebugDump())
-	}
-	t.Logf("尝试等待异步写入操作完成，但未成功")
-}
-
-// WaitUntil 等待直到条件满足或超时
-// condition: 要评估的条件函数，返回 true 表示条件满足
-// maxWaitMs: 最大等待时间（毫秒）
-// intervalMs: 检查条件的间隔时间（毫秒）
-// Returns: 是否成功（在超时前条件满足）
+// WaitUntil 等待条件满足或超时
 func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) bool {
-	startTime := time.Now()
 	maxDuration := time.Duration(maxWaitMs) * time.Millisecond
 	intervalDuration := time.Duration(intervalMs) * time.Millisecond
+	startTime := time.Now()
 
-	for i := 0; ; i++ {
+	for i := 0; i < maxWaitMs/intervalMs; i++ {
 		success, debugInfo := condition()
 		if success {
 			elapsed := time.Since(startTime)
@@ -176,59 +152,7 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 			i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
 		time.Sleep(intervalDuration)
 	}
-}
-
-// waitForShardStates 等待分片状态写入 etcd
-func waitForShardStates(t *testing.T, ctx context.Context, fakeEtcd *etcdprov.FakeEtcdProvider, expectedCount int) bool {
-	return WaitUntil(t, func() (bool, string) {
-		shardStateItems := fakeEtcd.List(ctx, "/smg/shard_state/", 100)
-		if len(shardStateItems) >= expectedCount {
-			t.Logf("异步写入操作已完成，找到 %d 个分片状态", len(shardStateItems))
-			return true, ""
-		}
-		return false, fakeEtcd.DebugDump()
-	}, 2000, 100)
-}
-
-// waitForEtcdShardStates 等待所有分片状态被持久化到 etcd 中
-// 它会等待更长的时间，确保异步写入操作完成
-func waitForEtcdShardStates(t *testing.T, ctx context.Context, fakeEtcd *etcdprov.FakeEtcdProvider, expectedCount int) bool {
-	t.Logf("开始等待etcd分片状态，期望数量: %d", expectedCount)
-	t.Logf("当前EtcdProvider状态: %s", etcdprov.DumpGlobalState())
-
-	return WaitUntil(t, func() (bool, string) {
-		// 打印当前EtcdProvider状态
-		t.Logf("检查点: 当前EtcdProvider状态: %s", etcdprov.DumpGlobalState())
-
-		// 确认我们在使用正确的EtcdProvider
-		providerStr := fmt.Sprintf("%T", etcdprov.GetCurrentEtcdProvider(ctx))
-		if !strings.Contains(providerStr, "FakeEtcdProvider") {
-			t.Logf("警告: 当前EtcdProvider不是FakeEtcdProvider，而是 %s", providerStr)
-		}
-
-		shardStateItems := fakeEtcd.List(ctx, "/smg/shard_state/", 100)
-		t.Logf("当前etcd中有 %d 个分片状态", len(shardStateItems))
-
-		if len(shardStateItems) >= expectedCount {
-			t.Logf("分片状态数量符合期望: %d >= %d", len(shardStateItems), expectedCount)
-			for _, item := range shardStateItems {
-				t.Logf("  - 键: %s, 值长度: %d", item.Key, len(item.Value))
-			}
-			return true, ""
-		}
-
-		// 打印当前找到的分片详情
-		if len(shardStateItems) > 0 {
-			t.Logf("已找到部分分片状态:")
-			for _, item := range shardStateItems {
-				t.Logf("  - 键: %s, 值长度: %d", item.Key, len(item.Value))
-			}
-		} else {
-			t.Logf("尚未找到任何分片状态")
-		}
-
-		return false, fakeEtcd.DebugDump()
-	}, 5000, 200) // 使用更长的超时时间和更大的间隔
+	return false
 }
 
 // waitForServiceShards 等待 ServiceState 中的分片数量达到预期
