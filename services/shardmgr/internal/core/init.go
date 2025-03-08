@@ -10,18 +10,17 @@ import (
 
 func (ss *ServiceState) Init(ctx context.Context) {
 	// step 1: load ServiceInfo
-	ss.PathManager = NewPathManager()
-	ss.ServiceInfo = ss.LoadServiceInfo(ctx)
-	ss.ServiceConfig = ss.LoadServiceConfig(ctx)
+	ss.ServiceInfo = ss.LoadServiceInfo(ctx)     // from /smg/config/service_info.json
+	ss.ServiceConfig = ss.LoadServiceConfig(ctx) // from /smg/config/service_config.json
 	// step 2: load all shard state
-	ss.LoadAllShardState(ctx)
+	ss.LoadAllShardState(ctx) // (from /smg/shard_state/ to ss.AllShards)
 	// setp 3: load all worker state
-	ss.LoadAllWorkerState(ctx)
+	ss.LoadAllWorkerState(ctx) // (from /smg/worker_state/ to ss.AllWorkers and ss.AllAssignments)
 	ss.ShadowState.InitDone()
 
 	// step 4: load current shard plan
 	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
-	ss.syncShardPlan(ctx, currentShardPlan)
+	ss.syncShardPlan(ctx, currentShardPlan) // based on crrentShardPlan, update ss.AllShards, and write to etcd
 	// step 5: load current worker eph
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
 	for _, workerEph := range currentWorkerEph {

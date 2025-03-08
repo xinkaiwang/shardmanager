@@ -7,23 +7,24 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
-type ProposalStateJson struct {
-	ProposalId  string            `json:"proposal_id"`
-	Description string            `json:"description"`
-	Moves       []*MicroMovesJson `json:"moves"`
-	NextMove    int               `json:"next_move"` // NextMove 是下一个要执行的 move 的索引
+// <etcd>/smg/move/{proposal_id}
+type ExecutionPlanJson struct {
+	ProposalId data.ProposalId   `json:"proposal_id"`
+	Signature  string            `json:"signature"`
+	Moves      []*MicroMovesJson `json:"moves"`
+	NextMove   int               `json:"next_move"` // NextMove 是下一个要执行的 move 的索引
 }
 
 type MicroMovesJson struct {
 	ShardId      data.ShardId      `json:"shard"`
-	ReplicaIdx   data.ReplicaIdx   `json:"replica"`
+	ReplicaIdx   data.ReplicaIdx   `json:"replica,omitempty"`
 	AssignmentId data.AssignmentId `json:"assignment"`
-	From         data.WorkerFullId `json:"from"`
-	To           data.WorkerFullId `json:"to"`
+	From         string            `json:"from,omitempty"` // WorkerFullId
+	To           string            `json:"to,omitempty"`   // WorkerFullId
 }
 
-func ProposalStateJsonParse(data []byte) *ProposalStateJson {
-	var state ProposalStateJson
+func ExecutionPlanJsonParse(data []byte) *ExecutionPlanJson {
+	var state ExecutionPlanJson
 	err := json.Unmarshal(data, &state)
 	if err != nil {
 		ke := kerror.Wrap(err, "UnmarshalError", "failed to unmarshal ProposalStateJson", false)
@@ -32,7 +33,7 @@ func ProposalStateJsonParse(data []byte) *ProposalStateJson {
 	return &state
 }
 
-func (obj *ProposalStateJson) ToJson() string {
+func (obj *ExecutionPlanJson) ToJson() string {
 	bytes, err := json.Marshal(obj)
 	if err != nil {
 		ke := kerror.Wrap(err, "MarshalError", "failed to marshal ProposalStateJson", false)

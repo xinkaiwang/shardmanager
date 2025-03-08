@@ -1,4 +1,6 @@
-package core
+package config
+
+import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 
 type PathManager struct {
 }
@@ -27,4 +29,20 @@ func (pm *PathManager) GetWorkerStatePathPrefix() string {
 
 func (pm *PathManager) GetWorkerEphPathPrefix() string {
 	return "/smg/eph/"
+}
+
+func (pm *PathManager) GetExecutionPlanPrefix() string {
+	return "/smg/move/"
+}
+
+func (pm *PathManager) FmtShardStatePath(shardId data.ShardId) string {
+	return pm.GetShardStatePathPrefix() + string(shardId)
+}
+
+func (pm *PathManager) FmtWorkerStatePath(workerFullId data.WorkerFullId) string {
+	return pm.GetWorkerStatePathPrefix() + workerFullId.String()
+}
+
+func (pm *PathManager) FmtExecutionPlanPath(proposalId data.ProposalId) string {
+	return pm.GetExecutionPlanPrefix() + string(proposalId)
 }

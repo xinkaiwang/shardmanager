@@ -16,7 +16,7 @@ import (
 // ServiceState implements the CriticalResource interface
 type ServiceState struct {
 	runloop       *krunloop.RunLoop[*ServiceState]
-	PathManager   *PathManager
+	PathManager   *config.PathManager
 	ServiceInfo   *ServiceInfo
 	ServiceConfig *config.ServiceConfig
 	StoreProvider shadow.StoreProvider
@@ -44,11 +44,11 @@ func NewServiceState(ctx context.Context) *ServiceState {
 		AllAssignments:   make(map[data.AssignmentId]*AssignmentState),
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
-		ShadowState:      shadow.NewShadowState(ctx),
 	}
+	ss.PathManager = config.NewPathManager()
+	ss.ShadowState = shadow.NewShadowState(ctx, ss.PathManager)
 	ss.StoreProvider = ss.ShadowState
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
-	ss.PathManager = NewPathManager()
 	ss.Init(ctx)
 	// strt runloop
 	go ss.runloop.Run(ctx)

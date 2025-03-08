@@ -4,23 +4,26 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // ShadowState implements StoreProvider
 type ShadowState struct {
-	AllShards    map[data.ShardId]*smgjson.ShardStateJson
-	AllWorkers   map[data.WorkerFullId]*smgjson.WorkerStateJson
-	AllProposals map[data.ProposalId]*smgjson.ProposalStateJson
-	runloop      *krunloop.RunLoop[*ShadowState]
+	PathManager *config.PathManager
+	AllShards   map[data.ShardId]*smgjson.ShardStateJson
+	AllWorkers  map[data.WorkerFullId]*smgjson.WorkerStateJson
+	AllExePlans map[data.ProposalId]*smgjson.ExecutionPlanJson
+	runloop     *krunloop.RunLoop[*ShadowState]
 }
 
-func NewShadowState(ctx context.Context) *ShadowState {
+func NewShadowState(ctx context.Context, pm *config.PathManager) *ShadowState {
 	shadow := &ShadowState{
-		AllShards:    make(map[data.ShardId]*smgjson.ShardStateJson),
-		AllWorkers:   make(map[data.WorkerFullId]*smgjson.WorkerStateJson),
-		AllProposals: make(map[data.ProposalId]*smgjson.ProposalStateJson),
+		PathManager: pm,
+		AllShards:   make(map[data.ShardId]*smgjson.ShardStateJson),
+		AllWorkers:  make(map[data.WorkerFullId]*smgjson.WorkerStateJson),
+		AllExePlans: make(map[data.ProposalId]*smgjson.ExecutionPlanJson),
 	}
 	shadow.runloop = krunloop.NewRunLoop(ctx, shadow, "shadow")
 	go shadow.runloop.Run(ctx)
@@ -40,8 +43,8 @@ func (shadow *ShadowState) InitWorkerState(workerFullId data.WorkerFullId, worke
 }
 
 // InitProposalState is only called once when the service starts, that's why it doesn't need to be thread-safe
-func (shadow *ShadowState) InitProposalState(proposalId data.ProposalId, proposalState *smgjson.ProposalStateJson) {
-	shadow.AllProposals[proposalId] = proposalState
+func (shadow *ShadowState) InitProposalState(proposalId data.ProposalId, proposalState *smgjson.ExecutionPlanJson) {
+	shadow.AllExePlans[proposalId] = proposalState
 }
 
 // InitDone is called once when init is done, non-thread-safe operation is not allowed after this
@@ -64,10 +67,10 @@ func (shadow *ShadowState) StoreWorkerState(workerFullId data.WorkerFullId, work
 	shadow.runloop.EnqueueEvent(eve)
 }
 
-func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.ProposalStateJson) {
-	eve := &ProposalStateJsonEvent{
-		ProposalId:    proposalId,
-		ProposalState: proposalState,
+func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.ExecutionPlanJson) {
+	eve := &ExecutionPlanJsonEvent{
+		ProposalId: proposalId,
+		ExtPlan:    proposalState,
 	}
 	shadow.runloop.EnqueueEvent(eve)
 }
@@ -87,6 +90,10 @@ func (eve *ShardStateJsonEvent) Process(ctx context.Context, shadow *ShadowState
 		return
 	}
 	shadow.AllShards[eve.ShardState.ShardName] = eve.ShardState
+	// write to etcd
+	key := shadow.PathManager.FmtShardStatePath(eve.ShardId)
+	value := eve.ShardState.ToJson()
+	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ShardState")
 }
 
 // WorkerStateJsonEvent implements krunloop.IEvent[*ShadowState]
@@ -104,21 +111,29 @@ func (eve *WorkerStateJsonEvent) Process(ctx context.Context, shadow *ShadowStat
 		return
 	}
 	shadow.AllWorkers[eve.WorkerFullId] = eve.WorkerState
+	// write to etcd
+	key := shadow.PathManager.FmtWorkerStatePath(eve.WorkerFullId)
+	value := eve.WorkerState.ToJson()
+	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "WorkerState")
 }
 
-// ProposalStateJsonEvent implements krunloop.IEvent[*ShadowState]
-type ProposalStateJsonEvent struct {
-	ProposalId    data.ProposalId
-	ProposalState *smgjson.ProposalStateJson
+// ExecutionPlanJsonEvent implements krunloop.IEvent[*ShadowState]
+type ExecutionPlanJsonEvent struct {
+	ProposalId data.ProposalId
+	ExtPlan    *smgjson.ExecutionPlanJson
 }
 
-func (eve *ProposalStateJsonEvent) GetName() string {
+func (eve *ExecutionPlanJsonEvent) GetName() string {
 	return "ProposalStateJsonEvent"
 }
-func (eve *ProposalStateJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
-	if eve.ProposalState == nil {
-		delete(shadow.AllProposals, eve.ProposalId)
+func (eve *ExecutionPlanJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
+	if eve.ExtPlan == nil {
+		delete(shadow.AllExePlans, eve.ProposalId)
 		return
 	}
-	shadow.AllProposals[eve.ProposalId] = eve.ProposalState
+	shadow.AllExePlans[eve.ProposalId] = eve.ExtPlan
+	// write to etcd
+	key := shadow.PathManager.FmtExecutionPlanPath(eve.ProposalId)
+	value := eve.ExtPlan.ToJson()
+	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ExecutionPlan")
 }
