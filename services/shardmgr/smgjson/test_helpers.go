@@ -1,0 +1,113 @@
+package smgjson
+
+// test_helpers.go 包含测试时常用的辅助函数
+
+// CreateTestServiceInfo 创建一个测试用的 ServiceInfoJson 对象
+// 使用默认值，适合大多数测试场景
+func CreateTestServiceInfo() *ServiceInfoJson {
+	return &ServiceInfoJson{
+		ServiceName:      "test-service",
+		ServiceType:      NewServiceTypePointer(ST_SOFT_STATEFUL),
+		MoveType:         NewMovePolicyPointer(MP_StartBeforeKill),
+		MaxResplicaCount: NewInt32Pointer(10),
+		MinResplicaCount: NewInt32Pointer(1),
+	}
+}
+
+// CreateTestServiceInfoWithOptions 创建一个测试用的 ServiceInfoJson 对象
+// 可以自定义各个字段的值
+func CreateTestServiceInfoWithOptions(
+	serviceName string,
+	serviceType ServiceType,
+	moveType MovePolicy,
+	maxReplica int32,
+	minReplica int32,
+) *ServiceInfoJson {
+	return &ServiceInfoJson{
+		ServiceName:      serviceName,
+		ServiceType:      NewServiceTypePointer(serviceType),
+		MoveType:         NewMovePolicyPointer(moveType),
+		MaxResplicaCount: NewInt32Pointer(maxReplica),
+		MinResplicaCount: NewInt32Pointer(minReplica),
+	}
+}
+
+// CreateTestServiceConfig 创建一个测试用的 ServiceConfigJson 对象
+// 使用默认值，适合大多数测试场景
+func CreateTestServiceConfig() *ServiceConfigJson {
+	return &ServiceConfigJson{
+		ShardConfig: &ShardConfigJson{
+			MoveType:        NewMovePolicyPointer(MP_StartBeforeKill),
+			MaxReplicaCount: NewInt32Pointer(10),
+			MinReplicaCount: NewInt32Pointer(1),
+		},
+		SystemLimit: &SystemLimitConfigJson{
+			MaxShardsCountLimit:         NewInt32Pointer(1000),
+			MaxReplicaCountLimit:        NewInt32Pointer(1000),
+			MaxAssignmentCountLimit:     NewInt32Pointer(1000),
+			MaxAssignmentCountPerWorker: NewInt32Pointer(100),
+		},
+		CostFuncCfg: &CostFuncConfigJson{
+			ShardCountCostEnable: NewBoolPointer(true),
+			ShardCountCostNorm:   NewInt32Pointer(100),
+			WorkerMaxAssignments: NewInt32Pointer(100),
+		},
+		SolverConfig: &SolverConfigJson{
+			SoftSolverConfig: &SoftSolverConfigJson{
+				SoftSolverEnabled: NewBoolPointer(true),
+				RunPerMinute:      NewInt32Pointer(30),
+				ExplorePerRun:     NewInt32Pointer(100),
+			},
+			AssignSolverConfig: &AssignSolverConfigJson{
+				AssignSolverEnabled: NewBoolPointer(true),
+				RunPerMinute:        NewInt32Pointer(30),
+				ExplorePerRun:       NewInt32Pointer(100),
+			},
+			UnassignSolverConfig: &UnassignSolverConfigJson{
+				UnassignSolverEnabled: NewBoolPointer(false),
+				RunPerMinute:          NewInt32Pointer(30),
+				ExplorePerRun:         NewInt32Pointer(100),
+			},
+		},
+	}
+}
+
+// ServiceConfigOption 是一个函数类型，用于修改 ServiceConfigJson 对象
+type ServiceConfigOption func(*ServiceConfigJson)
+
+// WithMovePolicy 设置 ShardConfig 的移动策略
+func WithMovePolicy(movePolicy MovePolicy) ServiceConfigOption {
+	return func(cfg *ServiceConfigJson) {
+		cfg.ShardConfig.MoveType = NewMovePolicyPointer(movePolicy)
+	}
+}
+
+// WithReplicaLimits 设置 ShardConfig 的副本数限制
+func WithReplicaLimits(min, max int32) ServiceConfigOption {
+	return func(cfg *ServiceConfigJson) {
+		cfg.ShardConfig.MinReplicaCount = NewInt32Pointer(min)
+		cfg.ShardConfig.MaxReplicaCount = NewInt32Pointer(max)
+	}
+}
+
+// WithSystemLimits 设置系统限制配置
+func WithSystemLimits(maxShards, maxReplicas, maxAssignments, maxAssignmentsPerWorker int32) ServiceConfigOption {
+	return func(cfg *ServiceConfigJson) {
+		cfg.SystemLimit.MaxShardsCountLimit = NewInt32Pointer(maxShards)
+		cfg.SystemLimit.MaxReplicaCountLimit = NewInt32Pointer(maxReplicas)
+		cfg.SystemLimit.MaxAssignmentCountLimit = NewInt32Pointer(maxAssignments)
+		cfg.SystemLimit.MaxAssignmentCountPerWorker = NewInt32Pointer(maxAssignmentsPerWorker)
+	}
+}
+
+// CreateTestServiceConfigWithOptions 使用选项模式创建自定义的 ServiceConfigJson
+func CreateTestServiceConfigWithOptions(options ...ServiceConfigOption) *ServiceConfigJson {
+	cfg := CreateTestServiceConfig()
+
+	// 应用自定义选项
+	for _, option := range options {
+		option(cfg)
+	}
+
+	return cfg
+}

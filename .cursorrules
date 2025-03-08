@@ -45,6 +45,95 @@
    - 错误处理在每一层都必须存在
    - 日志记录关键操作和错误
 
+## Shardmanager 核心组件 [P1]
+
+1. 核心组件和数据流：
+   - `ServiceState`：核心状态管理器，使用 runloop 模式保证线程安全
+   - `PathManager`：管理 etcd 中的路径配置
+   - `ShadowState`：实现 `StoreProvider` 接口，负责状态持久化
+   - `EtcdProvider`：etcd 存储接口，可以使用 `FakeEtcdProvider` 进行测试
+
+2. 主要数据存储路径：
+   - `/smg/config/service_info.json`: 服务基本信息
+   - `/smg/config/service_config.json`: 服务配置
+   - `/smg/config/shard_plan.txt`: shard 计划
+   - `/smg/shard_state/*`: shard 状态
+   - `/smg/worker_state/*`: worker 状态
+   - `/smg/eph/*`: 临时状态
+   - `/smg/move/*`: 执行计划
+
+3. 关键数据结构：
+   - `ServiceInfoJson`：服务基本信息，包括服务类型、迁移策略等
+   - `ServiceConfig`：详细配置，包含 shard 配置、系统限制等
+   - `ShardStateJson`：shard 状态信息
+   - `WorkerStateJson`：worker 状态信息
+   - `ExecutionPlanJson`：执行计划
+
+4. 状态管理流程：
+   - 初始化：`NewServiceState` 创建实例，初始化各种映射和 runloop
+   - 配置加载：从 etcd 读取配置信息
+   - 状态加载：从 etcd 读取现有状态
+   - 状态更新：通过 runloop 确保线程安全，并同步到 etcd
+   - 监听变化：通过 watcher 监听配置和状态变化
+
+5. 服务类型：
+   - `ST_STATELESS`：无状态服务
+   - `ST_SOFT_STATEFUL`：软状态，状态在内存中，重启后丢失
+   - `ST_HARD_STATEFUL`：硬状态，状态在硬盘，重启不丢失
+
+6. 迁移策略：
+   - `MP_KillBeforeStart`：先杀后启
+   - `MP_StartBeforeKill`：先启后杀（默认）
+   - `MP_Cocurrent`：同时进行
+
+## Shardmanager Shard Plan 格式 [P1]
+
+1. Shard Plan 格式说明：
+   - Shard Plan 是由多行 Shard Line 组成的文本格式
+   - 每行表示一个 shard 的配置
+   - 可以包含空行和以 `#` 开头的注释行
+   - 行内也可以包含注释，`#` 后的内容会被忽略
+
+2. Shard Line 格式：
+   ```
+   <shardName>[|<hintsJson>[|<customPropertiesJson>]]
+   ```
+   
+   示例：
+   ```
+   shard-1                                                # 仅有名称
+   shard-2|{"min_replica_count":2,"max_replica_count":5}  # 带有 hints
+   shard-3|{"move_type":"kill_before_start"}              # 设置迁移策略
+   shard-4|{"min_replica_count":3}|{"region":"us-west"}   # 带有自定义属性
+   ```
+
+3. Shard Line 组成部分：
+   - `shardName`: shard 的名称（必须）
+   - `hintsJson`: JSON 格式的 ShardHintsJson 对象（可选）
+     * `min_replica_count`: 最小副本数（可选）
+     * `max_replica_count`: 最大副本数（可选）
+     * `move_type`: 迁移策略（可选，值为 "kill_before_start", "start_before_kill", "concurrent"）
+   - `customPropertiesJson`: JSON 格式的自定义属性（可选）
+
+4. Hints 和默认值：
+   - 如果 shard 没有指定 hints，则使用服务级别的默认值
+   - 服务级别的默认值来自 ServiceInfo 中的设置
+   - 优先级：shard 特定设置 > 服务默认设置
+
+5. 解析流程：
+   - `ParseShardPlan`: 将整个 plan 字符串拆分为多行，并对每行调用 `ParseShardLine`
+   - `ParseShardLine`: 解析单行配置，提取 shardName, hints 和 customProperties
+   - 处理流程包括：移除注释、分割字段、解析 JSON
+
+6. 测试时使用示例：
+   ```go
+   shardPlan := `shard-1
+   shard-2|{"min_replica_count":2,"max_replica_count":5}
+   shard-3|{"move_type":"kill_before_start"}`
+   
+   fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlan)
+   ```
+
 ## Common Issues
 1. 部署相关问题：
    - 服务启动失败：检查配置文件和环境变量

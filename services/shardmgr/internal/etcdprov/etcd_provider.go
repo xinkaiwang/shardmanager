@@ -51,3 +51,14 @@ func GetCurrentEtcdProvider(ctx context.Context) EtcdProvider {
 	}
 	return currentEtcdProvider
 }
+
+// RunWithEtcdProvider 在执行 fn 期间临时使用提供的 EtcdProvider，执行完成后恢复原来的 provider
+// 无论 fn 是否 panic，都会确保恢复原来的 provider
+func RunWithEtcdProvider(provider EtcdProvider, fn func()) {
+	oldProvider := currentEtcdProvider
+	currentEtcdProvider = provider
+	defer func() {
+		currentEtcdProvider = oldProvider
+	}()
+	fn()
+}
