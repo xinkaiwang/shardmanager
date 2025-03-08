@@ -47,6 +47,10 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 		shardStateJson := smgjson.ShardStateJsonFromJson(item.Value)
 		ss.ShadowState.InitShardState(shardStateJson.ShardName, shardStateJson)
 		shardObj := NewShardState(shardStateJson.ShardName)
+
+		// 设置软删除状态，使用辅助函数转换
+		shardObj.LameDuck = smgjson.Int82Bool(shardStateJson.LameDuck)
+
 		ss.AllShards[data.ShardId(shardObj.ShardId)] = shardObj
 	}
 }

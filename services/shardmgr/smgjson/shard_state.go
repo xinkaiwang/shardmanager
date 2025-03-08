@@ -13,6 +13,8 @@ type ShardStateJson struct {
 
 	// key is replicaIdx
 	Resplicas map[data.ReplicaIdx]*ReplicaStateJson `json:"resplicas"`
+
+	LameDuck int8 `json:"lame_duck,omitempty"` // use int to represent bool
 }
 
 func NewShardStateJson(shardName data.ShardId) *ShardStateJson {

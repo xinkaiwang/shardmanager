@@ -57,3 +57,12 @@ func ParseServiceInfoJson(data string) *ServiceInfoJson {
 	}
 	return si
 }
+
+func (si *ServiceInfoJson) ToJson() string {
+	data, err := json.Marshal(si)
+	if err != nil {
+		ke := kerror.Wrap(err, "MarshalError", "failed to marshal ServiceInfoJson", false)
+		panic(ke)
+	}
+	return string(data)
+}

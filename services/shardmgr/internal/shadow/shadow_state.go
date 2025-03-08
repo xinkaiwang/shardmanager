@@ -3,6 +3,7 @@ package shadow
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -86,13 +87,19 @@ func (eve *ShardStateJsonEvent) GetName() string {
 }
 func (eve *ShardStateJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
 	if eve.ShardState == nil {
+		klogging.Info(ctx).With("shardId", eve.ShardId).Log("ShardStateJsonEventDelete", "正在删除分片状态")
 		delete(shadow.AllShards, eve.ShardId)
+		key := shadow.PathManager.FmtShardStatePath(eve.ShardId)
+		klogging.Info(ctx).With("key", key).Log("ShardStateJsonEventDelete", "从etcd中删除键")
+		GetCurrentEtcdStore(ctx).Put(ctx, key, "", "ShardState")
 		return
 	}
+	klogging.Info(ctx).With("shardId", eve.ShardId).With("lameDuck", eve.ShardState.LameDuck).Log("ShardStateJsonEventUpdate", "正在更新分片状态")
 	shadow.AllShards[eve.ShardState.ShardName] = eve.ShardState
 	// write to etcd
 	key := shadow.PathManager.FmtShardStatePath(eve.ShardId)
 	value := eve.ShardState.ToJson()
+	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("ShardStateJsonEventUpdate", "向etcd写入数据")
 	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ShardState")
 }
 
@@ -106,13 +113,14 @@ func (eve *WorkerStateJsonEvent) GetName() string {
 	return "WorkerStateJsonEvent"
 }
 func (eve *WorkerStateJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
+	key := shadow.PathManager.FmtWorkerStatePath(eve.WorkerFullId)
 	if eve.WorkerState == nil {
 		delete(shadow.AllWorkers, eve.WorkerFullId)
+		GetCurrentEtcdStore(ctx).Put(ctx, key, "", "WorkerState")
 		return
 	}
 	shadow.AllWorkers[eve.WorkerFullId] = eve.WorkerState
 	// write to etcd
-	key := shadow.PathManager.FmtWorkerStatePath(eve.WorkerFullId)
 	value := eve.WorkerState.ToJson()
 	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "WorkerState")
 }
@@ -127,13 +135,14 @@ func (eve *ExecutionPlanJsonEvent) GetName() string {
 	return "ProposalStateJsonEvent"
 }
 func (eve *ExecutionPlanJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
+	key := shadow.PathManager.FmtExecutionPlanPath(eve.ProposalId)
 	if eve.ExtPlan == nil {
 		delete(shadow.AllExePlans, eve.ProposalId)
+		GetCurrentEtcdStore(ctx).Put(ctx, key, "", "ExecutionPlan")
 		return
 	}
 	shadow.AllExePlans[eve.ProposalId] = eve.ExtPlan
 	// write to etcd
-	key := shadow.PathManager.FmtExecutionPlanPath(eve.ProposalId)
 	value := eve.ExtPlan.ToJson()
 	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ExecutionPlan")
 }

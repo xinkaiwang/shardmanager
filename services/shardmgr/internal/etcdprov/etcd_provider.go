@@ -58,6 +58,24 @@ func RunWithEtcdProvider(provider EtcdProvider, fn func()) {
 	oldProvider := currentEtcdProvider
 	currentEtcdProvider = provider
 	defer func() {
+		// 恢复原始的 provider
+		currentEtcdProvider = oldProvider
+	}()
+	fn()
+}
+
+// RunWithEtcdProviderAndWait 在执行 fn 期间临时使用提供的 EtcdProvider，
+// 执行完成后等待异步操作完成，然后恢复原来的 provider
+// waitFunc 是一个等待异步操作完成的函数
+func RunWithEtcdProviderAndWait(provider EtcdProvider, fn func(), waitFunc func()) {
+	oldProvider := currentEtcdProvider
+	currentEtcdProvider = provider
+	defer func() {
+		// 如果提供了等待函数，先执行等待
+		if waitFunc != nil {
+			waitFunc()
+		}
+		// 恢复原始的 provider
 		currentEtcdProvider = oldProvider
 	}()
 	fn()

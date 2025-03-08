@@ -2,9 +2,12 @@ package etcdprov
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // FakeEtcdProvider 是一个纯内存实现的 EtcdProvider
@@ -62,6 +65,7 @@ func (f *FakeEtcdProvider) Get(ctx context.Context, key string) EtcdKvItem {
 
 // Set 实现
 func (f *FakeEtcdProvider) Set(ctx context.Context, key, value string) {
+	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("FakeEtcdProviderSet", "设置键值")
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -85,14 +89,17 @@ func (f *FakeEtcdProvider) Set(ctx context.Context, key, value string) {
 		Value:       value,
 		ModRevision: f.currentRevision,
 	})
+	klogging.Info(ctx).With("key", key).With("revision", f.currentRevision).Log("FakeEtcdProviderSet", "键值设置完成")
 }
 
 // Delete 实现
 func (f *FakeEtcdProvider) Delete(ctx context.Context, key string) {
+	klogging.Info(ctx).With("key", key).Log("FakeEtcdProviderDelete", "删除键")
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if _, exists := f.data[key]; !exists {
+		klogging.Info(ctx).With("key", key).Log("FakeEtcdProviderDelete", "键不存在，无需删除")
 		panic(ErrKeyNotFound.With("key", key))
 	}
 
@@ -105,6 +112,7 @@ func (f *FakeEtcdProvider) Delete(ctx context.Context, key string) {
 		Value:       "", // 删除事件值为空
 		ModRevision: f.currentRevision,
 	})
+	klogging.Info(ctx).With("key", key).With("revision", f.currentRevision).Log("FakeEtcdProviderDelete", "键删除完成")
 }
 
 // List 实现
@@ -112,14 +120,24 @@ func (f *FakeEtcdProvider) List(ctx context.Context, startKey string, maxCount i
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
+	klogging.Info(ctx).With("startKey", startKey).With("maxCount", maxCount).With("dataCount", len(f.data)).Log("FakeEtcdProviderList", "列出键值")
+
+	// 打印所有存储的键值，帮助调试
+	for k, v := range f.data {
+		klogging.Info(ctx).With("key", k).With("valueLength", len(v.Value)).With("revision", v.ModRevision).Log("FakeEtcdProviderListData", "存储的键值")
+	}
+
 	var items []EtcdKvItem
 	for k, v := range f.data {
 		if strings.HasPrefix(k, startKey) {
+			klogging.Info(ctx).With("key", k).With("matches", true).Log("FakeEtcdProviderListCheck", "键前缀匹配")
 			items = append(items, EtcdKvItem{
 				Key:         k,
 				Value:       v.Value,
 				ModRevision: v.ModRevision,
 			})
+		} else {
+			klogging.Info(ctx).With("key", k).With("matches", false).Log("FakeEtcdProviderListCheck", "键前缀不匹配")
 		}
 	}
 
@@ -133,6 +151,7 @@ func (f *FakeEtcdProvider) List(ctx context.Context, startKey string, maxCount i
 		items = items[:maxCount]
 	}
 
+	klogging.Info(ctx).With("startKey", startKey).With("count", len(items)).Log("FakeEtcdProviderList", "列出键值完成")
 	return items
 }
 
@@ -141,14 +160,24 @@ func (f *FakeEtcdProvider) LoadAllByPrefix(ctx context.Context, pathPrefix strin
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
+	klogging.Info(ctx).With("pathPrefix", pathPrefix).With("dataCount", len(f.data)).Log("LoadAllByPrefix", "加载所有键值")
+
+	// 打印所有存储的键值，帮助调试
+	for k, v := range f.data {
+		klogging.Info(ctx).With("key", k).With("valueLength", len(v.Value)).With("revision", v.ModRevision).Log("LoadAllByPrefixData", "存储的键值")
+	}
+
 	var items []EtcdKvItem
 	for k, v := range f.data {
 		if strings.HasPrefix(k, pathPrefix) {
+			klogging.Info(ctx).With("key", k).With("matches", true).Log("LoadAllByPrefixCheck", "键前缀匹配")
 			items = append(items, EtcdKvItem{
 				Key:         k,
 				Value:       v.Value,
 				ModRevision: v.ModRevision,
 			})
+		} else {
+			klogging.Info(ctx).With("key", k).With("matches", false).Log("LoadAllByPrefixCheck", "键前缀不匹配")
 		}
 	}
 
@@ -157,6 +186,7 @@ func (f *FakeEtcdProvider) LoadAllByPrefix(ctx context.Context, pathPrefix strin
 		return items[i].Key < items[j].Key
 	})
 
+	klogging.Info(ctx).With("pathPrefix", pathPrefix).With("count", len(items)).With("revision", f.currentRevision).Log("LoadAllByPrefix", "加载完成")
 	return items, f.currentRevision
 }
 
@@ -235,4 +265,29 @@ func (f *FakeEtcdProvider) sendHistoricalEvents(ctx context.Context, prefix stri
 			}
 		}
 	}
+}
+
+// DebugDump 用于调试，打印当前存储的所有键值对
+func (f *FakeEtcdProvider) DebugDump() string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	if len(f.data) == 0 {
+		return "FakeEtcdProvider: empty data store"
+	}
+
+	var keys []string
+	for k := range f.data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("FakeEtcdProvider: %d keys, current revision: %d\n", len(f.data), f.currentRevision))
+	for _, k := range keys {
+		v := f.data[k]
+		result.WriteString(fmt.Sprintf("  %s: value_len=%d, rev=%d, create_rev=%d\n",
+			k, len(v.Value), v.ModRevision, v.CreateRev))
+	}
+	return result.String()
 }

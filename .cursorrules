@@ -420,6 +420,199 @@
 
 ## Lessons
 
+## 工作流程经验
+
+## 分片状态管理经验 [P1]
+
+1. 分片状态路径和结构：
+   - 分片状态存储在 etcd 中的 `/smg/shard_state/{shard-id}` 路径下
+   - 每个分片状态包含基本信息：shard_name 和 replicas 列表
+   - ShardHint 不会持久化到 ShardStateJson 中，这是设计决策
+   - 因为 Hints 信息可以从 ServiceCfg 和 shardPlan 派生，无需冗余存储
+
+2. 分片删除机制：
+   - 从分片计划中删除分片时，使用软删除机制
+   - 被删除的分片会从内存中的 AllShards 映射中移除
+   - 但分片的状态数据保留在 etcd 中，不被物理删除
+   - **功能缺失**：软删除标记（删除状态）没有被持久化到 etcd
+   - 这导致无法区分"尚未创建的分片"和"已被软删除的分片"
+   - 建议改进：在 ShardStateJson 中添加一个状态字段，用于标记删除状态
+
+3. 分片状态变更过程：
+   - 分片计划变更会触发 syncShardPlan 过程
+   - 此过程会识别新增、更新和删除的分片
+   - 对于新增分片，创建 ShardState 并保存到 etcd
+   - 对于更新分片，更新内存中的 ShardState
+   - 对于删除分片，从内存中移除但保留 etcd 数据
+   - **改进需求**：删除分片时，应将其标记为已删除状态并持久化该标记
+
+4. 测试分片变更的最佳实践：
+   - 设置初始分片计划（可以为空）
+   - 等待处理完成，验证内存状态和 etcd 状态
+   - 更新分片计划，添加或删除分片
+   - 等待处理完成，再次验证状态
+   - 检查 syncShardPlan 日志输出，确认正确的插入、更新和删除操作
+
+5. 分片 Hints 处理说明：
+   - `NewShardStateByPlan` 函数不设置 Hints 属性是有意的设计决策
+   - ShardHint 信息保存在分片计划中，不需要冗余存储在 ShardStateJson 中
+   - 运行时，系统从 ServiceCfg 和 shardPlan 获取 Hints 信息
+   - 在测试中，不应该检查 ShardState 的 Hints 属性是否从 ShardLine 传递
+
+6. 等待异步操作的重要性：
+   - 分片状态管理涉及异步操作
+   - 在验证状态前必须等待足够时间
+   - 推荐等待时间：200-300 毫秒
+   - 对于复杂操作可能需要更长等待时间
+
+## shardmanager 组件使用笔记
+
+### FakeEtcdProvider 使用方法
+1. 创建实例:
+   ```go
+   fakeEtcd := etcdprov.NewFakeEtcdProvider()
+   ```
+
+2. 键值操作:
+   ```go
+   // 读取键值（返回 EtcdKvItem，不返回错误）
+   item := fakeEtcd.Get(ctx, key) // 返回类型: EtcdKvItem，字段: Key, Value, ModRevision
+   
+   // 设置键值
+   fakeEtcd.Set(ctx, key, value) // 无返回值
+   
+   // 删除键（键不存在会 panic）
+   fakeEtcd.Delete(ctx, key)
+   
+   // 列出前缀匹配的键值对
+   items := fakeEtcd.List(ctx, keyPrefix, maxCount) // 返回类型: []EtcdKvItem
+   
+   // 加载前缀匹配的键值对，并返回当前版本
+   items, revision := fakeEtcd.LoadAllByPrefix(ctx, keyPrefix) // 返回类型: []EtcdKvItem, EtcdRevision
+   
+   // 监视键变化
+   ch := fakeEtcd.WatchByPrefix(ctx, keyPrefix, revision) // 返回类型: chan EtcdKvItem
+   ```
+
+3. 在测试中使用:
+   ```go
+   // 使用 RunWithEtcdProvider 临时替换全局 EtcdProvider
+   etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
+      // 在这个函数内，所有调用会使用 fakeEtcd
+      ss := NewServiceState(ctx)
+      // 进行断言...
+   })
+   ```
+
+### ShardStateJson 结构
+```go
+type ShardStateJson struct {
+    ShardName data.ShardId `json:"shard_name"` // 注意：字段名是 ShardName 而不是 ShardId
+    Resplicas map[data.ReplicaIdx]*ReplicaStateJson `json:"resplicas"`
+}
+```
+
+### ServiceState 关键路径
+1. 配置文件路径:
+   - 服务信息: `/smg/config/service_info.json`
+   - 服务配置: `/smg/config/service_config.json`
+   - 分片计划: `/smg/config/shard_plan.txt`
+   - 分片状态: `/smg/shard_state/{shard_id}` (注意：不是 shadow_state)
+
+2. 初始化服务状态:
+   ```go
+   ss := NewServiceState(ctx) // 会自动从 etcd 加载服务信息和配置
+   ```
+
+3. 访问分片:
+   ```go
+   // 获取所有分片
+   shards := ss.AllShards // 类型: map[string]*Shard
+   
+   // 获取特定分片
+   shard, ok := ss.AllShards[shardId]
+   
+   // 分片的配置信息
+   minReplica := shard.Hints.MinReplicaCount
+   maxReplica := shard.Hints.MaxReplicaCount
+   movePolicy := shard.Hints.MovePolicy
+   ```
+
+### 测试辅助函数
+1. 创建测试服务信息:
+   ```go
+   // 使用默认值
+   serviceInfo := smgjson.CreateTestServiceInfo()
+   
+   // 使用自定义值
+   serviceInfo := smgjson.CreateTestServiceInfoWithOptions(
+       "test-service",
+       smgjson.ST_SOFT_STATEFUL,
+       smgjson.MP_StartBeforeKill,
+       10, // maxReplica
+       1,  // minReplica
+   )
+   ```
+
+2. 创建测试服务配置:
+   ```go
+   // 使用默认值
+   serviceConfig := smgjson.CreateTestServiceConfig()
+   
+   // 使用选项模式自定义配置
+   serviceConfig := smgjson.CreateTestServiceConfigWithOptions(
+       smgjson.WithReplicaLimits(1, 10),
+       smgjson.WithMovePolicy(smgjson.MP_StartBeforeKill),
+       smgjson.WithSystemLimits(1000, 1000, 1000, 100),
+   )
+   ```
+
+3. 辅助函数返回值转换:
+   ```go
+   // 对象转 JSON
+   jsonStr := serviceInfo.ToJson()
+   
+   // JSON 转对象
+   serviceInfo := smgjson.ParseServiceInfoJson(jsonStr)
+   ```
+
+### 常见测试模式
+1. 设置并验证分片计划:
+   ```go
+   // 设置分片计划
+   shardPlan := `shard-1
+   shard-2|{"min_replica_count":2,"max_replica_count":5}
+   shard-3|{"move_type":"kill_before_start"}`
+   fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlan)
+   
+   // 初始化并验证
+   ss := NewServiceState(ctx)
+   assert.Equal(t, 3, len(ss.AllShards))
+   
+   // 验证特定分片配置
+   shard2, ok := ss.AllShards["shard-2"]
+   assert.True(t, ok)
+   assert.Equal(t, int32(2), shard2.Hints.MinReplicaCount)
+   assert.Equal(t, int32(5), shard2.Hints.MaxReplicaCount)
+   ```
+   
+2. 验证分片状态写入:
+   ```go
+   // 获取 shard_state 目录中的所有键
+   shadowStateItems := fakeEtcd.List(ctx, "/smg/shard_state/", 100)
+   assert.Equal(t, expectedCount, len(shadowStateItems))
+   
+   // 验证特定分片状态
+   item := fakeEtcd.Get(ctx, "/smg/shard_state/" + shardId)
+   assert.NotEmpty(t, item.Value)
+   
+   // 解析分片状态
+   var shardState smgjson.ShardStateJson
+   err := json.Unmarshal([]byte(item.Value), &shardState)
+   assert.NoError(t, err)
+   assert.Equal(t, shardId, string(shardState.ShardName))
+   ```
+
 ## 错误处理经验
 1. kerror 包装规范：
    - 错误示例：
