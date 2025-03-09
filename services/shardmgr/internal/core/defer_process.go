@@ -37,7 +37,7 @@ func (dp *DeferProcess) ScheduleRun(run func()) {
 		return
 	}
 	kcommon.ScheduleRun(dp.delayMs, func() {
-		dp.parent.EnqueueEvent(DeferEvent{dp: dp, run: run})
+		dp.parent.PostEvent(DeferEvent{dp: dp, run: run})
 	})
 }
 

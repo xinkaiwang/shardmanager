@@ -71,7 +71,7 @@ func TestEnqueueEvent(t *testing.T) {
 	// Event enqueuing should not block
 	enqueued := make(chan bool)
 	go func() {
-		rl.EnqueueEvent(event)
+		rl.PostEvent(event)
 		enqueued <- true
 	}()
 
@@ -108,7 +108,7 @@ func TestRunLoop(t *testing.T) {
 
 	// Send a test event
 	testEvent := NewRunLoopTestEvent("testEvent")
-	rl.EnqueueEvent(testEvent)
+	rl.PostEvent(testEvent)
 
 	// Wait for event execution
 	select {
@@ -171,7 +171,7 @@ func TestRunLoopHighLoad(t *testing.T) {
 	events := make([]*RunLoopTestEvent, numEvents)
 	for i := 0; i < numEvents; i++ {
 		events[i] = NewRunLoopTestEvent("largeVolumnEvent" + strconv.Itoa(i))
-		rl.EnqueueEvent(events[i])
+		rl.PostEvent(events[i])
 	}
 
 	// Verify all events were processed
@@ -217,14 +217,14 @@ func TestRunLoopConcurrency(t *testing.T) {
 	go func() {
 		for i := 0; i < numEvents; i++ {
 			testEvents[i] = NewRunLoopTestEvent("testConcurrentEvent" + strconv.Itoa(i))
-			rl.EnqueueEvent(testEvents[i])
+			rl.PostEvent(testEvents[i])
 		}
 		done <- true
 	}()
 
 	go func() {
 		for i := 0; i < numEvents; i++ {
-			rl.EnqueueEvent(DummyEvent{Msg: "dummy" + strconv.Itoa(i)})
+			rl.PostEvent(DummyEvent{Msg: "dummy" + strconv.Itoa(i)})
 		}
 		done <- true
 	}()
@@ -267,7 +267,7 @@ func TestRunLoopEventOrder(t *testing.T) {
 
 	for i, msg := range events {
 		testEvents[i] = NewRunLoopTestEvent(msg)
-		rl.EnqueueEvent(testEvents[i])
+		rl.PostEvent(testEvents[i])
 	}
 
 	// Verify processing order

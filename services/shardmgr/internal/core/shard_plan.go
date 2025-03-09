@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -48,7 +49,7 @@ func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.
 }
 
 type ShardPlanWatcher struct {
-	parent *ServiceState
+	parent krunloop.EventPoster[*ServiceState]
 	ch     chan etcdprov.EtcdKvItem
 }
 
@@ -71,7 +72,7 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 				return
 			}
 			shardPlan := smgjson.ParseShardPlan(item.Value)
-			sp.parent.runloop.EnqueueEvent(&ShardPlanUpdateEvent{ShardPlan: shardPlan})
+			sp.parent.PostEvent(&ShardPlanUpdateEvent{ShardPlan: shardPlan})
 		}
 	}
 }

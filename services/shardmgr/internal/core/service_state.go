@@ -35,6 +35,8 @@ type ServiceState struct {
 
 	ShardPlanWatcher *ShardPlanWatcher
 	WorkerEphWatcher *WorkerEphWatcher
+
+	syncWorkerBatchManager *BatchManager
 }
 
 func NewServiceState(ctx context.Context) *ServiceState {
@@ -52,6 +54,9 @@ func NewServiceState(ctx context.Context) *ServiceState {
 	ss.Init(ctx)
 	// strt runloop
 	go ss.runloop.Run(ctx)
+	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerBatch", func(ctx context.Context, ss *ServiceState) {
+		ss.syncEphStagingToWorkerState(ctx)
+	})
 	return ss
 }
 
@@ -60,8 +65,8 @@ func (ss *ServiceState) IsStateInMemory() bool {
 	return ss.ServiceInfo.ServiceType == smgjson.ST_SOFT_STATEFUL
 }
 
-func (ss *ServiceState) EnqueueEvent(event krunloop.IEvent[*ServiceState]) {
-	ss.runloop.EnqueueEvent(event)
+func (ss *ServiceState) PostEvent(event krunloop.IEvent[*ServiceState]) {
+	ss.runloop.PostEvent(event)
 }
 
 // IsResource implements the CriticalResource interface

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
@@ -134,7 +135,7 @@ func withServiceStateSync(ss *ServiceState, fn func(*ServiceState)) {
 	completed := make(chan struct{})
 
 	// 创建一个事件并加入队列
-	ss.EnqueueEvent(&serviceStateAccessEvent{
+	ss.PostEvent(&serviceStateAccessEvent{
 		callback: fn,
 		done:     completed,
 	})
@@ -188,9 +189,9 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 }
 
 // waitForServiceShards 等待 ServiceState 中的分片数量达到预期
-// 返回是否成功和等待时间
-func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bool, time.Duration) {
-	startTime := time.Now()
+// 返回是否成功和等待时间ms
+func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bool, int64) {
+	startTime := kcommon.GetMonoTimeMs()
 	result := WaitUntil(t, func() (bool, string) {
 		if len(ss.AllShards) >= expectedCount {
 			t.Logf("ServiceState 中的分片数量已达到预期：%d", len(ss.AllShards))
@@ -203,20 +204,39 @@ func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bo
 		return false, fmt.Sprintf("当前分片数量: %d, 分片列表: %v", len(ss.AllShards), shardIds)
 	}, 2000, 20)
 
-	waitDuration := time.Since(startTime)
+	waitDuration := kcommon.GetMonoTimeMs() - startTime
 	t.Logf("waitForServiceShards 总等待时间: %v，结果: %v", waitDuration, result)
 	return result, waitDuration
 }
 
-// waitServiceShards 等待ServiceState的分片数量达到预期
-func waitServiceShards(t *testing.T, ss *ServiceState, expectedCount int) bool {
-	t.Helper()
+func waitForWorkerCounts(t *testing.T, ss *ServiceState, expectedCount int) (bool, int64) { // 返回是否成功和等待时间ms
+	startTime := kcommon.GetMonoTimeMs()
+	result := WaitUntil(t, func() (bool, string) {
+		if len(ss.AllWorkers) >= expectedCount {
+			t.Logf("ServiceState 中的 Worker 数量已达到预期：%d", len(ss.AllWorkers))
+			return true, ""
+		}
+		var workerIds []string
+		for id := range ss.AllWorkers {
+			workerIds = append(workerIds, id.String())
+		}
+		return false, fmt.Sprintf("当前 Worker 数量: %d, Worker 列表: %v", len(ss.AllWorkers), workerIds)
+	}, 2000, 20)
 
-	// 使用waitForServiceShards，这是标准实现
-	result, _ := waitForServiceShards(t, ss, expectedCount)
-
-	return result
+	waitDuration := kcommon.GetMonoTimeMs() - startTime
+	t.Logf("waitForWorkerCounts 总等待时间: %v，结果: %v", waitDuration, result)
+	return result, waitDuration
 }
+
+// // waitServiceShards 等待ServiceState的分片数量达到预期
+// func waitServiceShards(t *testing.T, ss *ServiceState, expectedCount int) bool {
+// 	t.Helper()
+
+// 	// 使用waitForServiceShards，这是标准实现
+// 	result, _ := waitForServiceShards(t, ss, expectedCount)
+
+// 	return result
+// }
 
 // serviceStateReadEvent 用于安全读取 ServiceState
 type serviceStateReadEvent struct {
@@ -240,7 +260,7 @@ func verifyAllShards(t *testing.T, ss *ServiceState, expectedStates map[data.Sha
 	errorsChan := make(chan string, 10)
 
 	// 创建事件来安全访问 ServiceState
-	ss.EnqueueEvent(&serviceStateReadEvent{
+	ss.PostEvent(&serviceStateReadEvent{
 		callback: func(s *ServiceState) {
 			// 首先输出当前所有分片状态，方便调试
 			t.Logf("当前存在 %d 个分片, 需要验证 %d 个", len(s.AllShards), len(expectedStates))

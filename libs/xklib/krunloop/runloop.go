@@ -26,6 +26,11 @@ type IEvent[T CriticalResource] interface {
 	Process(ctx context.Context, resource T)
 }
 
+type EventPoster[T CriticalResource] interface {
+	PostEvent(event IEvent[T])
+}
+
+// RunLoop: implements EventPoster interface
 // RunLoop is a generic event processing loop for any resource type
 type RunLoop[T CriticalResource] struct {
 	name             string // name of this runloop: for logging/metrics purposes only
@@ -51,8 +56,8 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 	return rl
 }
 
-// EnqueueEvent: Enqueue an event to the run loop. This call never blocks.
-func (rl *RunLoop[T]) EnqueueEvent(event IEvent[T]) {
+// PostEvent: Enqueue an event to the run loop. This call never blocks.
+func (rl *RunLoop[T]) PostEvent(event IEvent[T]) {
 	rl.queue.Enqueue(event)
 }
 

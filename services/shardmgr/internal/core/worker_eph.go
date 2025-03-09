@@ -35,20 +35,21 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 			if kvItem.Value == "" {
 				// this is a delete event
 				str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
-				w.ss.EnqueueEvent(NewWorkerEphEvent(data.WorkerFullIdParseFromString(str), nil))
+				w.ss.PostEvent(NewWorkerEphEvent(data.WorkerFullIdParseFromString(str), nil))
 				continue
 			}
 			// this is a add or update event
 			str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
 			workerFullId := data.WorkerFullIdParseFromString(str)
 			workerEph := cougarjson.WorkerEphJsonFromJson(kvItem.Value)
-			w.ss.EnqueueEvent(NewWorkerEphEvent(workerFullId, workerEph))
+			w.ss.PostEvent(NewWorkerEphEvent(workerFullId, workerEph))
 		}
 	}
 }
 
 // writeWorkerEphToStaging: must be called in runloop
 func (ss *ServiceState) writeWorkerEphToStaging(ctx context.Context, workerFullId data.WorkerFullId, workerEph *cougarjson.WorkerEphJson) {
+	defer ss.syncWorkerBatchManager.TrySchedule()
 	if workerEph == nil {
 		// delete
 		delete(ss.EphWorkerStaging, workerFullId)

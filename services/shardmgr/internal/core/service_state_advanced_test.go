@@ -43,7 +43,7 @@ func TestServiceState_StateConflictResolution(t *testing.T) {
 
 				// 创建服务状态
 				ss := NewServiceState(ctx)
-				success := waitServiceShards(t, ss, 3)
+				success, _ := waitForServiceShards(t, ss, 3)
 				assert.True(t, success, "应该能在超时前加载预先存在的分片状态")
 
 				// 验证所有分片状态都是正确的
@@ -73,7 +73,7 @@ func TestServiceState_StateConflictResolution(t *testing.T) {
 
 				// 创建服务状态
 				ss := NewServiceState(ctx)
-				success := waitServiceShards(t, ss, 3)
+				success, _ := waitForServiceShards(t, ss, 3)
 				assert.True(t, success, "应该能在超时前加载预先存在的分片状态")
 
 				// 验证所有分片状态都被正确调整
@@ -104,7 +104,7 @@ func TestServiceState_StateConflictResolution(t *testing.T) {
 
 				// 创建服务状态
 				ss := NewServiceState(ctx)
-				success := waitServiceShards(t, ss, 4) // 应该有4个分片（包括lameDuck的shard-4）
+				success, _ := waitForServiceShards(t, ss, 4) // 应该有4个分片（包括lameDuck的shard-4）
 				assert.True(t, success, "应该能在超时前加载预先存在的分片状态")
 
 				// 验证初始状态
@@ -120,7 +120,7 @@ func TestServiceState_StateConflictResolution(t *testing.T) {
 				setShardPlan(t, fakeEtcd, ctx, updatedShardPlan)
 
 				// 等待分片状态更新
-				success = waitServiceShards(t, ss, 4) // 仍然有4个分片
+				success, _ = waitForServiceShards(t, ss, 4) // 仍然有4个分片
 				assert.True(t, success, "应该能在超时前更新分片状态")
 
 				// 验证分片状态是否正确更新

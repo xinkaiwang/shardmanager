@@ -57,7 +57,7 @@ func (shadow *ShadowState) StoreShardState(shardId data.ShardId, shardState *smg
 		ShardId:    shardId,
 		ShardState: shardState,
 	}
-	shadow.runloop.EnqueueEvent(eve)
+	shadow.runloop.PostEvent(eve)
 }
 
 func (shadow *ShadowState) StoreWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson) {
@@ -65,7 +65,7 @@ func (shadow *ShadowState) StoreWorkerState(workerFullId data.WorkerFullId, work
 		WorkerFullId: workerFullId,
 		WorkerState:  workerState,
 	}
-	shadow.runloop.EnqueueEvent(eve)
+	shadow.runloop.PostEvent(eve)
 }
 
 func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.ExecutionPlanJson) {
@@ -73,7 +73,7 @@ func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, propos
 		ProposalId: proposalId,
 		ExtPlan:    proposalState,
 	}
-	shadow.runloop.EnqueueEvent(eve)
+	shadow.runloop.PostEvent(eve)
 }
 
 func (shadow *ShadowState) StopAndWaitForExit(ctx context.Context) {

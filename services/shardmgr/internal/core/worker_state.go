@@ -54,7 +54,8 @@ func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
 	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ss.IsStateInMemory())
 }
 
-// syncEphStagingToWorkerState: must be called in runloop
+// syncEphStagingToWorkerState: must be called in runloop.
+// syncs from eph staging to worker state, should batch as much as possible
 func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 	// only updates those have dirty flag
 	for workerFullId := range ss.EphDirty {
@@ -78,6 +79,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 			}
 		}
 	}
+	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
 }
 
 // onEphNodeLost: must be called in runloop

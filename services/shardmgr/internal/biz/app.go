@@ -30,7 +30,7 @@ func (app *App) Ping(ctx context.Context) string {
 func (app *App) GetStatus(ctx context.Context) *api.GetStatusResponse {
 	klogging.Info(ctx).Log("app.GetStatus", "")
 	eve := NewGetStateEvent()
-	app.ss.EnqueueEvent(eve)
+	app.ss.PostEvent(eve)
 	return <-eve.resp
 }
 

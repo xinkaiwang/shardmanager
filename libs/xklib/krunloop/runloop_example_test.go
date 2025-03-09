@@ -86,7 +86,7 @@ func TestRunLoopWithExampleResource(t *testing.T) {
 	}
 
 	for _, event := range events {
-		rl.EnqueueEvent(event)
+		rl.PostEvent(event)
 	}
 
 	// Wait for all events to be processed

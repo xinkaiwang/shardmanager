@@ -120,7 +120,7 @@ func NewBufferedEtcdStore(ctx context.Context) *BufferedEtcdStore {
 func (store *BufferedEtcdStore) Put(ctx context.Context, key string, value string, name string) {
 	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).With("name", name).Log("BufferedEtcdStorePut", "将写入请求加入队列")
 	eve := NewWriteEvent(key, value, name)
-	store.runloop.EnqueueEvent(eve)
+	store.runloop.PostEvent(eve)
 }
 
 // BufferedEtcdStore implements CriticalResource
