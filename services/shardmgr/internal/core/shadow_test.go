@@ -22,11 +22,8 @@ func TestShadowState_EtcdStoreInteraction(t *testing.T) {
 	t.Logf("测试开始 - EtcdStore状态: %s", shadow.DumpStoreStats())
 	t.Logf("测试开始 - EtcdProvider状态: %s", etcdprov.DumpGlobalState())
 
-	// 使用waitGroup等待异步操作完成
-	waitComplete := make(chan struct{})
-
 	// 同时替换EtcdProvider和EtcdStore
-	etcdprov.RunWithEtcdProviderAndWait(fakeEtcd, func() {
+	etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
 		shadow.RunWithEtcdStore(fakeStore, func() {
 			ctx := context.Background()
 			t.Log("测试函数开始执行")
@@ -81,22 +78,8 @@ func TestShadowState_EtcdStoreInteraction(t *testing.T) {
 			}
 
 			// 关闭通道，表示测试完成
-			close(waitComplete)
+			shadowState.StopAndWaitForExit(ctx)
 		})
-	}, func() {
-		// 等待测试完成
-		t.Log("等待测试完成信号...")
-		select {
-		case <-waitComplete:
-			t.Log("收到测试完成信号")
-		case <-time.After(5 * time.Second):
-			t.Error("等待测试完成超时")
-		}
-
-		// 检查最终状态
-		t.Logf("等待函数中 - FakeEtcdStore调用次数: %d", fakeStore.GetPutCalledCount())
-		storeData := fakeStore.GetData()
-		t.Logf("等待函数中 - FakeEtcdStore数据条数: %d", len(storeData))
 	})
 
 	// 测试完成后的状态

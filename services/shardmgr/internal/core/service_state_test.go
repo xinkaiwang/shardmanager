@@ -299,19 +299,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 	// 创建一个FakeEtcdProvider用于测试
 	fakeEtcd := etcdprov.NewFakeEtcdProvider()
 
-	// 创建一个自定义的等待函数，确保在退出前检查所有异步写入操作已完成
-	waitForAsyncOps := func() {
-		ctx := context.Background()
-		// 在退出前最后一次验证etcd中的数据状态
-		fakeEtcdItems := fakeEtcd.List(ctx, "/smg/shard_state/", 100)
-		t.Logf("测试结束时etcd中有 %d 个分片状态", len(fakeEtcdItems))
-		for _, item := range fakeEtcdItems {
-			t.Logf("  - 键: %s, 值长度: %d", item.Key, len(item.Value))
-		}
-	}
-
-	// 使用RunWithEtcdProviderAndWait而不是RunWithEtcdProvider
-	etcdprov.RunWithEtcdProviderAndWait(fakeEtcd, func() {
+	etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
 		ctx := context.Background()
 
 		// 1. 准备初始数据
@@ -382,7 +370,14 @@ shard-d|{"min_replica_count":4,"max_replica_count":8}`
 		assert.True(t, ok, "shard-c 应该保留")
 		assert.Equal(t, true, shard_c.LameDuck, "shard-c 应该被标记为 lameDuck")
 
+		// 在测试结束前记录最终状态
+		fakeEtcdItems := fakeEtcd.List(ctx, "/smg/shard_state/", 100)
+		t.Logf("测试结束时etcd中有 %d 个分片状态", len(fakeEtcdItems))
+		for _, item := range fakeEtcdItems {
+			t.Logf("  - 键: %s, 值长度: %d", item.Key, len(item.Value))
+		}
+
 		// 在测试结束前调用 StopAndWaitForExit
 		ss.StopAndWaitForExit(ctx)
-	}, waitForAsyncOps)
+	})
 }

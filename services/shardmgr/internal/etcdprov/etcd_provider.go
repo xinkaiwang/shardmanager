@@ -77,31 +77,6 @@ func RunWithEtcdProvider(provider EtcdProvider, fn func()) {
 	fn()
 }
 
-// RunWithEtcdProviderAndWait 在执行 fn 期间临时使用提供的 EtcdProvider，
-// 执行完成后等待异步操作完成，然后恢复原来的 provider
-// waitFunc 是一个等待异步操作完成的函数
-func RunWithEtcdProviderAndWait(provider EtcdProvider, fn func(), waitFunc func()) {
-	ctx := context.Background()
-	oldProvider := currentEtcdProvider
-
-	// 仅记录关键信息，并简化日志内容
-	klogging.Info(ctx).Log("event", "RunWithEtcdProviderAndWait")
-
-	currentEtcdProvider = provider
-	defer func() {
-		// 如果提供了等待函数，先执行等待
-		if waitFunc != nil {
-			klogging.Info(ctx).Log("event", "RunWithEtcdProviderAndWait_Wait")
-			waitFunc()
-		}
-
-		// 恢复原始的 provider
-		currentEtcdProvider = oldProvider
-	}()
-
-	fn()
-}
-
 // DumpGlobalState 返回当前全局EtcdProvider的状态信息
 func DumpGlobalState() string {
 	ctx := context.Background()
