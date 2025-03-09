@@ -97,7 +97,7 @@ func (s *ServiceStateTestSetup) CreatePreExistingShards(t *testing.T, shardState
 // CreateServiceState 创建 ServiceState 并等待分片加载完成
 func (s *ServiceStateTestSetup) CreateServiceState(t *testing.T, expectedShardCount int) {
 	s.ServiceState = NewServiceState(s.Context)
-	success, waitDuration := waitForServiceShardsHelper(t, s.ServiceState, expectedShardCount)
+	success, waitDuration := waitForServiceShards(t, s.ServiceState, expectedShardCount)
 	assert.True(t, success, "应该能在超时前加载分片状态")
 	t.Logf("加载分片状态等待时间: %v", waitDuration)
 }
@@ -123,7 +123,7 @@ func (s *ServiceStateTestSetup) VerifyShardState(t *testing.T, shardName string,
 // UpdateShardPlan 更新分片计划并等待更新完成
 func (s *ServiceStateTestSetup) UpdateShardPlan(t *testing.T, shardNames []string, expectedShardCount int) {
 	s.SetShardPlan(t, shardNames)
-	success, waitDuration := waitForServiceShardsHelper(t, s.ServiceState, expectedShardCount)
+	success, waitDuration := waitForServiceShards(t, s.ServiceState, expectedShardCount)
 	assert.True(t, success, "应该能在超时前更新分片状态")
 	t.Logf("更新分片等待时间: %v", waitDuration)
 }
@@ -160,27 +160,179 @@ func (e *serviceStateAccessEvent) Process(ctx context.Context, ss *ServiceState)
 	close(e.done)
 }
 
-// waitForServiceShardsHelper 等待 ServiceState 中的分片数达到预期数量
-func waitForServiceShardsHelper(t *testing.T, ss *ServiceState, expectedCount int) (bool, time.Duration) {
+// WaitUntil 等待条件满足或超时
+func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) bool {
+	maxDuration := time.Duration(maxWaitMs) * time.Millisecond
+	intervalDuration := time.Duration(intervalMs) * time.Millisecond
 	startTime := time.Now()
 
+	for i := 0; i < maxWaitMs/intervalMs; i++ {
+		success, debugInfo := condition()
+		if success {
+			elapsed := time.Since(startTime)
+			t.Logf("条件满足，耗时 %v", elapsed)
+			return true
+		}
+
+		elapsed := time.Since(startTime)
+		if elapsed >= maxDuration {
+			t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
+			return false
+		}
+
+		t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
+			i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
+		time.Sleep(intervalDuration)
+	}
+	return false
+}
+
+// waitForServiceShards 等待 ServiceState 中的分片数量达到预期
+// 返回是否成功和等待时间
+func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bool, time.Duration) {
+	startTime := time.Now()
 	result := WaitUntil(t, func() (bool, string) {
-		// 使用安全方式访问 ServiceState
-		var shardCount int
-		var shardList []string
-
-		withServiceStateSync(ss, func(s *ServiceState) {
-			shardCount = len(s.AllShards)
-			for shardId := range s.AllShards {
-				shardList = append(shardList, string(shardId))
-			}
-		})
-
-		return shardCount >= expectedCount,
-			fmt.Sprintf("当前分片数量: %d, 分片列表: %v", shardCount, shardList)
+		if len(ss.AllShards) >= expectedCount {
+			t.Logf("ServiceState 中的分片数量已达到预期：%d", len(ss.AllShards))
+			return true, ""
+		}
+		var shardIds []string
+		for id := range ss.AllShards {
+			shardIds = append(shardIds, string(id))
+		}
+		return false, fmt.Sprintf("当前分片数量: %d, 分片列表: %v", len(ss.AllShards), shardIds)
 	}, 2000, 20)
 
 	waitDuration := time.Since(startTime)
 	t.Logf("waitForServiceShards 总等待时间: %v，结果: %v", waitDuration, result)
 	return result, waitDuration
+}
+
+// waitServiceShards 等待ServiceState的分片数量达到预期
+func waitServiceShards(t *testing.T, ss *ServiceState, expectedCount int) bool {
+	t.Helper()
+
+	// 使用waitForServiceShards，这是标准实现
+	result, _ := waitForServiceShards(t, ss, expectedCount)
+
+	return result
+}
+
+// serviceStateReadEvent 用于安全读取 ServiceState
+type serviceStateReadEvent struct {
+	callback func(*ServiceState)
+}
+
+// GetName 返回事件名称
+func (e *serviceStateReadEvent) GetName() string {
+	return "ServiceStateRead"
+}
+
+// Process 处理事件
+func (e *serviceStateReadEvent) Process(ctx context.Context, ss *ServiceState) {
+	e.callback(ss)
+}
+
+// verifyAllShards 验证所有分片的状态
+func verifyAllShards(t *testing.T, ss *ServiceState, expectedStates map[data.ShardId]bool) {
+	// 创建通道，用于接收验证结果
+	resultChan := make(chan bool)
+	errorsChan := make(chan string, 10)
+
+	// 创建事件来安全访问 ServiceState
+	ss.EnqueueEvent(&serviceStateReadEvent{
+		callback: func(s *ServiceState) {
+			// 首先输出当前所有分片状态，方便调试
+			t.Logf("当前存在 %d 个分片, 需要验证 %d 个", len(s.AllShards), len(expectedStates))
+			for shardId, shard := range s.AllShards {
+				t.Logf("    - 分片 %s 状态: lameDuck=%v", shardId, shard.LameDuck)
+			}
+
+			// 验证每个期望的分片
+			allPassed := true
+			for shardId, expectedLameDuck := range expectedStates {
+				shard, ok := s.AllShards[shardId]
+				if !ok {
+					errorMsg := fmt.Sprintf("未找到分片 %s", shardId)
+					t.Error(errorMsg)
+					errorsChan <- errorMsg
+					allPassed = false
+					continue // 继续检查其他分片
+				}
+
+				if shard.LameDuck != expectedLameDuck {
+					errorMsg := fmt.Sprintf("分片 %s 的 lameDuck 状态不符合预期，期望: %v，实际: %v",
+						shardId, expectedLameDuck, shard.LameDuck)
+					t.Error(errorMsg)
+					errorsChan <- errorMsg
+					allPassed = false
+					continue // 继续检查其他分片
+				}
+
+				t.Logf("分片 %s 状态验证通过: lameDuck=%v", shardId, shard.LameDuck)
+			}
+
+			// 所有验证都通过
+			resultChan <- allPassed
+		},
+	})
+
+	// 等待验证结果
+	success := <-resultChan
+
+	// 读取错误通道中的所有信息（已在回调中输出）
+	close(errorsChan)
+
+	// 返回验证结果
+	assert.True(t, success, "分片状态验证应该全部通过")
+}
+
+// 以下是测试辅助函数
+
+// setupBasicConfig 设置基本配置
+func setupBasicConfig(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context) {
+	// 创建服务信息
+	serviceInfo := smgjson.CreateTestServiceInfo()
+	fakeEtcd.Set(ctx, "/smg/config/service_info.json", serviceInfo.ToJson())
+
+	// 创建服务配置
+	serviceConfig := smgjson.CreateTestServiceConfig()
+	fakeEtcd.Set(ctx, "/smg/config/service_config.json", serviceConfig.ToJson())
+}
+
+// setShardPlan 设置分片计划
+func setShardPlan(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context, shardNames []string) {
+	shardPlanStr := ""
+	for i, name := range shardNames {
+		if i > 0 {
+			shardPlanStr += "\n"
+		}
+		shardPlanStr += name
+	}
+	fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
+}
+
+// createPreExistingShards 创建预先存在的分片状态
+func createPreExistingShards(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context, shardStates map[string]bool) {
+	pm := config.NewPathManager()
+
+	for shardName, isLameDuck := range shardStates {
+		// 使用正确的类型转换
+		shardId := data.ShardId(shardName)
+
+		// 创建一个 ShardStateJson 结构
+		shardStateJson := &smgjson.ShardStateJson{
+			ShardName: shardId,
+		}
+
+		if isLameDuck {
+			shardStateJson.LameDuck = 1
+		} else {
+			shardStateJson.LameDuck = 0
+		}
+
+		// 转换为 JSON 并存储
+		jsonStr := shardStateJson.ToJson()
+		fakeEtcd.Set(ctx, pm.FmtShardStatePath(shardId), jsonStr)
+	}
 }

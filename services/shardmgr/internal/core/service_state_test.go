@@ -142,54 +142,6 @@ shard-3|{"move_type":"kill_before_start"}`
 	})
 }
 
-// WaitUntil 等待条件满足或超时
-func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) bool {
-	maxDuration := time.Duration(maxWaitMs) * time.Millisecond
-	intervalDuration := time.Duration(intervalMs) * time.Millisecond
-	startTime := time.Now()
-
-	for i := 0; i < maxWaitMs/intervalMs; i++ {
-		success, debugInfo := condition()
-		if success {
-			elapsed := time.Since(startTime)
-			t.Logf("条件满足，耗时 %v", elapsed)
-			return true
-		}
-
-		elapsed := time.Since(startTime)
-		if elapsed >= maxDuration {
-			t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
-			return false
-		}
-
-		t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
-			i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
-		time.Sleep(intervalDuration)
-	}
-	return false
-}
-
-// waitForServiceShards 等待 ServiceState 中的分片数量达到预期
-// 返回是否成功和等待时间
-func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bool, time.Duration) {
-	startTime := time.Now()
-	result := WaitUntil(t, func() (bool, string) {
-		if len(ss.AllShards) >= expectedCount {
-			t.Logf("ServiceState 中的分片数量已达到预期：%d", len(ss.AllShards))
-			return true, ""
-		}
-		var shardIds []string
-		for id := range ss.AllShards {
-			shardIds = append(shardIds, string(id))
-		}
-		return false, fmt.Sprintf("当前分片数量: %d, 分片列表: %v", len(ss.AllShards), shardIds)
-	}, 2000, 20)
-
-	waitDuration := time.Since(startTime)
-	t.Logf("waitForServiceShards 总等待时间: %v，结果: %v", waitDuration, result)
-	return result, waitDuration
-}
-
 func TestServiceState_ShadowStateWrite(t *testing.T) {
 	// 测试开始前，确保EtcdStore和EtcdProvider被正确重置，避免全局变量状态干扰
 	resetGlobalState(t)
@@ -198,106 +150,106 @@ func TestServiceState_ShadowStateWrite(t *testing.T) {
 	t.Log("创建FakeEtcdProvider")
 	fakeEtcd := etcdprov.NewFakeEtcdProvider()
 
-	// 直接设置全局的EtcdProvider
-	etcdprov.SetCurrentEtcdProvider(fakeEtcd)
+	// 使用RunWithEtcdProvider模式替代直接设置全局EtcdProvider
+	etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
+		// 创建FakeEtcdStore
+		t.Log("创建FakeEtcdStore")
+		fakeStore := shadow.NewFakeEtcdStore()
 
-	// 创建FakeEtcdStore
-	t.Log("创建FakeEtcdStore")
-	fakeStore := shadow.NewFakeEtcdStore()
+		// 直接设置全局的EtcdStore
+		shadow.SetCurrentEtcdStore(fakeStore)
 
-	// 直接设置全局的EtcdStore
-	shadow.SetCurrentEtcdStore(fakeStore)
+		// 记录测试开始时的EtcdStore状态
+		t.Logf("测试开始时EtcdStore状态: %s", shadow.DumpStoreStats())
 
-	// 记录测试开始时的EtcdStore状态
-	t.Logf("测试开始时EtcdStore状态: %s", shadow.DumpStoreStats())
+		// 验证全局EtcdProvider已正确设置
+		ctx := context.Background()
+		currentProvider := etcdprov.GetCurrentEtcdProvider(ctx)
+		t.Logf("当前EtcdProvider: %T", currentProvider)
+		assert.Equal(t, "*etcdprov.FakeEtcdProvider", fmt.Sprintf("%T", currentProvider), "应该正确设置FakeEtcdProvider")
 
-	// 验证全局EtcdProvider已正确设置
-	ctx := context.Background()
-	currentProvider := etcdprov.GetCurrentEtcdProvider(ctx)
-	t.Logf("当前EtcdProvider: %T", currentProvider)
-	assert.Equal(t, "*etcdprov.FakeEtcdProvider", fmt.Sprintf("%T", currentProvider), "应该正确设置FakeEtcdProvider")
+		// 验证全局EtcdStore已正确设置
+		currentStore := shadow.GetCurrentEtcdStore(ctx)
+		t.Logf("当前EtcdStore: %T", currentStore)
+		assert.Equal(t, "*shadow.FakeEtcdStore", fmt.Sprintf("%T", currentStore), "应该正确设置FakeEtcdStore")
 
-	// 验证全局EtcdStore已正确设置
-	currentStore := shadow.GetCurrentEtcdStore(ctx)
-	t.Logf("当前EtcdStore: %T", currentStore)
-	assert.Equal(t, "*shadow.FakeEtcdStore", fmt.Sprintf("%T", currentStore), "应该正确设置FakeEtcdStore")
+		// 1. 准备初始数据
+		t.Log("准备初始数据")
 
-	// 1. 准备初始数据
-	t.Log("准备初始数据")
+		// 准备服务信息，使用测试辅助函数
+		t.Log("准备服务信息")
+		serviceInfo := smgjson.CreateTestServiceInfo()
+		fakeEtcd.Set(ctx, "/smg/config/service_info.json", serviceInfo.ToJson())
 
-	// 准备服务信息，使用测试辅助函数
-	t.Log("准备服务信息")
-	serviceInfo := smgjson.CreateTestServiceInfo()
-	fakeEtcd.Set(ctx, "/smg/config/service_info.json", serviceInfo.ToJson())
+		// 准备服务配置，使用测试辅助函数
+		t.Log("准备服务配置")
+		serviceConfig := smgjson.CreateTestServiceConfig()
+		fakeEtcd.Set(ctx, "/smg/config/service_config.json", serviceConfig.ToJson())
 
-	// 准备服务配置，使用测试辅助函数
-	t.Log("准备服务配置")
-	serviceConfig := smgjson.CreateTestServiceConfig()
-	fakeEtcd.Set(ctx, "/smg/config/service_config.json", serviceConfig.ToJson())
-
-	// 准备分片计划
-	t.Log("准备分片计划")
-	shardPlanStr := `shard-1
+		// 准备分片计划
+		t.Log("准备分片计划")
+		shardPlanStr := `shard-1
 shard-2|{"min_replica_count":2,"max_replica_count":5}
 shard-3|{"migration_strategy":{"shard_move_type":"kill_before_start"}}`
-	fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
+		fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
 
-	// 2. 创建ServiceState
-	t.Log("创建ServiceState")
-	ss := NewServiceState(ctx)
+		// 2. 创建ServiceState
+		t.Log("创建ServiceState")
+		ss := NewServiceState(ctx)
 
-	// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
-	// defer ss.StopAndWaitForExit(ctx)
+		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
+		// defer ss.StopAndWaitForExit(ctx)
 
-	// 3. 验证影子分片状态写入
-	t.Log("开始验证影子分片状态写入")
+		// 3. 验证影子分片状态写入
+		t.Log("开始验证影子分片状态写入")
 
-	// 等待ServiceState加载分片
-	t.Log("等待ServiceState加载分片")
-	success, waitDuration := waitForServiceShards(t, ss, 3)
-	assert.True(t, success, "应该能在超时前加载分片")
-	t.Logf("加载分片等待时间: %v", waitDuration)
+		// 等待ServiceState加载分片
+		t.Log("等待ServiceState加载分片")
+		success, waitDuration := waitForServiceShards(t, ss, 3)
+		assert.True(t, success, "应该能在超时前加载分片")
+		t.Logf("加载分片等待时间: %v", waitDuration)
 
-	// 验证分片数量
-	t.Logf("AllShards数量: %d", len(ss.AllShards))
-	assert.Equal(t, 3, len(ss.AllShards), "应该有3个分片")
+		// 验证分片数量
+		t.Logf("AllShards数量: %d", len(ss.AllShards))
+		assert.Equal(t, 3, len(ss.AllShards), "应该有3个分片")
 
-	// 验证特定分片的存在
-	_, ok := ss.AllShards["shard-1"]
-	t.Logf("shard-1存在: %v", ok)
-	assert.True(t, ok, "应该能找到 shard-1")
+		// 验证特定分片的存在
+		_, ok := ss.AllShards["shard-1"]
+		t.Logf("shard-1存在: %v", ok)
+		assert.True(t, ok, "应该能找到 shard-1")
 
-	_, ok = ss.AllShards["shard-2"]
-	t.Logf("shard-2存在: %v", ok)
-	assert.True(t, ok, "应该能找到 shard-2")
+		_, ok = ss.AllShards["shard-2"]
+		t.Logf("shard-2存在: %v", ok)
+		assert.True(t, ok, "应该能找到 shard-2")
 
-	_, ok = ss.AllShards["shard-3"]
-	t.Logf("shard-3存在: %v", ok)
-	assert.True(t, ok, "应该能找到 shard-3")
+		_, ok = ss.AllShards["shard-3"]
+		t.Logf("shard-3存在: %v", ok)
+		assert.True(t, ok, "应该能找到 shard-3")
 
-	// 检查FakeEtcdStore中的数据
-	t.Log("检查FakeEtcdStore中的数据")
-	t.Logf("FakeEtcdStore调用次数: %d", fakeStore.GetPutCalledCount())
-	storeData := fakeStore.GetData()
-	t.Logf("FakeEtcdStore数据条数: %d", len(storeData))
-	for k, v := range storeData {
-		t.Logf("  - 键: %s, 值长度: %d", k, len(v))
-	}
+		// 检查FakeEtcdStore中的数据
+		t.Log("检查FakeEtcdStore中的数据")
+		t.Logf("FakeEtcdStore调用次数: %d", fakeStore.GetPutCalledCount())
+		storeData := fakeStore.GetData()
+		t.Logf("FakeEtcdStore数据条数: %d", len(storeData))
+		for k, v := range storeData {
+			t.Logf("  - 键: %s, 值长度: %d", k, len(v))
+		}
 
-	// 确保在 FakeEtcdStore 中可以找到分片状态
-	t.Log("检查FakeEtcdStore中的分片状态")
-	items := fakeStore.List("/smg/shard_state/")
-	t.Logf("FakeEtcdStore中分片状态数量: %d", len(items))
-	assert.GreaterOrEqual(t, len(items), 3, "应该在FakeEtcdStore中找到至少3个分片状态")
+		// 确保在 FakeEtcdStore 中可以找到分片状态
+		t.Log("检查FakeEtcdStore中的分片状态")
+		items := fakeStore.List("/smg/shard_state/")
+		t.Logf("FakeEtcdStore中分片状态数量: %d", len(items))
+		assert.GreaterOrEqual(t, len(items), 3, "应该在FakeEtcdStore中找到至少3个分片状态")
 
-	// 确保所有Runloop处理完毕
-	time.Sleep(500 * time.Millisecond)
+		// 确保所有Runloop处理完毕
+		time.Sleep(500 * time.Millisecond)
 
-	// 在测试结束前调用 StopAndWaitForExit
-	ss.StopAndWaitForExit(ctx)
+		// 在测试结束前调用 StopAndWaitForExit
+		ss.StopAndWaitForExit(ctx)
 
-	// 测试结束后清理，避免影响其他测试
-	resetGlobalState(t)
+		// 测试结束后清理，避免影响其他测试
+		resetGlobalState(t)
+	})
 }
 
 func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {

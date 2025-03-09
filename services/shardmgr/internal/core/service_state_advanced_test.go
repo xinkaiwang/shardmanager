@@ -2,15 +2,13 @@ package core
 
 import (
 	"context"
-	"fmt"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // TestServiceState_StateConflictResolution 测试当分片状态与分片计划冲突时的解决方案
@@ -138,138 +136,4 @@ func TestServiceState_StateConflictResolution(t *testing.T) {
 			})
 		})
 	})
-}
-
-// 以下是测试辅助函数
-
-// setupBasicConfig 设置基本配置
-func setupBasicConfig(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context) {
-	// 创建服务信息
-	serviceInfo := smgjson.CreateTestServiceInfo()
-	fakeEtcd.Set(ctx, "/smg/config/service_info.json", serviceInfo.ToJson())
-
-	// 创建服务配置
-	serviceConfig := smgjson.CreateTestServiceConfig()
-	fakeEtcd.Set(ctx, "/smg/config/service_config.json", serviceConfig.ToJson())
-}
-
-// setShardPlan 设置分片计划
-func setShardPlan(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context, shardNames []string) {
-	shardPlanStr := ""
-	for i, name := range shardNames {
-		if i > 0 {
-			shardPlanStr += "\n"
-		}
-		shardPlanStr += name
-	}
-	fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
-}
-
-// createPreExistingShards 创建预先存在的分片状态
-func createPreExistingShards(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context, shardStates map[string]bool) {
-	pm := config.NewPathManager()
-
-	for shardName, isLameDuck := range shardStates {
-		// 使用正确的类型转换
-		shardId := data.ShardId(shardName)
-
-		// 创建一个 ShardStateJson 结构
-		shardStateJson := &smgjson.ShardStateJson{
-			ShardName: shardId,
-		}
-
-		if isLameDuck {
-			shardStateJson.LameDuck = 1
-		} else {
-			shardStateJson.LameDuck = 0
-		}
-
-		// 转换为 JSON 并存储
-		jsonStr := shardStateJson.ToJson()
-		fakeEtcd.Set(ctx, pm.FmtShardStatePath(shardId), jsonStr)
-	}
-}
-
-// waitServiceShards 等待ServiceState的分片数量达到预期
-func waitServiceShards(t *testing.T, ss *ServiceState, expectedCount int) bool {
-	t.Helper()
-
-	// 使用waitForServiceShards，这是标准实现
-	result, _ := waitForServiceShards(t, ss, expectedCount)
-
-	return result
-}
-
-// serviceStateReadEvent 用于安全读取 ServiceState
-type serviceStateReadEvent struct {
-	callback func(*ServiceState)
-}
-
-// GetName 返回事件名称
-func (e *serviceStateReadEvent) GetName() string {
-	return "ServiceStateRead"
-}
-
-// Process 处理事件
-func (e *serviceStateReadEvent) Process(ctx context.Context, ss *ServiceState) {
-	e.callback(ss)
-}
-
-// verifyAllShards 验证所有分片的状态
-func verifyAllShards(t *testing.T, ss *ServiceState, expectedStates map[data.ShardId]bool) {
-	// 创建通道，用于接收验证结果
-	resultChan := make(chan bool)
-	errorsChan := make(chan string, 10)
-
-	// 创建事件来安全访问 ServiceState
-	ss.EnqueueEvent(&serviceStateReadEvent{
-		callback: func(s *ServiceState) {
-			// 首先输出当前所有分片状态，方便调试
-			t.Logf("当前存在 %d 个分片, 需要验证 %d 个", len(s.AllShards), len(expectedStates))
-			for shardId, shard := range s.AllShards {
-				t.Logf("    - 分片 %s 状态: lameDuck=%v", shardId, shard.LameDuck)
-			}
-
-			// 验证每个期望的分片
-			allPassed := true
-			for shardId, expectedLameDuck := range expectedStates {
-				shard, ok := s.AllShards[shardId]
-				if !ok {
-					errorMsg := fmt.Sprintf("未找到分片 %s", shardId)
-					t.Error(errorMsg)
-					errorsChan <- errorMsg
-					allPassed = false
-					continue // 继续检查其他分片
-				}
-
-				if shard.LameDuck != expectedLameDuck {
-					errorMsg := fmt.Sprintf("分片 %s 的 lameDuck 状态不符合预期，期望: %v，实际: %v",
-						shardId, expectedLameDuck, shard.LameDuck)
-					t.Error(errorMsg)
-					errorsChan <- errorMsg
-					allPassed = false
-					continue // 继续检查其他分片
-				}
-
-				t.Logf("分片 %s 状态验证通过: lameDuck=%v", shardId, shard.LameDuck)
-			}
-
-			// 所有验证都通过
-			resultChan <- allPassed
-		},
-	})
-
-	// 等待验证结果
-	success := <-resultChan
-
-	// 读取错误通道中的所有信息（已在回调中输出）
-	// 清空通道
-	select {
-	case <-errorsChan:
-		// 继续清空通道
-	default:
-		// 通道已空
-	}
-
-	assert.True(t, success, "分片状态验证应该通过")
 }

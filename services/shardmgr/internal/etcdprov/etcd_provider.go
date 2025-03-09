@@ -54,11 +54,6 @@ func GetCurrentEtcdProvider(ctx context.Context) EtcdProvider {
 	return currentEtcdProvider
 }
 
-// SetCurrentEtcdProvider 直接设置当前的EtcdProvider，主要用于测试
-func SetCurrentEtcdProvider(provider EtcdProvider) {
-	currentEtcdProvider = provider
-}
-
 // RunWithEtcdProvider 在执行 fn 期间临时使用提供的 EtcdProvider，执行完成后恢复原来的 provider
 // 无论 fn 是否 panic，都会确保恢复原来的 provider
 func RunWithEtcdProvider(provider EtcdProvider, fn func()) {
