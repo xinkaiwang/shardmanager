@@ -77,7 +77,7 @@ func TestShadowState_EtcdStoreInteraction(t *testing.T) {
 				t.Logf("  - 键: %s, 值长度: %d", item.Key, len(item.Value))
 			}
 
-			// 关闭通道，表示测试完成
+			// 测试完成
 			shadowState.StopAndWaitForExit(ctx)
 		})
 	})

@@ -40,7 +40,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 }
 
 func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
-	pathPrefix := "/smg/shard_state/"
+	pathPrefix := ss.PathManager.GetShardStatePathPrefix()
 	// load all from etcd
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
@@ -56,7 +56,7 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 }
 
 func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
-	pathPrefix := "/smg/worker_state/"
+	pathPrefix := ss.PathManager.GetWorkerStatePathPrefix()
 	// load all from etcd
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
@@ -73,7 +73,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 }
 
 func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.ShardLineJson, etcdprov.EtcdRevision) {
-	path := "/smg/config/shard_plan.txt"
+	path := ss.PathManager.GetShardPlanPath()
 	item := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path)
 	list := smgjson.ParseShardPlan(item.Value)
 	return list, item.ModRevision

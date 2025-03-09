@@ -30,6 +30,7 @@ func NewShardStateByPlan(shardLine *smgjson.ShardLineJson) *ShardState {
 
 // return 1 if shard state is updated, 0 if not
 func (ss *ServiceState) UpdateShardStateByPlan(shard *ShardState, shardLine *smgjson.ShardLineJson) bool {
+	dirty := false
 	newHints := ss.ServiceConfig.ShardConfig
 	if shardLine.Hints != nil {
 		if shardLine.Hints.MinReplicaCount != nil {
@@ -42,11 +43,15 @@ func (ss *ServiceState) UpdateShardStateByPlan(shard *ShardState, shardLine *smg
 			newHints.MovePolicy = *shardLine.Hints.MoveType
 		}
 	}
-	if shard.Hints == newHints {
-		return false
+	if shard.Hints != newHints {
+		shard.Hints = newHints
+		dirty = true
 	}
-	shard.Hints = newHints
-	return true
+	if shard.LameDuck { // 如果分片已经被标记为软删除，则undo软删除, 重新激活分片
+		shard.LameDuck = false
+		dirty = true
+	}
+	return dirty
 }
 
 func (shard *ShardState) MarkAsSoftDelete(ctx context.Context) {
