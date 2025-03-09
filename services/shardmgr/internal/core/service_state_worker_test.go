@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // TestServiceState_WorkerEphToState 测试ServiceState能否正确从worker eph创建worker state
@@ -51,6 +53,16 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 			setup.FakeEtcd.Set(ctx, ephPath, string(workerEphJson))
 			t.Logf("worker eph节点已设置到etcd，开始等待状态同步")
 
+			// 验证worker eph已正确设置到etcd
+			ephItems := setup.FakeEtcd.List(ctx, ss.PathManager.GetWorkerEphPathPrefix(), 10)
+			t.Logf("etcd中的worker eph节点数量: %d", len(ephItems))
+			assert.Equal(t, 1, len(ephItems), "etcd应该包含1个worker eph节点")
+			for _, item := range ephItems {
+				t.Logf("etcd worker eph节点: 键=%s, 值=%s", item.Key, item.Value)
+				assert.Equal(t, ephPath, item.Key, "worker eph节点路径应该正确")
+				assert.Equal(t, string(workerEphJson), item.Value, "worker eph节点内容应该正确")
+			}
+
 			// 等待系统自动处理worker eph变化并创建worker state
 			success, elapsedMs := waitForWorkerStateCreation(t, ss, "worker-1")
 			t.Logf("等待worker-1创建结果: success=%v, 耗时=%dms", success, elapsedMs)
@@ -82,6 +94,25 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 			setup.FakeEtcd.Set(ctx, eph2Path, string(worker2EphJson))
 			t.Logf("worker eph节点已设置到etcd，开始等待状态同步")
 
+			// 验证etcd中的worker eph节点
+			ephItems = setup.FakeEtcd.List(ctx, ss.PathManager.GetWorkerEphPathPrefix(), 10)
+			t.Logf("etcd中的worker eph节点数量: %d", len(ephItems))
+			assert.Equal(t, 2, len(ephItems), "etcd应该包含2个worker eph节点")
+
+			// 创建期望的键值对映射
+			expectedEphMap := map[string]string{
+				ephPath:  string(workerEphJson),
+				eph2Path: string(worker2EphJson),
+			}
+
+			// 验证每个worker eph节点
+			for _, item := range ephItems {
+				t.Logf("etcd worker eph节点: 键=%s, 值长度=%d", item.Key, len(item.Value))
+				expectedValue, exists := expectedEphMap[item.Key]
+				assert.True(t, exists, "应该能在预期映射中找到键: %s", item.Key)
+				assert.Equal(t, expectedValue, item.Value, "worker eph节点内容应该正确: %s", item.Key)
+			}
+
 			// 等待系统自动处理worker eph变化并创建worker state
 			success, elapsedMs = waitForWorkerStateCreation(t, ss, "worker-2")
 			t.Logf("等待worker-2创建结果: success=%v, 耗时=%dms", success, elapsedMs)
@@ -106,6 +137,34 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 				assert.Equal(t, data.WS_Online_healthy, worker2.State)
 				t.Logf("worker-2最终状态: exists=%v, State=%v", exists2, worker2.State)
 			})
+
+			// 验证FakeEtcdStore内容
+			t.Log("验证FakeEtcdStore内容")
+			storeData := setup.FakeStore.GetData()
+			t.Logf("FakeEtcdStore数据条数: %d", len(storeData))
+
+			// 验证worker state是否被持久化
+			workerStatePrefix := ss.PathManager.GetWorkerStatePathPrefix()
+			workerStatePersisted := false
+
+			for k, v := range storeData {
+				if strings.HasPrefix(k, workerStatePrefix) {
+					workerStatePersisted = true
+					t.Logf("  - worker state持久化: 键=%s, 值长度=%d", k, len(v))
+
+					// 验证worker state内容
+					var workerStateJson smgjson.WorkerStateJson
+					err := json.Unmarshal([]byte(v), &workerStateJson)
+					assert.NoError(t, err, "应该能解析worker state json")
+
+					if err == nil {
+						t.Logf("    worker state内容: WorkerId=%s, SessionId=%s, 状态=%v",
+							workerStateJson.WorkerId, workerStateJson.SessionId, workerStateJson.WorkerState)
+					}
+				}
+			}
+
+			assert.True(t, workerStatePersisted, "worker state应该被持久化到FakeEtcdStore")
 		})
 	})
 }

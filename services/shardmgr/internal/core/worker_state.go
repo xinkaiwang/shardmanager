@@ -51,6 +51,29 @@ func NewWorkerStateFromJson(workerStateJson *smgjson.WorkerStateJson) *WorkerSta
 	return workerState
 }
 
+func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState) *smgjson.WorkerStateJson {
+	obj := &smgjson.WorkerStateJson{
+		WorkerId:    ws.WorkerId,
+		SessionId:   ws.SessionId,
+		WorkerState: ws.State,
+		Assignments: map[data.AssignmentId]*smgjson.AssignmentStateJson{},
+	}
+	for assignmentId := range ws.Assignments {
+		assignState, ok := ss.AllAssignments[assignmentId]
+		if !ok {
+			klogging.Fatal(ctx).With("assignmentId", assignmentId).
+				Log("ToWorkerStateJson", "assignment not found")
+			continue
+		}
+		assignJson := &smgjson.AssignmentStateJson{
+			ShardId:    assignState.ShardId,
+			ReplicaIdx: assignState.ReplicaIdx,
+		}
+		obj.Assignments[assignmentId] = assignJson
+	}
+	return obj
+}
+
 func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
 	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ss.IsStateInMemory())
 }
@@ -83,6 +106,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), workerEph)
 				ss.AllWorkers[workerFullId] = workerState
+				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss).SetUpdateReason("worker_create"))
 
 				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 					With("workerId", workerEph.WorkerId).
@@ -97,6 +121,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 					Log("syncEphStagingToWorkerState", "worker eph丢失，更新worker state")
 
 				workerState.onEphNodeLost(ctx)
+				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss).SetUpdateReason("worker_eph_lost"))
 
 				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 					With("newState", workerState.State).
@@ -107,6 +132,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 					Log("syncEphStagingToWorkerState", "更新worker state")
 
 				workerState.onEphNodeUpdate(ctx, workerEph)
+				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss).SetUpdateReason("worker_eph_update"))
 
 				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 					With("state", workerState.State).
