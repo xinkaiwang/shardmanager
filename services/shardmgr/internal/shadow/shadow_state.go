@@ -76,6 +76,12 @@ func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, propos
 	shadow.runloop.EnqueueEvent(eve)
 }
 
+func (shadow *ShadowState) StopAndWaitForExit(ctx context.Context) {
+	if shadow.runloop != nil {
+		shadow.runloop.StopAndWaitForExit()
+	}
+}
+
 // ShardStateJsonEvent implements krunloop.IEvent[*ShadowState]
 type ShardStateJsonEvent struct {
 	ShardId    data.ShardId

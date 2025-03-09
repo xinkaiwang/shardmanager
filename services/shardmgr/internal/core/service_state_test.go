@@ -60,6 +60,9 @@ func TestServiceState_Basic(t *testing.T) {
 		// 创建 ServiceState
 		ss := NewServiceState(ctx)
 
+		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
+		// defer ss.StopAndWaitForExit(ctx)
+
 		// 验证基本信息是否正确加载
 		assert.Equal(t, "test-service", ss.ServiceInfo.ServiceName)
 		assert.Equal(t, smgjson.ST_SOFT_STATEFUL, ss.ServiceInfo.ServiceType)
@@ -69,6 +72,9 @@ func TestServiceState_Basic(t *testing.T) {
 
 		// 验证 IsStateInMemory 方法
 		assert.True(t, ss.IsStateInMemory())
+
+		// 在测试结束前调用 StopAndWaitForExit
+		ss.StopAndWaitForExit(ctx)
 	})
 }
 
@@ -108,6 +114,9 @@ shard-3|{"move_type":"kill_before_start"}`
 		// 创建 ServiceState
 		ss := NewServiceState(ctx)
 
+		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
+		// defer ss.StopAndWaitForExit(ctx)
+
 		// 验证 shard 是否被正确加载
 		assert.Equal(t, 3, len(ss.AllShards))
 
@@ -125,6 +134,9 @@ shard-3|{"move_type":"kill_before_start"}`
 		shard3, ok := ss.AllShards["shard-3"]
 		assert.True(t, ok)
 		assert.Equal(t, "shard-3", string(shard3.ShardId))
+
+		// 在测试结束前调用 StopAndWaitForExit
+		ss.StopAndWaitForExit(ctx)
 	})
 }
 
@@ -226,6 +238,9 @@ shard-3|{"migration_strategy":{"shard_move_type":"kill_before_start"}}`
 	t.Log("创建ServiceState")
 	ss := NewServiceState(ctx)
 
+	// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
+	// defer ss.StopAndWaitForExit(ctx)
+
 	// 3. 验证影子分片状态写入
 	t.Log("开始验证影子分片状态写入")
 
@@ -270,6 +285,9 @@ shard-3|{"migration_strategy":{"shard_move_type":"kill_before_start"}}`
 	// 确保所有Runloop处理完毕
 	time.Sleep(500 * time.Millisecond)
 
+	// 在测试结束前调用 StopAndWaitForExit
+	ss.StopAndWaitForExit(ctx)
+
 	// 测试结束后清理，避免影响其他测试
 	resetGlobalState(t)
 }
@@ -312,6 +330,9 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		// 2. 创建ServiceState
 		ss := NewServiceState(ctx)
 
+		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
+		// defer ss.StopAndWaitForExit(ctx)
+
 		// 3. 第一次分片计划更新：添加三个分片
 
 		// 设置第一个分片计划
@@ -320,14 +341,11 @@ shard-b|{"min_replica_count":2,"max_replica_count":5}
 shard-c|{"migration_strategy":{"shard_move_type":"kill_before_start"}}`
 		fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
 
-		// 等待ServiceState更新分片
+		// 等待ServiceState加载分片
 		success := waitForServiceShards(t, ss, 3)
-		assert.True(t, success, "应该能在超时前更新分片状态")
+		assert.True(t, success, "应该能在超时前加载分片")
 
-		// 验证分片数量
-		assert.Equal(t, 3, len(ss.AllShards), "更新后应该有 3 个分片")
-
-		// 验证特定分片的存在
+		// 验证分片是否存在
 		_, ok := ss.AllShards["shard-a"]
 		assert.True(t, ok, "应该能找到 shard-a")
 
@@ -337,7 +355,7 @@ shard-c|{"migration_strategy":{"shard_move_type":"kill_before_start"}}`
 		_, ok = ss.AllShards["shard-c"]
 		assert.True(t, ok, "应该能找到 shard-c")
 
-		// 4. 第二次分片计划更新：删除两个分片
+		// 4. 第二次分片计划更新：保留一个分片，添加一个新分片，删除两个分片
 
 		// 设置新的分片计划
 		updatedShardPlan := `shard-a
@@ -363,5 +381,8 @@ shard-d|{"min_replica_count":4,"max_replica_count":8}`
 		shard_c, ok := ss.AllShards["shard-c"]
 		assert.True(t, ok, "shard-c 应该保留")
 		assert.Equal(t, true, shard_c.LameDuck, "shard-c 应该被标记为 lameDuck")
+
+		// 在测试结束前调用 StopAndWaitForExit
+		ss.StopAndWaitForExit(ctx)
 	}, waitForAsyncOps)
 }

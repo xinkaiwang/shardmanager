@@ -66,3 +66,12 @@ func (ss *ServiceState) EnqueueEvent(event krunloop.IEvent[*ServiceState]) {
 
 // IsResource implements the CriticalResource interface
 func (ss *ServiceState) IsResource() {}
+
+func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
+	if ss.runloop != nil {
+		ss.runloop.StopAndWaitForExit()
+	}
+	if ss.ShadowState != nil {
+		ss.ShadowState.StopAndWaitForExit(ctx)
+	}
+}

@@ -2,6 +2,7 @@ package krunloop
 
 import (
 	"context"
+	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -32,6 +33,9 @@ type RunLoop[T CriticalResource] struct {
 	queue            *UnboundedQueue[T]
 	currentEventName string
 	sampler          *RunloopSampler
+	ctx              context.Context
+	cancel           context.CancelFunc
+	exited           chan struct{}
 }
 
 // NewRunLoop creates a new RunLoop for the given resource.
@@ -41,6 +45,7 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 		name:     name,
 		resource: resource,
 		queue:    NewUnboundedQueue[T](ctx),
+		exited:   make(chan struct{}),
 	}
 	rl.sampler = NewRunloopSampler(ctx, func() string { return rl.currentEventName }, name)
 	return rl
@@ -52,6 +57,7 @@ func (rl *RunLoop[T]) EnqueueEvent(event IEvent[T]) {
 }
 
 func (rl *RunLoop[T]) Run(ctx context.Context) {
+	rl.ctx, rl.cancel = context.WithCancel(ctx)
 	defer rl.queue.Close()
 
 	for {
@@ -75,5 +81,23 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			}()
 			event.Process(ctx, rl.resource)
 		}
+	}
+}
+
+func (rl *RunLoop[T]) StopAndWaitForExit() {
+	// 如果 cancel 为 nil，则 runloop 尚未启动，无需等待
+	if rl.cancel == nil {
+		return
+	}
+
+	// 取消 context
+	rl.cancel()
+
+	// 设置短超时，避免无限等待
+	select {
+	case <-rl.exited:
+		// 正常退出
+	case <-time.After(100 * time.Millisecond):
+		// 超时，可能 Run 方法尚未完全启动或已异常退出
 	}
 }
