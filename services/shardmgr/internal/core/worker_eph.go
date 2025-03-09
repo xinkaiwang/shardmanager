@@ -49,22 +49,40 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 
 // writeWorkerEphToStaging: must be called in runloop
 func (ss *ServiceState) writeWorkerEphToStaging(ctx context.Context, workerFullId data.WorkerFullId, workerEph *cougarjson.WorkerEphJson) {
-	defer ss.syncWorkerBatchManager.TrySchedule()
+	klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+		With("hasEph", workerEph != nil).
+		Log("writeWorkerEphToStaging", "开始处理worker eph")
+
+	defer func() {
+		ss.syncWorkerBatchManager.TrySchedule()
+		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+			With("dirtyCount", len(ss.EphDirty)).
+			Log("writeWorkerEphToStaging", "已调度BatchManager")
+	}()
+
 	if workerEph == nil {
 		// delete
 		delete(ss.EphWorkerStaging, workerFullId)
 		ss.EphDirty[workerFullId] = common.Unit{}
+		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+			Log("writeWorkerEphToStaging", "worker eph已删除")
 		return
 	}
+
 	if ss.EphWorkerStaging[workerFullId] == nil {
 		// add
 		ss.EphWorkerStaging[workerFullId] = workerEph
 		ss.EphDirty[workerFullId] = common.Unit{}
+		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+			Log("writeWorkerEphToStaging", "worker eph已添加")
 		return
 	}
+
 	// update
 	ss.EphWorkerStaging[workerFullId] = workerEph
 	ss.EphDirty[workerFullId] = common.Unit{}
+	klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+		Log("writeWorkerEphToStaging", "worker eph已更新")
 }
 
 func (ss *ServiceState) LoadCurrentWorkerEph(ctx context.Context) ([]*cougarjson.WorkerEphJson, etcdprov.EtcdRevision) {

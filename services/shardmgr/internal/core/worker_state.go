@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -57,28 +58,67 @@ func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
 // syncEphStagingToWorkerState: must be called in runloop.
 // syncs from eph staging to worker state, should batch as much as possible
 func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
+	klogging.Info(ctx).With("dirtyCount", len(ss.EphDirty)).
+		Log("syncEphStagingToWorkerState", "开始同步worker eph到worker state")
+
 	// only updates those have dirty flag
 	for workerFullId := range ss.EphDirty {
 		workerEph := ss.EphWorkerStaging[workerFullId]
 		workerState := ss.AllWorkers[workerFullId]
+
+		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+			With("hasEph", workerEph != nil).
+			With("hasState", workerState != nil).
+			Log("syncEphStagingToWorkerState", "处理worker")
+
 		if workerState == nil {
 			if workerEph == nil {
 				// nothing to do
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+					Log("syncEphStagingToWorkerState", "无需操作：worker eph和state都不存在")
 			} else {
 				// Worker Event: Eph node created, worker becomes online
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+					Log("syncEphStagingToWorkerState", "正在创建新的worker state")
+
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), workerEph)
 				ss.AllWorkers[workerFullId] = workerState
+
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+					With("workerId", workerEph.WorkerId).
+					With("sessionId", workerEph.SessionId).
+					Log("syncEphStagingToWorkerState", "worker state创建完成")
 			}
 		} else {
 			if workerEph == nil {
 				// Worker Event: Eph node lost, worker becomes offline
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+					With("oldState", workerState.State).
+					Log("syncEphStagingToWorkerState", "worker eph丢失，更新worker state")
+
 				workerState.onEphNodeLost(ctx)
+
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+					With("newState", workerState.State).
+					Log("syncEphStagingToWorkerState", "worker state已更新为离线状态")
 			} else {
 				// Worker Event: Eph node updated
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+					Log("syncEphStagingToWorkerState", "更新worker state")
+
 				workerState.onEphNodeUpdate(ctx, workerEph)
+
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
+					With("state", workerState.State).
+					Log("syncEphStagingToWorkerState", "worker state已更新")
 			}
 		}
 	}
+
+	klogging.Info(ctx).With("processingCount", len(ss.EphDirty)).
+		With("totalWorkers", len(ss.AllWorkers)).
+		Log("syncEphStagingToWorkerState", "worker eph同步到worker state完成")
+
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
 }
 
