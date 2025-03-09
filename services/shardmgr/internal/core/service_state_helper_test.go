@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -111,7 +112,7 @@ func (s *ServiceStateTestSetup) VerifyShardState(t *testing.T, shardName string,
 	var shard *ShardState
 	var ok bool
 
-	withServiceStateSync(s.ServiceState, func(ss *ServiceState) {
+	safeAccessServiceState(s.ServiceState, func(ss *ServiceState) {
 		shard, ok = ss.AllShards[shardId]
 	})
 
@@ -130,7 +131,7 @@ func (s *ServiceStateTestSetup) UpdateShardPlan(t *testing.T, shardNames []strin
 }
 
 // 安全地访问 ServiceState 内部状态（同步方式）
-func withServiceStateSync(ss *ServiceState, fn func(*ServiceState)) {
+func safeAccessServiceState(ss *ServiceState, fn func(*ServiceState)) {
 	// 创建同步通道
 	completed := make(chan struct{})
 
@@ -355,4 +356,38 @@ func createPreExistingShards(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, 
 		jsonStr := shardStateJson.ToJson()
 		fakeEtcd.Set(ctx, pm.FmtShardStatePath(shardId), jsonStr)
 	}
+}
+
+// waitForWorkerStateCreation 等待指定的worker state被创建
+// 使用WaitUntil函数实现
+func waitForWorkerStateCreation(t *testing.T, ss *ServiceState, workerId string) (bool, int64) {
+	t.Helper()
+
+	startMs := kcommon.GetMonoTimeMs()
+	fn := func() (bool, string) {
+		// 不再创建固定的 workerFullId，而是遍历 AllWorkers 查找
+		var workerIds []string
+		exists := false
+
+		// 记录所有 worker IDs 用于调试
+		for id := range ss.AllWorkers {
+			workerIds = append(workerIds, id.String())
+
+			// 检查是否有以指定 workerId 开头的 workerFullId
+			if strings.HasPrefix(id.String(), workerId+":") {
+				exists = true
+			}
+		}
+
+		// 生成调试信息字符串
+		debugInfo := fmt.Sprintf("查找workerId=%s, workers=%v, exists=%v",
+			workerId, workerIds, exists)
+
+		t.Logf("检查worker state: %s", debugInfo)
+
+		return exists, debugInfo
+	}
+	// 使用已有的WaitUntil函数实现等待
+	succ := WaitUntil(t, fn, 1000, 20)
+	return succ, kcommon.GetMonoTimeMs() - startMs
 }
