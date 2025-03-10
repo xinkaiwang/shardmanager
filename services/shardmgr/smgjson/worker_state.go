@@ -67,3 +67,51 @@ func WorkerStateJsonFromJson(stringJson string) *WorkerStateJson {
 
 	return &obj
 }
+
+// Equals 比较两个 WorkerStateJson 是否相等
+func (obj *WorkerStateJson) Equals(other *WorkerStateJson) bool {
+	if obj == nil && other == nil {
+		return true
+	}
+	if obj == nil || other == nil {
+		return false
+	}
+
+	// 比较基本字段
+	if obj.WorkerId != other.WorkerId ||
+		obj.SessionId != other.SessionId ||
+		obj.WorkerState != other.WorkerState ||
+		obj.LastUpdateAtMs != other.LastUpdateAtMs ||
+		obj.LastUpdateReason != other.LastUpdateReason {
+		return false
+	}
+
+	// 比较 map 大小
+	if len(obj.Assignments) != len(other.Assignments) {
+		return false
+	}
+
+	// 比较 map 内容
+	for key, thisVal := range obj.Assignments {
+		otherVal, exists := other.Assignments[key]
+		if !exists {
+			return false
+		}
+
+		// 比较指针值，如果都为 nil 则相等
+		if thisVal == nil && otherVal == nil {
+			continue
+		}
+		if thisVal == nil || otherVal == nil {
+			return false
+		}
+
+		// 这里假设 AssignmentStateJson 可以直接用 == 比较
+		// 如果 AssignmentStateJson 也包含 map，需要为它也实现 Equals 方法并在这里调用
+		if *thisVal != *otherVal {
+			return false
+		}
+	}
+
+	return true
+}

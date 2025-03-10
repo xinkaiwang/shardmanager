@@ -32,6 +32,8 @@ type WorkerEphJson struct {
 
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`
+
+	ReqShutDown int8 `json:"req_shutdown,omitempty"` // if true, worker should drain and shutdown
 }
 
 func NewWorkerEphJson(workerId string, sessionId string, startTimeMs int64, capacity int32) *WorkerEphJson {

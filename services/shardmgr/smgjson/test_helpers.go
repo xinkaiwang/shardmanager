@@ -41,11 +41,14 @@ func CreateTestServiceConfig() *ServiceConfigJson {
 			MaxReplicaCount: NewInt32Pointer(10),
 			MinReplicaCount: NewInt32Pointer(1),
 		},
+		WorkerConfig: &WorkerConfigJson{
+			MaxAssignmentCountPerWorker: NewInt32Pointer(10),
+			OfflineGracePeriodSec:       NewInt32Pointer(60),
+		},
 		SystemLimit: &SystemLimitConfigJson{
-			MaxShardsCountLimit:         NewInt32Pointer(1000),
-			MaxReplicaCountLimit:        NewInt32Pointer(1000),
-			MaxAssignmentCountLimit:     NewInt32Pointer(1000),
-			MaxAssignmentCountPerWorker: NewInt32Pointer(100),
+			MaxShardsCountLimit:     NewInt32Pointer(1000),
+			MaxReplicaCountLimit:    NewInt32Pointer(1000),
+			MaxAssignmentCountLimit: NewInt32Pointer(1000),
 		},
 		CostFuncCfg: &CostFuncConfigJson{
 			ShardCountCostEnable: NewBoolPointer(true),
@@ -96,7 +99,6 @@ func WithSystemLimits(maxShards, maxReplicas, maxAssignments, maxAssignmentsPerW
 		cfg.SystemLimit.MaxShardsCountLimit = NewInt32Pointer(maxShards)
 		cfg.SystemLimit.MaxReplicaCountLimit = NewInt32Pointer(maxReplicas)
 		cfg.SystemLimit.MaxAssignmentCountLimit = NewInt32Pointer(maxAssignments)
-		cfg.SystemLimit.MaxAssignmentCountPerWorker = NewInt32Pointer(maxAssignmentsPerWorker)
 	}
 }
 

@@ -26,3 +26,40 @@ func WorkerInfoFromWorkerEph(workerEph *cougarjson.WorkerEphJson) WorkerInfoJson
 		Properties:   workerEph.Properties,
 	}
 }
+
+func (wi *WorkerInfoJson) Equals(other *WorkerInfoJson) bool {
+	if wi.WorkerId != other.WorkerId {
+		return false
+	}
+	if wi.SessionId != other.SessionId {
+		return false
+	}
+	if wi.AddressPort != other.AddressPort {
+		return false
+	}
+	if wi.StartTimeMs != other.StartTimeMs {
+		return false
+	}
+	if wi.Capacity != other.Capacity {
+		return false
+	}
+	if wi.MemorySizeMB != other.MemorySizeMB {
+		return false
+	}
+	if !StringMapEquals(wi.Properties, other.Properties) {
+		return false
+	}
+	return true
+}
+
+func StringMapEquals(map1 map[string]string, map2 map[string]string) bool {
+	if len(map1) != len(map2) {
+		return false
+	}
+	for key, value := range map1 {
+		if map2[key] != value {
+			return false
+		}
+	}
+	return true
+}

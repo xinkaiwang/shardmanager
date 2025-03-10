@@ -8,6 +8,7 @@ import (
 
 type ServiceConfigJson struct {
 	ShardConfig  *ShardConfigJson       `json:"shard_config"`
+	WorkerConfig *WorkerConfigJson      `json:"worker_config"`
 	SystemLimit  *SystemLimitConfigJson `json:"system_limit"`
 	CostFuncCfg  *CostFuncConfigJson    `json:"cost_func_cfg"`
 	SolverConfig *SolverConfigJson      `json:"solver_config"`
@@ -28,8 +29,6 @@ type SystemLimitConfigJson struct {
 	MaxReplicaCountLimit *int32 `json:"max_replica_count_limit"`
 	// MaxAssignmentCountLimit 是 shard 的最大 assignment 数量限制
 	MaxAssignmentCountLimit *int32 `json:"max_assignment_count_limit"`
-	// MaxAssignmentCount 是 per worker 的最大 assignment 数量限制
-	MaxAssignmentCountPerWorker *int32 `json:"max_assignment_count_per_worker"`
 }
 
 type CostFuncConfigJson struct {

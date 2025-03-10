@@ -61,10 +61,10 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
 		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
-		obj := NewWorkerState(workerStateJson.WorkerId, workerStateJson.SessionId, nil)
-		workerFullId := data.NewWorkerFullId(obj.WorkerId, obj.SessionId, ss.IsStateInMemory())
+		WorkerState := NewWorkerStateFromJson(workerStateJson)
+		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), ss.IsStateInMemory())
 		ss.ShadowState.InitWorkerState(workerFullId, workerStateJson)
-		ss.AllWorkers[workerFullId] = obj
+		ss.AllWorkers[workerFullId] = WorkerState
 		// assignments
 		for assignmentId, assignement := range workerStateJson.Assignments {
 			ss.AllAssignments[assignmentId] = NewAssignmentState(assignmentId, assignement.ShardId, assignement.ReplicaIdx, workerFullId)

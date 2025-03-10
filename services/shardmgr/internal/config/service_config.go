@@ -21,6 +21,7 @@ func ParseServiceConfigFromJson(data string) *ServiceConfig {
 
 type ServiceConfig struct {
 	ShardConfig  ShardConfig
+	WorkerConfig WorkerConfig
 	SystemLimit  SystemLimitConfig
 	CostFuncCfg  CostfuncConfig
 	SolverConfig SolverConfig
@@ -34,6 +35,13 @@ type ShardConfig struct {
 	MinReplicaCount int32 // default min replica count per shard (default 1)
 }
 
+type WorkerConfig struct {
+	// MaxAssignmentCountPerWorker 是 per worker 的最大 assignment 数量限制
+	MaxAssignmentCountPerWorker int32
+	// Offline Grace Period sec 是 worker 下线的宽限期
+	OfflineGracePeriodSec int32
+}
+
 type SystemLimitConfig struct {
 	// MaxShardsCountLimit 是 shard 的最大数量限制
 	MaxShardsCountLimit int32
@@ -41,8 +49,6 @@ type SystemLimitConfig struct {
 	MaxReplicaCountLimit int32
 	// MaxAssignmentCountLimit 是 shard 的最大 assignment 数量限制
 	MaxAssignmentCountLimit int32
-	// MaxAssignmentCount 是 per worker 的最大 assignment 数量限制
-	MaxAssignmentCountPerWorker int32
 }
 
 func ServiceConfigJsonToServiceConfig(si *smgjson.ServiceConfigJson) *ServiceConfig {
@@ -76,12 +82,28 @@ func ShardConfigJsonToConfig(sc *smgjson.ShardConfigJson) ShardConfig {
 	return cfg
 }
 
+func WorkerConfigJsonToConfig(wc *smgjson.WorkerConfigJson) WorkerConfig {
+	cfg := WorkerConfig{
+		MaxAssignmentCountPerWorker: 100, // default 100
+		OfflineGracePeriodSec:       10,  // default 10 sec
+	}
+	if wc == nil {
+		return cfg
+	}
+	if wc.MaxAssignmentCountPerWorker != nil {
+		cfg.MaxAssignmentCountPerWorker = *wc.MaxAssignmentCountPerWorker
+	}
+	if wc.OfflineGracePeriodSec != nil {
+		cfg.OfflineGracePeriodSec = *wc.OfflineGracePeriodSec
+	}
+	return cfg
+}
+
 func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimitConfig {
 	cfg := SystemLimitConfig{
-		MaxShardsCountLimit:         1000, // default 1000
-		MaxReplicaCountLimit:        1000, // default 1000
-		MaxAssignmentCountLimit:     1000, // default 1000
-		MaxAssignmentCountPerWorker: 100,  // default 100
+		MaxShardsCountLimit:     1000, // default 1000
+		MaxReplicaCountLimit:    1000, // default 1000
+		MaxAssignmentCountLimit: 1000, // default 1000
 	}
 	if sc == nil {
 		return cfg
@@ -94,9 +116,6 @@ func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimi
 	}
 	if sc.MaxAssignmentCountLimit != nil {
 		cfg.MaxAssignmentCountLimit = *sc.MaxAssignmentCountLimit
-	}
-	if sc.MaxAssignmentCountPerWorker != nil {
-		cfg.MaxAssignmentCountPerWorker = *sc.MaxAssignmentCountPerWorker
 	}
 	return cfg
 }
@@ -114,11 +133,16 @@ func (cfg *ShardConfig) ToShardConfigJson() *smgjson.ShardConfigJson {
 		MinReplicaCount: &cfg.MinReplicaCount,
 	}
 }
+func (cfg *WorkerConfig) ToWorkerConfigJson() *smgjson.WorkerConfigJson {
+	return &smgjson.WorkerConfigJson{
+		MaxAssignmentCountPerWorker: &cfg.MaxAssignmentCountPerWorker,
+		OfflineGracePeriodSec:       &cfg.OfflineGracePeriodSec,
+	}
+}
 func (cfg *SystemLimitConfig) ToSystemLimitConfigJson() *smgjson.SystemLimitConfigJson {
 	return &smgjson.SystemLimitConfigJson{
-		MaxShardsCountLimit:         &cfg.MaxShardsCountLimit,
-		MaxReplicaCountLimit:        &cfg.MaxReplicaCountLimit,
-		MaxAssignmentCountLimit:     &cfg.MaxAssignmentCountLimit,
-		MaxAssignmentCountPerWorker: &cfg.MaxAssignmentCountPerWorker,
+		MaxShardsCountLimit:     &cfg.MaxShardsCountLimit,
+		MaxReplicaCountLimit:    &cfg.MaxReplicaCountLimit,
+		MaxAssignmentCountLimit: &cfg.MaxAssignmentCountLimit,
 	}
 }
