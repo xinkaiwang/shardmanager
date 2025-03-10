@@ -157,6 +157,12 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
 }
 
+func (ws *WorkerState) signalAll(reason string) {
+	ws.NotifyReason = reason
+	close(ws.NotifyCh)
+	ws.NotifyCh = make(chan struct{}, 1)
+}
+
 // onEphNodeLost: must be called in runloop
 func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 	var dirty DirtyFlag
@@ -181,17 +187,8 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
 		dirty.AddDirtyFlag("WorkerState")
 	case data.WS_Offline_graceful_period:
-		// this should never happen
-		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
-			Log("onEphNodeLost", "worker eph already lost")
 	case data.WS_Offline_draining_candidate:
-		// this should never happen
-		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
-			Log("onEphNodeLost", "worker eph already lost")
 	case data.WS_Offline_draining_hat:
-		// this should never happen
-		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
-			Log("onEphNodeLost", "worker eph already lost")
 	case data.WS_Offline_draining_complete:
 		// this should never happen
 		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
@@ -200,9 +197,9 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		// nothing to do
 	}
 	if dirty.IsDirty() {
-		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss).SetUpdateReason(dirty.String()))
-		ws.NotifyReason = dirty.String()
-		close(ws.NotifyCh)
+		reason := dirty.String()
+		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss).SetUpdateReason(reason))
+		ws.signalAll(reason)
 	}
 }
 
@@ -211,13 +208,10 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	var dirty DirtyFlag
 	switch ws.State {
 	case data.WS_Online_healthy:
-		// nothing to do
 	case data.WS_Online_shutdown_req:
-		// nothing to do
 	case data.WS_Online_shutdown_hat:
-		// nothing to do
 	case data.WS_Online_shutdown_permit:
-		// nothing to do
+		dirty.AddDirtyFlag(ws.updateWorkerByEph(ctx, workerEph)...)
 	case data.WS_Offline_graceful_period:
 	case data.WS_Offline_draining_candidate:
 	case data.WS_Offline_draining_hat:
@@ -228,9 +222,9 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 			Log("onEphNodeUpdate", "worker eph already lost")
 	}
 	if dirty.IsDirty() {
-		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss).SetUpdateReason(dirty.String()))
-		ws.NotifyReason = dirty.String()
-		close(ws.NotifyCh)
+		reason := dirty.String()
+		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss).SetUpdateReason(reason))
+		ws.signalAll(reason)
 	}
 }
 
@@ -246,7 +240,7 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 	case data.WS_Online_shutdown_permit:
 		// nothing to do
 	case data.WS_Offline_graceful_period:
-		if ws.GracePeriodStartTimeMs+int64(ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec)*1000 > kcommon.GetWallTimeMs() { // expired
+		if ws.GracePeriodStartTimeMs+int64(ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec)*1000 <= kcommon.GetWallTimeMs() { // expired
 			// Worker Event: Grace period expired, worker becomes offline
 			ws.State = data.WS_Offline_draining_candidate
 			dirty.AddDirtyFlag("WorkerState")

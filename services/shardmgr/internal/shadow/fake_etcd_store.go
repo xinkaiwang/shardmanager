@@ -29,16 +29,41 @@ func (store *FakeEtcdStore) Put(ctx context.Context, key string, value string, n
 		With("name", name).
 		Log("FakeEtcdStorePut", "写入数据")
 
+	// 这里添加调用栈信息，帮助调试
+	klogging.Info(ctx).
+		With("key", key).
+		Log("FakeEtcdStorePut", "调用栈跟踪点1")
+
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
 	store.putCalled++
 
+	klogging.Info(ctx).
+		With("key", key).
+		With("putCalledCount", store.putCalled).
+		Log("FakeEtcdStorePut", "更新putCalled计数")
+
 	if value == "" {
+		klogging.Info(ctx).
+			With("key", key).
+			Log("FakeEtcdStorePut", "删除键值")
 		delete(store.data, key)
 	} else {
+		klogging.Info(ctx).
+			With("key", key).
+			With("valueLength", len(value)).
+			Log("FakeEtcdStorePut", "存储键值")
 		store.data[key] = value
 	}
+
+	// 验证存储结果
+	storedValue, exists := store.data[key]
+	klogging.Info(ctx).
+		With("key", key).
+		With("exists", exists).
+		With("storedLength", len(storedValue)).
+		Log("FakeEtcdStorePut", "验证存储结果")
 }
 
 // GetPutCalledCount returns the number of times Put was called

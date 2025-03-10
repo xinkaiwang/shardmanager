@@ -2561,3 +2561,67 @@ ShardManager 中 worker 状态管理的关键流程如下：
    - 使用 WaitUntil 时，至少等待 500ms
    - 对于复杂场景，可能需要更长的等待时间（1-5秒）
    - 考虑批处理延迟对测试的影响
+
+## WorkerState 系统机制 [P1]
+
+1. **数据流和架构**：
+   - **Worker临时节点(WorkerEph)**：存储在etcd的`/smg/eph/{worker_id}:{session_id}`路径
+   - **临时节点暂存区(EphWorkerStaging)**：ServiceState内存中的暂存区
+   - **状态对象(WorkerState)**：完整的Worker状态和生命周期管理
+   - **持久化存储**：通过ShadowState和StoreProvider接口存储到etcd的`/smg/worker_state/{worker_full_id}`
+
+2. **新Worker出现的完整流程**：
+   - etcd中创建新的`/smg/eph/{worker_id}:{session_id}`节点
+   - WorkerEphWatcher检测到变更，创建WorkerEphEvent
+   - 更新EphWorkerStaging暂存区，标记EphDirty
+   - BatchManager调度syncEphStagingToWorkerState执行批量同步
+   - 创建新的WorkerState对象，初始状态为WS_Online_healthy
+   - 通过StoreProvider (ShadowState)同时写入内存缓存和etcd
+
+3. **Worker状态机**：
+   - **在线状态**：
+     * WS_Online_healthy：正常在线工作
+     * WS_Online_shutdown_req：请求关闭
+     * WS_Online_shutdown_hat：关闭已在处理中
+     * WS_Online_shutdown_permit：允许关闭
+   - **离线状态**：
+     * WS_Offline_graceful_period：优雅期，临时离线可能恢复
+     * WS_Offline_draining_candidate：排空候选，准备移除分配
+     * WS_Offline_draining_hat：正在排空中
+     * WS_Offline_draining_complete：排空完成
+     * WS_Offline_dead：已死亡，等待清理
+     * WS_Deleted：已删除，标记为需要从管理中移除
+
+4. **状态转换触发事件**：
+   - **临时节点更新**：通过onEphNodeUpdate处理
+   - **临时节点丢失**：通过onEphNodeLost处理
+     * 在线状态 → WS_Offline_graceful_period（开始优雅期）
+     * WS_Online_shutdown_hat → WS_Offline_draining_hat
+     * WS_Online_shutdown_permit → WS_Offline_dead
+   - **超时检查**：通过checkWorkerForTimeout处理
+     * WS_Offline_graceful_period优雅期过期 → WS_Offline_draining_candidate
+     * WS_Offline_dead持续20秒 → WS_Deleted并标记删除
+
+5. **批处理优化机制**：
+   - 使用BatchManager延迟处理（最多延迟10ms）合并多次更新
+   - 使用EphDirty映射跟踪需要更新的Worker
+   - 使用DirtyFlag跟踪WorkerState中变更的字段
+   - 只有变更时才进行持久化操作
+   - 变更时通过NotifyCh通知其他组件
+
+6. **存储机制**：
+   - **双层存储**：同时写入内存缓存和etcd持久化存储
+   - **数据一致性**：通过etcd的版本机制和事务保证
+   - **故障恢复**：可从etcd重新加载所有状态
+
+7. **标识体系**：
+   - **WorkerId**：基本标识符，通常是Worker的主机名或Pod名称
+   - **SessionId**：会话标识符，每次重启时更改
+   - **WorkerFullId**：组合标识符`{worker_id}:{session_id}`
+   - **在内存状态模式下**：WorkerFullId必须包含SessionId
+   - **在持久化状态模式下**：WorkerFullId可以只包含WorkerId
+
+8. **注意事项和常见问题**：
+   - 时间比较逻辑：优雅期和死亡状态的时间比较逻辑需要注意（小于等于表示已过期）
+   - 状态冲突：当Worker已处于离线状态时收到临时节点更新会触发严重错误
+   - 线程安全：所有状态更新必须在runloop中执行，确保状态一致性
