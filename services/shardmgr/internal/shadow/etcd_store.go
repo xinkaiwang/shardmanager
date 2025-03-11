@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
@@ -13,7 +14,9 @@ import (
 )
 
 var (
+	// 使用互斥锁保护 currentEtcdStore
 	currentEtcdStore EtcdStore
+	storeMutex       sync.RWMutex
 
 	// 跟踪EtcdStore的使用情况
 	storeCreationCount    int
@@ -23,18 +26,21 @@ var (
 
 // DumpStoreStats 返回当前EtcdStore的使用统计信息
 func DumpStoreStats() string {
+	storeMutex.RLock()
+	defer storeMutex.RUnlock()
+
 	var storeType string
 	if currentEtcdStore != nil {
 		storeType = fmt.Sprintf("%T", currentEtcdStore)
 	} else {
 		storeType = "nil"
 	}
-	return fmt.Sprintf("EtcdStore stats: type=%s, creations=%d, accesses=%d, lastCaller=%s",
+	return fmt.Sprintf("EtcdStore类型=%s, 创建次数=%d, 访问次数=%d, 最后访问=%s",
 		storeType, storeCreationCount, storeAccessCount, storeLastAccessCaller)
 }
 
+// GetCurrentEtcdStore 获取当前的EtcdStore，如果不存在则创建一个新的
 func GetCurrentEtcdStore(ctx context.Context) EtcdStore {
-	// 递增访问计数
 	storeAccessCount++
 
 	// 记录调用者信息（仅用于调试）
@@ -47,36 +53,62 @@ func GetCurrentEtcdStore(ctx context.Context) EtcdStore {
 		storeLastAccessCaller = fmt.Sprintf("%s:%d", file, line)
 	}
 
-	// 仅使用Info级别记录关键操作，避免过多日志
-	if currentEtcdStore == nil {
-		storeCreationCount++
-		klogging.Info(ctx).Log("event", "GetCurrentEtcdStore")
-		currentEtcdStore = NewBufferedEtcdStore(ctx)
+	// 检查当前存储
+	storeMutex.RLock()
+	store := currentEtcdStore
+	storeMutex.RUnlock()
+
+	if store != nil {
+		return store
+	}
+
+	// 如果存储不存在，创建一个新的
+	storeMutex.Lock()
+	defer storeMutex.Unlock()
+
+	// 双重检查锁定模式，确保不会创建多个实例
+	if currentEtcdStore != nil {
 		return currentEtcdStore
 	}
 
-	return currentEtcdStore
+	// 仅使用Info级别记录关键操作，避免过多日志
+	storeCreationCount++
+	klogging.Info(ctx).Log("event", "GetCurrentEtcdStore")
+	store = NewBufferedEtcdStore(ctx)
+	currentEtcdStore = store
+	return store
 }
 
 // SetCurrentEtcdStore 直接设置当前的EtcdStore，主要用于测试
 func SetCurrentEtcdStore(store EtcdStore) {
+	storeMutex.Lock()
+	defer storeMutex.Unlock()
 	currentEtcdStore = store
 }
 
 func RunWithEtcdStore(store EtcdStore, fn func()) {
 	ctx := context.Background()
+
+	// 保存当前存储
+	storeMutex.Lock()
+	oldStore := currentEtcdStore
+	currentEtcdStore = store
+	storeMutex.Unlock()
+
 	klogging.Info(ctx).
-		With("oldStore", fmt.Sprintf("%T", currentEtcdStore)).
+		With("oldStore", fmt.Sprintf("%T", oldStore)).
 		With("newStore", fmt.Sprintf("%T", store)).
 		Log("RunWithEtcdStore", "临时替换EtcdStore")
 
-	oldStore := currentEtcdStore
-	currentEtcdStore = store
 	defer func() {
 		klogging.Info(ctx).
 			With("restoredStore", fmt.Sprintf("%T", oldStore)).
 			Log("RunWithEtcdStore", "恢复原始EtcdStore")
+
+		// 恢复原始存储
+		storeMutex.Lock()
 		currentEtcdStore = oldStore
+		storeMutex.Unlock()
 	}()
 	fn()
 }
@@ -160,6 +192,9 @@ func (eve *WriteEvent) Process(ctx context.Context, resource *BufferedEtcdStore)
 
 // ResetEtcdStore 重置全局EtcdStore变量，用于测试
 func ResetEtcdStore() {
+	storeMutex.Lock()
+	defer storeMutex.Unlock()
+
 	currentEtcdStore = nil
 	storeCreationCount = 0
 	storeAccessCount = 0

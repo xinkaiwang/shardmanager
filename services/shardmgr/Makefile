@@ -56,6 +56,8 @@ docker-push:
 # 运行测试
 test:
 	@echo "Running tests..."
+	@echo "注意：测试可能显示数据竞争警告，主要源于底层库 krunloop 中的采样器和RunLoop之间的并发访问。"
+	@echo "这些并发问题需要在 krunloop 包中通过适当的同步机制解决，而不是忽略竞争检测。"
 	go test -v ./...
 
 # 运行服务

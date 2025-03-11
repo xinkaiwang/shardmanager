@@ -229,16 +229,6 @@ func waitForWorkerCounts(t *testing.T, ss *ServiceState, expectedCount int) (boo
 	return result, waitDuration
 }
 
-// // waitServiceShards 等待ServiceState的分片数量达到预期
-// func waitServiceShards(t *testing.T, ss *ServiceState, expectedCount int) bool {
-// 	t.Helper()
-
-// 	// 使用waitForServiceShards，这是标准实现
-// 	result, _ := waitForServiceShards(t, ss, expectedCount)
-
-// 	return result
-// }
-
 // serviceStateReadEvent 用于安全读取 ServiceState
 type serviceStateReadEvent struct {
 	callback func(*ServiceState)
@@ -365,19 +355,22 @@ func waitForWorkerStateCreation(t *testing.T, ss *ServiceState, workerId string)
 
 	startMs := kcommon.GetMonoTimeMs()
 	fn := func() (bool, string) {
-		// 不再创建固定的 workerFullId，而是遍历 AllWorkers 查找
+		// 使用 safeAccessServiceState 安全访问 ServiceState
 		var workerIds []string
 		exists := false
 
-		// 记录所有 worker IDs 用于调试
-		for id := range ss.AllWorkers {
-			workerIds = append(workerIds, id.String())
+		safeAccessServiceState(ss, func(ss *ServiceState) {
+			// 记录所有 worker IDs 用于调试
+			workerIds = make([]string, 0, len(ss.AllWorkers))
+			for id := range ss.AllWorkers {
+				workerIds = append(workerIds, id.String())
 
-			// 检查是否有以指定 workerId 开头的 workerFullId
-			if strings.HasPrefix(id.String(), workerId+":") {
-				exists = true
+				// 检查是否有以指定 workerId 开头的 workerFullId
+				if strings.HasPrefix(id.String(), workerId+":") {
+					exists = true
+				}
 			}
-		}
+		})
 
 		// 生成调试信息字符串
 		debugInfo := fmt.Sprintf("查找workerId=%s, workers=%v, exists=%v",
@@ -389,5 +382,32 @@ func waitForWorkerStateCreation(t *testing.T, ss *ServiceState, workerId string)
 	}
 	// 使用已有的WaitUntil函数实现等待
 	succ := WaitUntil(t, fn, 1000, 20)
+	return succ, kcommon.GetMonoTimeMs() - startMs
+}
+
+// waitForWorkerStatePersistence 等待特定路径的worker状态被持久化到存储中
+func waitForWorkerStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, path string) (bool, int64) {
+	t.Helper()
+
+	startMs := kcommon.GetMonoTimeMs()
+	fn := func() (bool, string) {
+		// 获取存储数据
+		storeData := store.GetData()
+
+		// 检查目标路径是否存在
+		value, exists := storeData[path]
+
+		// 生成调试信息
+		debugInfo := fmt.Sprintf("路径=%s, 存在=%v, 数据长度=%d, 总存储项数=%d",
+			path, exists, len(value), len(storeData))
+
+		// 记录当前尝试的状态
+		t.Logf("检查worker状态持久化: %s", debugInfo)
+
+		return exists, debugInfo
+	}
+
+	// 使用已有的WaitUntil函数实现等待，最多等待1秒，每50ms检查一次
+	succ := WaitUntil(t, fn, 1000, 50)
 	return succ, kcommon.GetMonoTimeMs() - startMs
 }

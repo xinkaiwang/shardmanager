@@ -2,6 +2,7 @@ package krunloop
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -36,7 +37,7 @@ type RunLoop[T CriticalResource] struct {
 	name             string // name of this runloop: for logging/metrics purposes only
 	resource         T
 	queue            *UnboundedQueue[T]
-	currentEventName string
+	currentEventName atomic.Value // 使用原子操作保护事件名
 	sampler          *RunloopSampler
 	ctx              context.Context
 	cancel           context.CancelFunc
@@ -52,7 +53,16 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 		queue:    NewUnboundedQueue[T](ctx),
 		exited:   make(chan struct{}),
 	}
-	rl.sampler = NewRunloopSampler(ctx, func() string { return rl.currentEventName }, name)
+	// 初始化 atomic.Value
+	rl.currentEventName.Store("")
+	// 使用安全的方式获取当前事件名
+	rl.sampler = NewRunloopSampler(ctx, func() string {
+		val := rl.currentEventName.Load()
+		if val == nil {
+			return ""
+		}
+		return val.(string)
+	}, name)
 	return rl
 }
 
@@ -78,9 +88,11 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			// Handle event
 			start := kcommon.GetMonoTimeMs()
 			eveName := event.GetName()
-			rl.currentEventName = eveName
+			// 使用原子操作存储当前事件名
+			rl.currentEventName.Store(eveName)
 			defer func() {
-				rl.currentEventName = ""
+				// 使用原子操作清除当前事件名
+				rl.currentEventName.Store("")
 				elapsedMs := kcommon.GetMonoTimeMs() - start
 				RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
 			}()
