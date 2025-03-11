@@ -46,3 +46,7 @@ func (pm *PathManager) FmtWorkerStatePath(workerFullId data.WorkerFullId) string
 func (pm *PathManager) FmtExecutionPlanPath(proposalId data.ProposalId) string {
 	return pm.GetExecutionPlanPrefix() + string(proposalId)
 }
+
+func (pm *PathManager) FmtWorkerEphPath(workerFullId data.WorkerFullId) string {
+	return pm.GetWorkerEphPathPrefix() + workerFullId.String()
+}

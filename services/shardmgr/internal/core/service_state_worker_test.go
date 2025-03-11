@@ -327,25 +327,72 @@ func testOtherStateTransitionsWithEtcd(t *testing.T, ctx context.Context, ss *Se
 	workerFullId := data.NewWorkerFullId("worker-2", "session-2", ss.IsStateInMemory())
 	workerEph := cougarjson.NewWorkerEphJson("worker-2", "session-2", 1234567890000, 60)
 	workerEph.AddressPort = "localhost:8081"
-	workerEphJson, _ := json.Marshal(workerEph)
 	t.Logf("已创建worker eph对象，worker-2:session-2")
 
 	// 设置到etcd
-	ephPath := ss.PathManager.GetWorkerEphPathPrefix() + workerFullId.String()
-	setup.FakeEtcd.Set(ctx, ephPath, string(workerEphJson))
+	ephPath := ss.PathManager.FmtWorkerEphPath(workerFullId)
+
+	// 添加更多日志信息 - 记录完整路径
+	t.Logf("正在设置worker eph节点，完整路径: %s，workerFullId: %s", ephPath, workerFullId.String())
+
+	// 验证EtcdProvider是否可用
+	t.Logf("检查FakeEtcd是否可用: %v", setup.FakeEtcd != nil)
+
+	// 查看当前etcd中的内容
+	t.Logf("设置前查看etcd内容:")
+	items := setup.FakeEtcd.List(ctx, ss.PathManager.GetWorkerEphPathPrefix(), 10)
+	for _, item := range items {
+		t.Logf("  - etcd中已有项: %s", item.Key)
+	}
+
+	setup.FakeEtcd.Set(ctx, ephPath, workerEph.ToJson())
 	t.Logf("worker eph节点已设置到etcd，等待状态同步")
 
+	// 验证是否成功设置
+	kvItem := setup.FakeEtcd.Get(ctx, ephPath)
+	t.Logf("验证设置结果: 路径=%s, 值=%s, ModRevision=%d",
+		ephPath, kvItem.Value, kvItem.ModRevision)
+
+	// 检查批处理管理器状态
+	t.Logf("检查Worker批处理管理器状态, 名称=%s, 是否已初始化=%v",
+		ss.syncWorkerBatchManager.name,
+		ss.syncWorkerBatchManager != nil)
+
 	// 等待创建
-	success, _ := waitForWorkerStateCreation(t, ss, "worker-2")
+	t.Logf("开始等待worker-2状态创建，当前AllWorkers数量: %d", len(ss.AllWorkers))
+	success, duration := waitForWorkerStateCreation(t, ss, "worker-2")
+	t.Logf("等待worker-2状态创建结果: success=%v, 耗时=%dms, 当前AllWorkers数量: %d",
+		success, duration, len(ss.AllWorkers))
 	assert.True(t, success, "应该成功创建worker state: worker-2")
+
+	// 添加更多调试信息 - 检查所有已有的worker
+	t.Logf("当前所有worker:")
+	safeAccessServiceState(ss, func(ss *ServiceState) {
+		for id := range ss.AllWorkers {
+			t.Logf("  - worker ID: %s", id.String())
+		}
+
+		// 检查EphWorkerStaging和EphDirty字段
+		t.Logf("EphWorkerStaging数量: %d, EphDirty数量: %d",
+			len(ss.EphWorkerStaging), len(ss.EphDirty))
+
+		// 检查EphWorkerStaging中是否包含worker-2
+		for id := range ss.EphWorkerStaging {
+			t.Logf("  - staging中的worker: %s", id.String())
+		}
+	})
 
 	// 修改状态为shutdown_req - 使用safeAccessServiceState保证线程安全
 	safeAccessServiceState(ss, func(ss *ServiceState) {
 		worker, exists := ss.AllWorkers[workerFullId]
 		assert.True(t, exists, "worker应该已创建")
-		worker.State = data.WS_Online_shutdown_req
+		if exists {
+			worker.State = data.WS_Online_shutdown_req
+			t.Logf("已将worker-2状态设置为WS_Online_shutdown_req")
+		} else {
+			t.Logf("错误: worker-2不存在，无法设置状态")
+		}
 	})
-	t.Logf("已将worker-2状态设置为WS_Online_shutdown_req")
 
 	// 删除临时节点，触发处理
 	setup.FakeEtcd.Delete(ctx, ephPath)
@@ -377,24 +424,7 @@ func testOtherStateTransitionsWithEtcd(t *testing.T, ctx context.Context, ss *Se
 
 	t.Logf("等待worker-2状态从online_shutdown_req变化")
 	if !WaitUntil(t, waitForState2Condition, 1000, 50) {
-		// 如果超时，触发批处理
-		t.Logf("等待超时，添加触发worker来促进批处理")
-		triggerFullId := data.NewWorkerFullId("worker-trigger2", "session-trigger2", ss.IsStateInMemory())
-		triggerEph := cougarjson.NewWorkerEphJson("worker-trigger2", "session-trigger2", 1234567890000, 60)
-		triggerEph.AddressPort = "localhost:8082"
-		triggerEphJson, _ := json.Marshal(triggerEph)
-		triggerPath := ss.PathManager.GetWorkerEphPathPrefix() + triggerFullId.String()
-		setup.FakeEtcd.Set(ctx, triggerPath, string(triggerEphJson))
-		t.Logf("触发worker eph节点已设置，重新等待状态变化")
-
-		// 再次等待状态变化
-		if !WaitUntil(t, waitForState2Condition, 1000, 50) {
-			t.Fatalf("即使添加触发，worker-2状态仍未变化，测试失败")
-		}
-
-		// 清理触发节点
-		setup.FakeEtcd.Delete(ctx, triggerPath)
-		t.Logf("已清理触发worker")
+		t.Fatalf("等待超时，worker-2状态仍未从online_shutdown_req变化，测试失败")
 	}
 
 	t.Logf("worker-2状态已成功变化")
