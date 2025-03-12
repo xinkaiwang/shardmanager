@@ -13,6 +13,13 @@ import (
 // syncShardPlan: this must called in runloop
 // this will modify AllShards, and call FlushShardState
 func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.ShardLineJson) {
+	// 注意：此函数已经在 runloop 中调用，它是 ServiceState 的方法
+	// ServiceState 已经有限制只能在 runloop 中修改，因此这里不需要额外的锁
+	// runloop 是单线程的，因此这里的 map 操作是安全的
+
+	// 如果外部仍需要安全地访问这个 map，ServiceState 应该提供安全的访问方法
+	// 此处的问题可能是测试代码直接访问了 ss.AllShards 而不通过安全方法
+
 	// compare with current shard state
 	needRemove := map[data.ShardId]*ShardState{}
 	for _, shard := range ss.AllShards {

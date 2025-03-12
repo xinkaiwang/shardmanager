@@ -41,7 +41,10 @@ func DumpStoreStats() string {
 
 // GetCurrentEtcdStore 获取当前的EtcdStore，如果不存在则创建一个新的
 func GetCurrentEtcdStore(ctx context.Context) EtcdStore {
+	// 使用互斥锁保护全局变量的读写
+	storeMutex.Lock()
 	storeAccessCount++
+	storeMutex.Unlock()
 
 	// 记录调用者信息（仅用于调试）
 	_, file, line, ok := runtime.Caller(1)
@@ -50,7 +53,11 @@ func GetCurrentEtcdStore(ctx context.Context) EtcdStore {
 		if idx := strings.LastIndex(file, "/"); idx >= 0 {
 			file = file[idx+1:]
 		}
+
+		// 使用互斥锁保护对 storeLastAccessCaller 的写入
+		storeMutex.Lock()
 		storeLastAccessCaller = fmt.Sprintf("%s:%d", file, line)
+		storeMutex.Unlock()
 	}
 
 	// 检查当前存储
@@ -73,7 +80,7 @@ func GetCurrentEtcdStore(ctx context.Context) EtcdStore {
 
 	// 仅使用Info级别记录关键操作，避免过多日志
 	storeCreationCount++
-	klogging.Info(ctx).Log("event", "GetCurrentEtcdStore")
+	klogging.Info(ctx).Log("EtcdStoreCreation", "创建新的EtcdStore实例")
 	store = NewBufferedEtcdStore(ctx)
 	currentEtcdStore = store
 	return store

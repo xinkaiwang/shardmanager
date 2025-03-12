@@ -2,6 +2,7 @@ package solver
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -57,34 +58,45 @@ type SolverDriver struct {
 	parent         *SolverGroup
 	solver         Solver
 	enqueueTask    func(task Task)
+	threadsMutex   sync.Mutex // 保护 threads 数组
 	threads        []*DriverThread
-	sleepPerLoopMs int
+	sleepPerLoopMs atomic.Int64 // 使用原子操作代替互斥锁保护
 }
 
 func NewSolverDriver(ctx context.Context, name SolverType, parent *SolverGroup, solver Solver, enqueue func(task Task)) *SolverDriver {
 	driver := &SolverDriver{
-		ctx:            ctx,
-		name:           name,
-		parent:         parent,
-		solver:         solver,
-		enqueueTask:    enqueue,
-		sleepPerLoopMs: 1000,
+		ctx:         ctx,
+		name:        name,
+		parent:      parent,
+		solver:      solver,
+		enqueueTask: enqueue,
 	}
+	// 设置初始值为1000
+	driver.sleepPerLoopMs.Store(1000)
 	driver.threadCountWatcher(ctx)
 	return driver
 }
 
 func (sd *SolverDriver) threadCountWatcher(ctx context.Context) {
-	expectedThreadCount, sleepPerLoopMs := sd.expectedThreadCount()
-	// klogging.Info(ctx).With("solver", sd.name).With("expectedThreadCount", expectedThreadCount).With("sleepPerLoopMs", sleepPerLoopMs).Log("SolverDriver", "threadCountWatcher")
-	sd.sleepPerLoopMs = sleepPerLoopMs
+	expectedThreadCount, newSleepPerLoopMs := sd.expectedThreadCount()
+	// 使用原子操作更新 sleepPerLoopMs
+	sd.sleepPerLoopMs.Store(int64(newSleepPerLoopMs))
+
+	// 使用互斥锁保护对 threads 数组的访问
+	sd.threadsMutex.Lock()
+	defer sd.threadsMutex.Unlock()
+
+	// 添加需要的线程
 	for len(sd.threads) < expectedThreadCount {
 		sd.threads = append(sd.threads, NewDriverThread(ctx, sd))
 	}
+
+	// 移除多余的线程
 	for len(sd.threads) > expectedThreadCount {
 		sd.threads[len(sd.threads)-1].Stop()
 		sd.threads = sd.threads[:len(sd.threads)-1]
 	}
+
 	kcommon.ScheduleRun(1*1000, func() {
 		sd.threadCountWatcher(ctx)
 	})
@@ -119,6 +131,7 @@ type DriverThread struct {
 	ctx    context.Context
 	parent *SolverDriver
 	stop   bool
+	mutex  sync.Mutex // 添加互斥锁保护 stop 字段
 }
 
 func NewDriverThread(ctx context.Context, parent *SolverDriver) *DriverThread {
@@ -132,12 +145,16 @@ func NewDriverThread(ctx context.Context, parent *SolverDriver) *DriverThread {
 }
 
 func (dt *DriverThread) Stop() {
+	dt.mutex.Lock()
 	dt.stop = true
+	dt.mutex.Unlock()
 }
 
 func (dt *DriverThread) run() {
+	// 使用原子操作读取 sleepPerLoopMs
+	sleepMs := int(dt.parent.sleepPerLoopMs.Load())
 	// initial sleep
-	initalSleepMs := kcommon.RandomInt(dt.ctx, dt.parent.sleepPerLoopMs)
+	initalSleepMs := kcommon.RandomInt(dt.ctx, sleepMs)
 	if initalSleepMs > 0 {
 		ch := make(chan struct{})
 		kcommon.ScheduleRun(initalSleepMs, func() {
@@ -145,14 +162,24 @@ func (dt *DriverThread) run() {
 		})
 		<-ch
 	}
-	for !dt.stop {
+
+	for {
+		// 检查是否应该停止
+		dt.mutex.Lock()
+		shouldStop := dt.stop
+		dt.mutex.Unlock()
+		if shouldStop {
+			break
+		}
+
 		task := NewDriverThreadTask(dt.ctx, dt, dt.parent.name)
 		dt.parent.enqueueTask(task)
 		<-task.done
 
-		// sleep
+		// sleep - 使用原子操作读取最新的 sleepPerLoopMs
+		sleepMs = int(dt.parent.sleepPerLoopMs.Load())
 		ch := make(chan struct{})
-		kcommon.ScheduleRun(dt.parent.sleepPerLoopMs, func() {
+		kcommon.ScheduleRun(sleepMs, func() {
 			close(ch)
 		})
 		<-ch

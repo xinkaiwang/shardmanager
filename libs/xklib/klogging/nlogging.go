@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -250,10 +251,18 @@ type BasicLogger struct {
 	LogLevel Level
 }
 
+// 添加一个互斥锁来保护lastLoggedMessage
+var lastLoggedMessageMutex sync.Mutex
+var lastLoggedMessage string
+
 func (bl *BasicLogger) Log(entry *LogEntry, shouldLog bool) {
 	if shouldLog {
 		fmt.Println(entry.String())
+
+		// 使用互斥锁保护对lastLoggedMessage的访问
+		lastLoggedMessageMutex.Lock()
 		lastLoggedMessage = entry.String()
+		lastLoggedMessageMutex.Unlock()
 	}
 }
 
@@ -261,9 +270,10 @@ func (bl *BasicLogger) Level() Level {
 	return bl.LogLevel
 }
 
-var lastLoggedMessage string
-
 func GetLastLoggedMessage() string {
+	// 使用互斥锁保护对lastLoggedMessage的读取
+	lastLoggedMessageMutex.Lock()
+	defer lastLoggedMessageMutex.Unlock()
 	return lastLoggedMessage
 }
 

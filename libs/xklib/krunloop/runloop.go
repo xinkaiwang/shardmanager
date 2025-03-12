@@ -2,6 +2,7 @@ package krunloop
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -39,6 +40,7 @@ type RunLoop[T CriticalResource] struct {
 	queue            *UnboundedQueue[T]
 	currentEventName atomic.Value // 使用原子操作保护事件名
 	sampler          *RunloopSampler
+	mu               sync.Mutex // 保护 ctx 和 cancel
 	ctx              context.Context
 	cancel           context.CancelFunc
 	exited           chan struct{}
@@ -51,11 +53,8 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 		name:     name,
 		resource: resource,
 		queue:    NewUnboundedQueue[T](ctx),
-		exited:   make(chan struct{}),
+		exited:   make(chan struct{}), // 初始化 exited 通道
 	}
-	// 初始化 atomic.Value
-	rl.currentEventName.Store("")
-	// 使用安全的方式获取当前事件名
 	rl.sampler = NewRunloopSampler(ctx, func() string {
 		val := rl.currentEventName.Load()
 		if val == nil {
@@ -72,8 +71,16 @@ func (rl *RunLoop[T]) PostEvent(event IEvent[T]) {
 }
 
 func (rl *RunLoop[T]) Run(ctx context.Context) {
+	// 使用互斥锁保护 ctx 和 cancel 的设置
+	rl.mu.Lock()
 	rl.ctx, rl.cancel = context.WithCancel(ctx)
-	defer rl.queue.Close()
+	rl.mu.Unlock()
+
+	defer func() {
+		rl.queue.Close()
+		// 通知 RunLoop 已退出
+		close(rl.exited)
+	}()
 
 	for {
 		select {
@@ -102,19 +109,25 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 }
 
 func (rl *RunLoop[T]) StopAndWaitForExit() {
+	// 使用互斥锁保护对 cancel 的访问
+	rl.mu.Lock()
+	cancel := rl.cancel
+	rl.mu.Unlock()
+
 	// 如果 cancel 为 nil，则 runloop 尚未启动，无需等待
-	if rl.cancel == nil {
+	if cancel == nil {
 		return
 	}
 
 	// 取消 context
-	rl.cancel()
+	cancel()
 
 	// 设置短超时，避免无限等待
 	select {
 	case <-rl.exited:
 		// 正常退出
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(1000 * time.Millisecond): // 增加超时时间，确保有足够时间退出
 		// 超时，可能 Run 方法尚未完全启动或已异常退出
+		klogging.Warning(context.Background()).Log("RunLoopStopTimeout", "RunLoop.StopAndWaitForExit 超时")
 	}
 }

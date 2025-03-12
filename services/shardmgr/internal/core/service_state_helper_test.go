@@ -193,16 +193,36 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 // 返回是否成功和等待时间ms
 func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bool, int64) {
 	startTime := kcommon.GetMonoTimeMs()
+
+	// 添加一个同步通道，用于在 runloop 中安全地获取分片信息
+	type shardInfo struct {
+		count int
+		ids   []string
+	}
+
 	result := WaitUntil(t, func() (bool, string) {
-		if len(ss.AllShards) >= expectedCount {
-			t.Logf("ServiceState 中的分片数量已达到预期：%d", len(ss.AllShards))
+		// 使用 safeAccessServiceState 在 runloop 中安全地访问 ServiceState
+		info := make(chan shardInfo, 1)
+		safeAccessServiceState(ss, func(ss *ServiceState) {
+			var shardIds []string
+			for id := range ss.AllShards {
+				shardIds = append(shardIds, string(id))
+			}
+			info <- shardInfo{
+				count: len(ss.AllShards),
+				ids:   shardIds,
+			}
+		})
+
+		// 从通道中获取分片信息
+		shardData := <-info
+
+		if shardData.count >= expectedCount {
+			t.Logf("ServiceState 中的分片数量已达到预期：%d", shardData.count)
 			return true, ""
 		}
-		var shardIds []string
-		for id := range ss.AllShards {
-			shardIds = append(shardIds, string(id))
-		}
-		return false, fmt.Sprintf("当前分片数量: %d, 分片列表: %v", len(ss.AllShards), shardIds)
+
+		return false, fmt.Sprintf("当前分片数量: %d, 分片列表: %v", shardData.count, shardData.ids)
 	}, 2000, 20)
 
 	waitDuration := kcommon.GetMonoTimeMs() - startTime

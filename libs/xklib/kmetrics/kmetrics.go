@@ -189,9 +189,14 @@ func CreateTimeSequence(ctx context.Context, key string, parent *Kmetric, tagVal
 	}
 	seq.labelValues = values
 
+	// 复制要在goroutine中使用的变量，避免共享可变状态
+	metricName := parent.metricName
+	tagKey := key
+	ctxCopy := ctx
+
 	go func() {
 		// we have to defer this log operation into another goroutine to avoid dead-lock caused by re-entry
-		klogging.Info(ctx).With("gaugeName", parent.metricName).With("tagKey", key).Log("CreateTimeSequence", "")
+		klogging.Info(ctxCopy).With("gaugeName", metricName).With("tagKey", tagKey).Log("CreateTimeSequence", "")
 	}()
 	return seq
 }
