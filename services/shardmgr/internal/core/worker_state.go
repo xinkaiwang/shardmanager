@@ -55,12 +55,15 @@ func NewWorkerStateFromJson(workerStateJson *smgjson.WorkerStateJson) *WorkerSta
 	return workerState
 }
 
-func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState) *smgjson.WorkerStateJson {
+func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, updateReason string) *smgjson.WorkerStateJson {
 	obj := &smgjson.WorkerStateJson{
-		WorkerId:    ws.WorkerId,
-		SessionId:   ws.SessionId,
-		WorkerState: ws.State,
-		Assignments: map[data.AssignmentId]*smgjson.AssignmentStateJson{},
+		WorkerId:         ws.WorkerId,
+		SessionId:        ws.SessionId,
+		WorkerState:      ws.State,
+		Assignments:      map[data.AssignmentId]*smgjson.AssignmentStateJson{},
+		LastUpdateAtMs:   kcommon.GetWallTimeMs(),
+		LastUpdateReason: updateReason,
+		RequestShutdown:  common.Int8FromBool(ws.ShutdownRequesting),
 	}
 	for assignmentId := range ws.Assignments {
 		assignState, ok := ss.AllAssignments[assignmentId]
@@ -105,54 +108,25 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 		if workerState == nil {
 			if workerEph == nil {
 				// nothing to do
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-					Log("syncEphStagingToWorkerState", "无需操作：worker eph和state都不存在")
 			} else {
 				// Worker Event: Eph node created, worker becomes online
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-					Log("syncEphStagingToWorkerState", "正在创建新的worker state")
 
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId))
 				workerState.updateWorkerByEph(ctx, workerEph)
 				ss.AllWorkers[workerFullId] = workerState
-				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss).SetUpdateReason("worker_create"))
-
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-					With("workerId", workerEph.WorkerId).
-					With("sessionId", workerEph.SessionId).
-					Log("syncEphStagingToWorkerState", "worker state创建完成")
 			}
 		} else {
 			if workerEph == nil {
 				// Worker Event: Eph node lost, worker becomes offline
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-					With("oldState", workerState.State).
-					Log("syncEphStagingToWorkerState", "worker eph丢失，更新worker state")
 
 				workerState.onEphNodeLost(ctx, ss)
-				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss).SetUpdateReason("worker_eph_lost"))
-
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-					With("newState", workerState.State).
-					Log("syncEphStagingToWorkerState", "worker state已更新为离线状态")
 			} else {
 				// Worker Event: Eph node updated
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-					Log("syncEphStagingToWorkerState", "更新worker state")
 
 				workerState.onEphNodeUpdate(ctx, ss, workerEph)
-				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss).SetUpdateReason("worker_eph_update"))
-
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-					With("state", workerState.State).
-					Log("syncEphStagingToWorkerState", "worker state已更新")
 			}
 		}
 	}
-
-	klogging.Info(ctx).With("processingCount", len(ss.EphDirty)).
-		With("totalWorkers", len(ss.AllWorkers)).
-		Log("syncEphStagingToWorkerState", "worker eph同步到worker state完成")
 
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
 }
@@ -187,8 +161,11 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
 		dirty.AddDirtyFlag("WorkerState")
 	case data.WS_Offline_graceful_period:
+		fallthrough
 	case data.WS_Offline_draining_candidate:
+		fallthrough
 	case data.WS_Offline_draining_hat:
+		fallthrough
 	case data.WS_Offline_draining_complete:
 		// this should never happen
 		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
@@ -196,40 +173,53 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 	case data.WS_Offline_dead:
 		// nothing to do
 	}
+	klogging.Info(ctx).With("workerId", ws.WorkerId).
+		With("dirty", dirty.String()).
+		Log("onEphNodeLostDone", "worker eph lost")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss).SetUpdateReason(reason))
+		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, reason))
 		ws.signalAll(reason)
 	}
 }
 
 // onEphNodeUpdate: must be called in runloop
 func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson) {
-	var dirty DirtyFlag
+	dirty := NewDirtyFlag()
 	switch ws.State {
 	case data.WS_Online_healthy:
+		fallthrough
 	case data.WS_Online_shutdown_req:
+		fallthrough
 	case data.WS_Online_shutdown_hat:
+		fallthrough
 	case data.WS_Online_shutdown_permit:
-		dirty.AddDirtyFlag(ws.updateWorkerByEph(ctx, workerEph)...)
+		dirty.AddDirtyFlags(ws.updateWorkerByEph(ctx, workerEph))
 	case data.WS_Offline_graceful_period:
+		fallthrough
 	case data.WS_Offline_draining_candidate:
+		fallthrough
 	case data.WS_Offline_draining_hat:
+		fallthrough
 	case data.WS_Offline_draining_complete:
+		fallthrough
 	case data.WS_Offline_dead:
 		// this should never happen
 		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
 			Log("onEphNodeUpdate", "worker eph already lost")
 	}
+	klogging.Info(ctx).With("workerId", ws.WorkerId).
+		With("dirty", dirty.String()).
+		Log("onEphNodeUpdateDone", "workerEph updated finished")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss).SetUpdateReason(reason))
+		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, reason))
 		ws.signalAll(reason)
 	}
 }
 
 func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {
-	var dirty DirtyFlag
+	dirty := NewDirtyFlag()
 	switch ws.State {
 	case data.WS_Online_healthy:
 		// nothing to do
@@ -258,16 +248,19 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 			needsDelete = true
 			dirty.AddDirtyFlag("WorkerState")
 		}
-		if dirty.IsDirty() {
-			ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss).SetUpdateReason(dirty.String()))
-		}
+	}
+	klogging.Info(ctx).With("workerId", ws.WorkerId).
+		With("dirty", dirty.String()).
+		Log("checkWorkerForTimeout", "worker timeout check finished")
+	if dirty.IsDirty() {
+		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))
 	}
 	return
 }
 
 // return true if dirty
-func (ws *WorkerState) updateWorkerByEph(ctx context.Context, workerEph *cougarjson.WorkerEphJson) DirtyFlag {
-	var dirty DirtyFlag
+func (ws *WorkerState) updateWorkerByEph(ctx context.Context, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
+	dirty := NewDirtyFlag()
 	// WorkerInfo
 	newWorkerInfo := smgjson.WorkerInfoFromWorkerEph(workerEph)
 	if !ws.WorkerInfo.Equals(&newWorkerInfo) {
@@ -307,16 +300,28 @@ func assignMapEquals(map1 map[data.AssignmentId]common.Unit, map2 map[data.Assig
 	return true
 }
 
-type DirtyFlag []string
-
-func (df DirtyFlag) AddDirtyFlag(flag ...string) DirtyFlag {
-	return append(df, flag...)
+type DirtyFlag struct {
+	flags []string
 }
 
-func (df DirtyFlag) IsDirty() bool {
-	return len(df) > 0
+func NewDirtyFlag() *DirtyFlag {
+	return &DirtyFlag{}
 }
 
-func (df DirtyFlag) String() string {
-	return strings.Join(df, ",")
+func (df *DirtyFlag) AddDirtyFlag(flag ...string) *DirtyFlag {
+	df.flags = append(df.flags, flag...)
+	return df
+}
+
+func (df *DirtyFlag) AddDirtyFlags(another *DirtyFlag) *DirtyFlag {
+	df.flags = append(df.flags, another.flags...)
+	return df
+}
+
+func (df *DirtyFlag) IsDirty() bool {
+	return len(df.flags) > 0
+}
+
+func (df *DirtyFlag) String() string {
+	return strings.Join(df.flags, ",")
 }

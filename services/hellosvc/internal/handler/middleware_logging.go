@@ -10,9 +10,6 @@ import (
 
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 确保在处理请求前设置 Content-Type
-		w.Header().Set("Content-Type", "application/json")
-
 		defer func() {
 			if err := recover(); err != nil {
 				// 记录错误信息

@@ -3,7 +3,6 @@ package smgjson
 import (
 	"encoding/json"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -21,6 +20,7 @@ type WorkerStateJson struct {
 
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`
+	RequestShutdown  int8   `json:"req_shutdown,omitempty"`
 }
 
 func NewWorkerStateJson(workerId data.WorkerId, sessionId data.SessionId) *WorkerStateJson {
@@ -29,12 +29,6 @@ func NewWorkerStateJson(workerId data.WorkerId, sessionId data.SessionId) *Worke
 		SessionId:   sessionId,
 		Assignments: make(map[data.AssignmentId]*AssignmentStateJson),
 	}
-}
-
-func (obj *WorkerStateJson) SetUpdateReason(reason string) *WorkerStateJson {
-	obj.LastUpdateAtMs = kcommon.GetWallTimeMs()
-	obj.LastUpdateReason = reason
-	return obj
 }
 
 func (obj *WorkerStateJson) ToJson() string {

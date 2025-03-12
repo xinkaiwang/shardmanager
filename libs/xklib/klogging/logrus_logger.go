@@ -182,6 +182,7 @@ func (logger *LogrusLogger) Log(entry *LogEntry, shouldLog bool) {
 	if !shouldLog {
 		return
 	}
+	// logrus fields
 	for _, item := range entry.Details {
 		fields[item.K] = item.V
 	}

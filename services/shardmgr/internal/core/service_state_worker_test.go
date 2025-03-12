@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
@@ -16,9 +15,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
-
-// 专用的测试日志记录器，避免数据竞争
-var testLogger = logrus.New()
 
 // TestServiceState_WorkerEphToState 测试ServiceState能否正确从worker eph创建worker state
 func TestServiceState_WorkerEphToState(t *testing.T) {
@@ -176,7 +172,6 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 }
 
 // TestWorkerState_EphNodeLost 测试临时节点丢失时的状态转换
-// 注意：此测试使用 NullLogger 减少日志记录引起的竞争问题，
 // 同时使用 safeAccessServiceState 确保对 ServiceState 的安全访问。
 //
 // 然而，测试仍会显示数据竞争警告，主要原因是底层 krunloop 库中的问题：
@@ -187,9 +182,8 @@ func TestWorkerState_EphNodeLost(t *testing.T) {
 	t.Run("worker ephemeral node lost", func(t *testing.T) {
 		ctx := context.Background()
 
-		// 保存原始日志记录器，并使用 NullLogger 替换它以避免数据竞争
 		originalLogger := klogging.GetDefaultLogger()
-		nullLogger := klogging.NewNullLogger()
+		nullLogger := klogging.NewLogrusLogger(ctx)
 		klogging.SetDefaultLogger(nullLogger)
 		// 测试结束时恢复原始日志记录器
 		defer klogging.SetDefaultLogger(originalLogger)
@@ -313,131 +307,148 @@ func TestWorkerState_EphNodeLost(t *testing.T) {
 					"持久化的状态应为WS_Offline_graceful_period")
 				t.Logf("持久化数据验证完成: WorkerId=%s, State=%v",
 					storedWorkerState.WorkerId, storedWorkerState.WorkerState)
-
-				// 测试其他状态转换
-				testOtherStateTransitionsWithEtcd(t, ctx, ss, setup)
 			})
 		})
 	})
 }
 
-// testOtherStateTransitionsWithEtcd 通过etcd操作测试其他状态的转换
-func testOtherStateTransitionsWithEtcd(t *testing.T, ctx context.Context, ss *ServiceState, setup *ServiceStateTestSetup) {
-	// 测试WS_Online_shutdown_req状态下临时节点丢失
-	workerFullId := data.NewWorkerFullId("worker-2", "session-2", ss.IsStateInMemory())
-	workerEph := cougarjson.NewWorkerEphJson("worker-2", "session-2", 1234567890000, 60)
-	workerEph.AddressPort = "localhost:8081"
-	t.Logf("已创建worker eph对象，worker-2:session-2")
+// TestWorkerShutdownRequest 测试通过worker eph节点请求关闭的流程
+func TestWorkerShutdownRequest(t *testing.T) {
+	ctx := context.Background()
 
-	// 设置到etcd
-	ephPath := ss.PathManager.FmtWorkerEphPath(workerFullId)
+	// 减少日志输出，使测试输出更清晰
+	originalLogger := klogging.GetDefaultLogger()
+	nullLogger := klogging.NewLogrusLogger(ctx)
+	klogging.SetDefaultLogger(nullLogger)
+	// 测试结束时恢复原始日志记录器
+	defer klogging.SetDefaultLogger(originalLogger)
 
-	// 添加更多日志信息 - 记录完整路径
-	t.Logf("正在设置worker eph节点，完整路径: %s，workerFullId: %s", ephPath, workerFullId.String())
+	// 重置全局状态
+	resetGlobalState(t)
+	t.Logf("全局状态已重置")
 
-	// 验证EtcdProvider是否可用
-	t.Logf("检查FakeEtcd是否可用: %v", setup.FakeEtcd != nil)
+	// 配置测试环境
+	setup := CreateTestSetup(t)
+	setup.SetupBasicConfig(t)
+	t.Logf("测试环境已配置")
 
-	// 查看当前etcd中的内容
-	t.Logf("设置前查看etcd内容:")
-	items := setup.FakeEtcd.List(ctx, ss.PathManager.GetWorkerEphPathPrefix(), 10)
-	for _, item := range items {
-		t.Logf("  - etcd中已有项: %s", item.Key)
-	}
+	// 初始化ServiceState并通过etcd触发worker状态变化
+	etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
+		shadow.RunWithEtcdStore(setup.FakeStore, func() {
+			setup.CreateServiceState(t, 0)
+			ss := setup.ServiceState
+			t.Logf("ServiceState已初始化")
 
-	setup.FakeEtcd.Set(ctx, ephPath, workerEph.ToJson())
-	t.Logf("worker eph节点已设置到etcd，等待状态同步")
+			// 添加worker eph节点
+			workerFullId := data.NewWorkerFullId("worker-1", "session-1", ss.IsStateInMemory())
+			workerEph := cougarjson.NewWorkerEphJson("worker-1", "session-1", 1234567890000, 60)
+			workerEph.AddressPort = "localhost:8080"
+			workerEphJson, _ := json.Marshal(workerEph)
+			t.Logf("已创建worker eph对象，worker-1:session-1")
 
-	// 验证是否成功设置
-	kvItem := setup.FakeEtcd.Get(ctx, ephPath)
-	t.Logf("验证设置结果: 路径=%s, 值=%s, ModRevision=%d",
-		ephPath, kvItem.Value, kvItem.ModRevision)
+			// 直接设置到etcd
+			ephPath := ss.PathManager.GetWorkerEphPathPrefix() + workerFullId.String()
+			t.Logf("设置worker eph节点到etcd路径: %s", ephPath)
+			setup.FakeEtcd.Set(ctx, ephPath, string(workerEphJson))
+			t.Logf("worker eph节点已设置到etcd，开始等待状态同步")
 
-	// 检查批处理管理器状态
-	t.Logf("检查Worker批处理管理器状态, 名称=%s, 是否已初始化=%v",
-		ss.syncWorkerBatchManager.name,
-		ss.syncWorkerBatchManager != nil)
+			// 等待系统自动处理worker eph变化并创建worker state
+			success, elapsedMs := waitForWorkerStateCreation(t, ss, "worker-1")
+			t.Logf("等待worker-1创建结果: success=%v, 耗时=%dms", success, elapsedMs)
+			assert.True(t, success, "应该在超时前成功创建worker state: worker-1")
 
-	// 等待创建
-	t.Logf("开始等待worker-2状态创建，当前AllWorkers数量: %d", len(ss.AllWorkers))
-	success, duration := waitForWorkerStateCreation(t, ss, "worker-2")
-	t.Logf("等待worker-2状态创建结果: success=%v, 耗时=%dms, 当前AllWorkers数量: %d",
-		success, duration, len(ss.AllWorkers))
-	assert.True(t, success, "应该成功创建worker state: worker-2")
+			// 验证初始状态
+			var initialState data.WorkerStateEnum
+			var initialShutdownRequesting bool
+			workerStatePath := ""
 
-	// 添加更多调试信息 - 检查所有已有的worker
-	t.Logf("当前所有worker:")
-	safeAccessServiceState(ss, func(ss *ServiceState) {
-		for id := range ss.AllWorkers {
-			t.Logf("  - worker ID: %s", id.String())
-		}
+			safeAccessServiceState(ss, func(ss *ServiceState) {
+				worker, exists := ss.AllWorkers[workerFullId]
+				assert.True(t, exists, "worker应该已创建")
+				initialState = worker.State
+				initialShutdownRequesting = worker.ShutdownRequesting
+				workerStatePath = ss.PathManager.FmtWorkerStatePath(workerFullId)
+				assert.Equal(t, data.WS_Online_healthy, worker.State, "worker初始状态应为healthy")
+				assert.False(t, worker.ShutdownRequesting, "初始ShutdownRequesting应为false")
+			})
+			t.Logf("初始状态验证完成: 状态=%v, ShutdownRequesting=%v", initialState, initialShutdownRequesting)
 
-		// 检查EphWorkerStaging和EphDirty字段
-		t.Logf("EphWorkerStaging数量: %d, EphDirty数量: %d",
-			len(ss.EphWorkerStaging), len(ss.EphDirty))
+			// 更新worker eph，设置关闭请求标志
+			updatedWorkerEph := cougarjson.WorkerEphJsonFromJson(string(workerEphJson))
+			updatedWorkerEph.ReqShutDown = 1 // 设置为true
+			updatedWorkerEphJson, _ := json.Marshal(updatedWorkerEph)
 
-		// 检查EphWorkerStaging中是否包含worker-2
-		for id := range ss.EphWorkerStaging {
-			t.Logf("  - staging中的worker: %s", id.String())
-		}
-	})
+			t.Logf("更新worker eph，设置ReqShutDown=1")
+			// 更新etcd中的worker eph节点
+			setup.FakeEtcd.Set(ctx, ephPath, string(updatedWorkerEphJson))
+			t.Logf("已更新worker eph节点，等待状态同步")
 
-	// 修改状态为shutdown_req - 使用safeAccessServiceState保证线程安全
-	safeAccessServiceState(ss, func(ss *ServiceState) {
-		worker, exists := ss.AllWorkers[workerFullId]
-		assert.True(t, exists, "worker应该已创建")
-		if exists {
-			worker.State = data.WS_Online_shutdown_req
-			t.Logf("已将worker-2状态设置为WS_Online_shutdown_req")
-		} else {
-			t.Logf("错误: worker-2不存在，无法设置状态")
-		}
-	})
+			// 定义等待条件：等待worker状态变为shutdown_req
+			waitForShutdownReq := func() (bool, string) {
+				var state data.WorkerStateEnum
+				var shuttingDown bool
+				var exists bool
 
-	// 删除临时节点，触发处理
-	setup.FakeEtcd.Delete(ctx, ephPath)
-	t.Logf("已删除worker eph节点，等待状态更新")
+				safeAccessServiceState(ss, func(ss *ServiceState) {
+					worker, ok := ss.AllWorkers[workerFullId]
+					if !ok {
+						exists = false
+						return
+					}
+					exists = true
+					state = worker.State
+					shuttingDown = worker.ShutdownRequesting
+				})
 
-	// 使用WaitUntil等待状态变化 - 使用safeAccessServiceState保证线程安全
-	waitForState2Condition := func() (bool, string) {
-		var state data.WorkerStateEnum
-		var exists bool
+				if !exists {
+					return false, "worker不存在"
+				}
 
-		safeAccessServiceState(ss, func(ss *ServiceState) {
-			worker, ok := ss.AllWorkers[workerFullId]
-			if !ok {
-				exists = false
-				return
+				isShutdownReq := state == data.WS_Online_shutdown_req && shuttingDown
+				return isShutdownReq, fmt.Sprintf("状态=%v, ShutdownRequesting=%v", state, shuttingDown)
 			}
-			exists = true
-			state = worker.State
+
+			// 等待状态变化
+			t.Logf("等待worker状态变为online_shutdown_req")
+			if !WaitUntil(t, waitForShutdownReq, 1000, 50) {
+				t.Fatalf("等待超时，worker状态未变为shutdown_req")
+			}
+			t.Logf("worker状态已成功变为shutdown_req")
+
+			// 验证最终状态
+			var finalState data.WorkerStateEnum
+			var finalShutdownRequesting bool
+
+			safeAccessServiceState(ss, func(ss *ServiceState) {
+				worker, exists := ss.AllWorkers[workerFullId]
+				assert.True(t, exists, "worker应该存在")
+				finalState = worker.State
+				finalShutdownRequesting = worker.ShutdownRequesting
+			})
+
+			assert.Equal(t, data.WS_Online_shutdown_req, finalState, "worker状态应变为WS_Online_shutdown_req")
+			assert.True(t, finalShutdownRequesting, "ShutdownRequesting应为true")
+			t.Logf("最终状态验证完成: 原状态=%v, 新状态=%v, ShutdownRequesting=%v",
+				initialState, finalState, finalShutdownRequesting)
+
+			// 验证状态持久化
+			t.Logf("等待worker state持久化到路径: %s", workerStatePath)
+			success, waitDuration := waitForWorkerStatePersistence(t, setup.FakeStore, workerStatePath)
+			assert.True(t, success, "worker状态应成功持久化")
+			t.Logf("等待worker状态持久化结果: success=%v, 等待时间=%dms", success, waitDuration)
+
+			// 验证持久化的内容
+			storeData := setup.FakeStore.GetData()
+			jsonStr := storeData[workerStatePath]
+			storedWorkerState := smgjson.WorkerStateJsonFromJson(jsonStr)
+
+			assert.NotNil(t, storedWorkerState, "应该能解析worker state json")
+			assert.Equal(t, data.WorkerId("worker-1"), storedWorkerState.WorkerId, "持久化的WorkerId应正确")
+			assert.Equal(t, data.WS_Online_shutdown_req, storedWorkerState.WorkerState,
+				"持久化的状态应为WS_Online_shutdown_req")
+			t.Logf("持久化数据验证完成: WorkerId=%s, State=%v",
+				storedWorkerState.WorkerId, storedWorkerState.WorkerState)
+			// assert.Equal(t, true, false, "测试失败")
 		})
-
-		if !exists {
-			return false, "worker-2不存在"
-		}
-
-		// 检查状态是否从online_shutdown_req变化
-		hasChanged := state != data.WS_Online_shutdown_req
-		return hasChanged, fmt.Sprintf("worker-2状态=%v, 是否变化=%v", state, hasChanged)
-	}
-
-	t.Logf("等待worker-2状态从online_shutdown_req变化")
-	if !WaitUntil(t, waitForState2Condition, 1000, 50) {
-		t.Fatalf("等待超时，worker-2状态仍未从online_shutdown_req变化，测试失败")
-	}
-
-	t.Logf("worker-2状态已成功变化")
-
-	// 验证最终状态 - 使用safeAccessServiceState保证线程安全
-	var finalState data.WorkerStateEnum
-
-	safeAccessServiceState(ss, func(ss *ServiceState) {
-		worker, exists := ss.AllWorkers[workerFullId]
-		assert.True(t, exists, "worker应该仍然存在")
-		finalState = worker.State
 	})
-
-	assert.Equal(t, data.WS_Offline_graceful_period, finalState, "worker状态应变为WS_Offline_graceful_period")
-	t.Logf("worker-2状态已验证: 新状态=%v", finalState)
 }

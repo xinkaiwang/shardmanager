@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 )
 
@@ -26,13 +27,18 @@ func NewBatchManager(parent krunloop.EventPoster[*ServiceState], maxDelayMs int,
 	}
 }
 
-func (bm *BatchManager) TrySchedule() {
+func (bm *BatchManager) TrySchedule(ctx context.Context) {
+	var needSchedule bool
 	bm.mutex.Lock()
-	defer bm.mutex.Unlock()
-	if bm.isInFlight {
+	if !bm.isInFlight {
+		bm.isInFlight = true
+		needSchedule = true
+	}
+	bm.mutex.Unlock()
+	klogging.Info(ctx).With("name", bm.name).With("needSchedule", needSchedule).Log("TrySchedule", "done")
+	if !needSchedule {
 		return
 	}
-	bm.isInFlight = true
 	kcommon.ScheduleRun(bm.maxDelayMs, func() {
 		bm.parent.PostEvent(NewBatchProcessEvent(bm))
 	})
