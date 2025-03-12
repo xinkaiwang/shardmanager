@@ -29,3 +29,4 @@ node_modules/
 bin/
 coverage.html
 coverage.out
+logs/

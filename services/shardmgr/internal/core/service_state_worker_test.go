@@ -140,17 +140,32 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 				t.Logf("worker-2最终状态: exists=%v, State=%v", exists2, worker2.State)
 			})
 
+			// 等待worker state被持久化到存储
+			worker1StatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
+			worker2StatePath := ss.PathManager.FmtWorkerStatePath(worker2FullId)
+
+			// 等待worker-1状态持久化
+			t.Logf("等待worker-1的state持久化到路径: %s", worker1StatePath)
+			success1, waitDuration1 := waitForWorkerStatePersistence(t, setup.FakeStore, worker1StatePath)
+			assert.True(t, success1, "worker-1状态应成功持久化")
+			t.Logf("等待worker-1状态持久化结果: success=%v, 等待时间=%dms", success1, waitDuration1)
+
+			// 等待worker-2状态持久化
+			t.Logf("等待worker-2的state持久化到路径: %s", worker2StatePath)
+			success2, waitDuration2 := waitForWorkerStatePersistence(t, setup.FakeStore, worker2StatePath)
+			assert.True(t, success2, "worker-2状态应成功持久化")
+			t.Logf("等待worker-2状态持久化结果: success=%v, 等待时间=%dms", success2, waitDuration2)
+
 			// 验证FakeEtcdStore内容
 			t.Log("验证FakeEtcdStore内容")
 			storeData := setup.FakeStore.GetData()
 			t.Logf("FakeEtcdStore数据条数: %d", len(storeData))
 
 			// 验证worker state是否被持久化
-			workerStatePrefix := ss.PathManager.GetWorkerStatePathPrefix()
 			workerStatePersisted := false
 
 			for k, v := range storeData {
-				if strings.HasPrefix(k, workerStatePrefix) {
+				if strings.HasPrefix(k, ss.PathManager.GetWorkerStatePathPrefix()) {
 					workerStatePersisted = true
 					t.Logf("  - worker state持久化: 键=%s, 值长度=%d", k, len(v))
 

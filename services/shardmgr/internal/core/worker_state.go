@@ -110,10 +110,10 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 				// nothing to do
 			} else {
 				// Worker Event: Eph node created, worker becomes online
-
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId))
 				workerState.updateWorkerByEph(ctx, workerEph)
 				ss.AllWorkers[workerFullId] = workerState
+				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss, "NewWorker"))
 			}
 		} else {
 			if workerEph == nil {

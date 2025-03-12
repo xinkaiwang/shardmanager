@@ -65,7 +65,7 @@ func (f *FakeEtcdProvider) Get(ctx context.Context, key string) EtcdKvItem {
 
 // Set 实现
 func (f *FakeEtcdProvider) Set(ctx context.Context, key, value string) {
-	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("FakeEtcdProviderSet", "设置键值")
+	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).With("value", value).Log("FakeEtcdProviderSet", "设置键值")
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
