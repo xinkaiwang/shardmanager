@@ -1,12 +1,14 @@
 package kcommon
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFakeTimeProvider(t *testing.T) {
+	ctx := context.Background()
 	time := NewFakeTimeProvider()
 
 	RunWithTimeProvider(time, func() {
@@ -19,15 +21,15 @@ func TestFakeTimeProvider(t *testing.T) {
 		})
 
 		assert.Equal(t, 0, res)
-		time.SimulateForward(11)
+		time.VirtualTimeForward(ctx, 11)
 		assert.Equal(t, 10, res)
-		time.SimulateForward(101)
+		time.VirtualTimeForward(ctx, 101)
 		assert.Equal(t, 100, res)
 
 		ScheduleRun(1000000, func() {
 			res = 1000000
 		})
-		time.SimulateForward(10000001)
+		time.VirtualTimeForward(ctx, 10000001)
 		assert.Equal(t, 1000000, res)
 	})
 }
