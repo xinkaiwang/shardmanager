@@ -30,6 +30,10 @@ func (provider *FakeTimeProvider) GetMonoTimeMs() int64 {
 	return provider.MonoTime
 }
 
+func (provider *FakeTimeProvider) SleepMs(ctx context.Context, ms int) {
+	provider.VirtualTimeForward(ctx, ms)
+}
+
 func (provider *FakeTimeProvider) ScheduleRun(delayMs int, fn func()) {
 	task := &FakeTimerTask{
 		TaskFunc:       fn,
@@ -76,6 +80,8 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 				return
 			} else {
 				currentVt = topTask.ScheduledForMs
+				provider.MonoTime = currentVt
+				provider.WallTime = currentVt
 				sleepAtThisTime = false
 				needRunTask = topTask
 				heap.Pop(provider.taskQueue)

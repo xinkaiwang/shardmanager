@@ -35,6 +35,9 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 7: start listening to worker eph changes
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
 
+	// step 8: start housekeeping
+	ss.PostEvent(NewHousekeep1sEvent())
+
 	// step 10: start runloop
 	// Note: The runloop is now initialized in NewServiceState
 }

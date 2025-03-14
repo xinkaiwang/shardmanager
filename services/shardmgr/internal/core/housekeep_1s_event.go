@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 )
 
 // Housekeep1sEvent implements krunloop.IEvent[*ServiceState] interface
@@ -14,6 +16,13 @@ func (te *Housekeep1sEvent) GetName() string {
 
 func (te *Housekeep1sEvent) Process(ctx context.Context, ss *ServiceState) {
 	ss.checkWorkerForTimeout(ctx)
+	kcommon.ScheduleRun(1000, func() {
+		ss.PostEvent(NewHousekeep1sEvent())
+	})
+}
+
+func NewHousekeep1sEvent() *Housekeep1sEvent {
+	return &Housekeep1sEvent{}
 }
 
 func (ss *ServiceState) checkWorkerForTimeout(ctx context.Context) {

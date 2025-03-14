@@ -1,6 +1,9 @@
 package kcommon
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 var (
 	currentTimeProvider TimeProvider = NewSystemTimeProvider()
@@ -24,6 +27,7 @@ type TimeProvider interface {
 	GetWallTimeMs() int64
 	GetMonoTimeMs() int64
 	ScheduleRun(delayMs int, fn func())
+	SleepMs(ctx context.Context, ms int)
 }
 
 func GetWallTimeMs() int64 {
@@ -36,6 +40,10 @@ func GetMonoTimeMs() int64 {
 
 func ScheduleRun(delayMs int, fn func()) {
 	currentTimeProvider.ScheduleRun(delayMs, fn)
+}
+
+func SleepMs(ctx context.Context, ms int) {
+	currentTimeProvider.SleepMs(ctx, ms)
 }
 
 // SystemTimeProvider: implements TimeProvider interface
@@ -61,6 +69,10 @@ func (provider *SystemTimeProvider) GetMonoTimeMs() int64 {
 
 func (provider *SystemTimeProvider) ScheduleRun(delayMs int, fn func()) {
 	time.AfterFunc(time.Duration(delayMs)*time.Millisecond, fn)
+}
+
+func (provider *SystemTimeProvider) SleepMs(ctx context.Context, ms int) {
+	time.Sleep(time.Duration(ms) * time.Millisecond)
 }
 
 func (provider *SystemTimeProvider) SetAsDefault() *SystemTimeProvider {
@@ -113,6 +125,11 @@ func (provider *MockTimeProvider) AddTimeMs(diffMs int64) *MockTimeProvider {
 	provider.MonoTime += diffMs
 	provider.WallTime += diffMs
 	return provider
+}
+
+func (provider *MockTimeProvider) SleepMs(ctx context.Context, ms int) {
+	provider.MonoTime += int64(ms)
+	provider.WallTime += int64(ms)
 }
 
 func (provider *MockTimeProvider) SetAsDefault() *MockTimeProvider {

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -164,19 +163,19 @@ func (e *serviceStateAccessEvent) Process(ctx context.Context, ss *ServiceState)
 
 // WaitUntil 等待条件满足或超时
 func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) bool {
-	maxDuration := time.Duration(maxWaitMs) * time.Millisecond
-	intervalDuration := time.Duration(intervalMs) * time.Millisecond
-	startTime := time.Now()
+	maxDuration := maxWaitMs
+	intervalDuration := intervalMs
+	startTime := kcommon.GetMonoTimeMs()
 
 	for i := 0; i < maxWaitMs/intervalMs; i++ {
 		success, debugInfo := condition()
 		if success {
-			elapsed := time.Since(startTime)
+			elapsed := kcommon.GetMonoTimeMs() - startTime
 			t.Logf("条件满足，耗时 %v", elapsed)
 			return true
 		}
 
-		elapsed := time.Since(startTime)
+		elapsed := int(kcommon.GetMonoTimeMs() - startTime)
 		if elapsed >= maxDuration {
 			t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
 			return false
@@ -184,7 +183,7 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 
 		t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
 			i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
-		time.Sleep(intervalDuration)
+		kcommon.SleepMs(context.Background(), intervalDuration)
 	}
 	return false
 }
