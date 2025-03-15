@@ -205,8 +205,8 @@ func WaitUntilShardCount(t *testing.T, ss *ServiceState, expectedShardCount int,
 }
 
 // verifyAllShards 验证所有分片的状态
-func verifyAllShardState(t *testing.T, ss *ServiceState, expectedStates map[data.ShardId]ExpectedShardState) bool {
-	allPassed := true
+func verifyAllShardState(t *testing.T, ss *ServiceState, expectedStates map[data.ShardId]ExpectedShardState) []string {
+	var allPassed []string
 	// 创建事件来安全访问 ServiceState
 	safeAccessServiceState(ss, func(ss *ServiceState) {
 		// 首先输出当前所有分片状态，方便调试
@@ -220,16 +220,14 @@ func verifyAllShardState(t *testing.T, ss *ServiceState, expectedStates map[data
 			shard, ok := ss.AllShards[shardId]
 			if !ok {
 				errorMsg := fmt.Sprintf("未找到分片 %s", shardId)
-				t.Error(errorMsg)
-				allPassed = false
+				allPassed = append(allPassed, errorMsg)
 				continue // 继续检查其他分片
 			}
 
 			if shard.LameDuck != expected.LameDuck {
 				errorMsg := fmt.Sprintf("分片 %s 的 lameDuck 状态不符合预期，期望: %v，实际: %v",
 					shardId, expected.LameDuck, shard.LameDuck)
-				t.Error(errorMsg)
-				allPassed = false
+				allPassed = append(allPassed, errorMsg)
 				continue // 继续检查其他分片
 			}
 
