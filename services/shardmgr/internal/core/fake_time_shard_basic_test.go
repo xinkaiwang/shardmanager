@@ -12,6 +12,124 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
+// FakeTime style test case
+// 1. **测试目的**：验证系统如何处理分片计划动态变更
+
+// 2. **初始设置**：
+//    - 创建空的分片计划
+//    - 设置基本服务配置
+
+// 3. **第一次变更**：
+//    - 添加三个分片：shard-a、shard-b、shard-c
+//    - 验证系统正确创建了这些分片
+
+// 4. **第二次变更**：
+//    - 保留shard-a，添加新分片shard-d
+//    - 移除shard-b和shard-c
+//    - 验证移除的分片被标记为lameDuck（准备下线）
+
+// 5. **验证点**：
+//    - 系统能正确添加和识别新分片
+//    - 移除的分片不会立即删除而是标记为lameDuck
+//    - 所有状态变更被正确持久化
+
+func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
+	ctx := context.Background()
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
+	t.Logf("设置测试环境...")
+
+	// 配置测试环境
+	setup := NewFakeTimeTestSetup(t)
+	setup.SetupBasicConfig(ctx)
+	t.Logf("测试环境已配置")
+
+	// 使用FakeTime环境运行测试
+	setup.RunWith(func() {
+		// 创建 ServiceState (shard plan为空)
+		ss := NewServiceState(ctx, "TestServiceState_DynamicShardPlanUpdate")
+		setup.ServiceState = ss
+		t.Logf("ServiceState已创建: %s", ss.Name)
+
+		// 初始阶段：验证服务状态的初始状态 - 应该没有分片
+		t.Logf("验证初始状态...")
+		{
+			var initialCount int
+			safeAccessServiceState(ss, func(ss *ServiceState) {
+				initialCount = len(ss.AllShards)
+			})
+			t.Logf("初始状态：%d个分片", initialCount)
+		}
+
+		// 第一次更新：添加三个分片 (shard-a, shard-b, shard-c)
+		t.Logf("第一次更新：添加三个分片 (shard-a, shard-b, shard-c)")
+		firstShardPlan := []string{"shard-a", "shard-b", "shard-c"}
+		setShardPlan(t, setup.FakeEtcd, ctx, firstShardPlan)
+
+		// 等待ServiceState加载分片状态
+		t.Logf("等待ServiceState加载分片状态...")
+		{
+			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
+			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
+		}
+
+		// 验证第一次更新后的分片状态
+		t.Logf("验证第一次更新后的分片状态...")
+		expectedStates1 := map[data.ShardId]ExpectedShardState{
+			"shard-a": {LameDuck: false},
+			"shard-b": {LameDuck: false},
+			"shard-c": {LameDuck: false},
+		}
+		errors1 := verifyAllShardState(t, ss, expectedStates1)
+		assert.Empty(t, errors1, "第一次更新后分片状态验证失败: %v", errors1)
+
+		// 确保状态已持久化
+		t.Logf("确保第一次更新的状态已持久化...")
+		setup.FakeTime.VirtualTimeForward(ctx, 500) // 前进500ms，确保持久化完成
+		errors1storage := verifyAllShardsInStorage(t, setup, expectedStates1)
+		assert.Empty(t, errors1storage, "第一次更新后分片状态持久化验证失败: %v", errors1storage)
+
+		// 第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c
+		t.Logf("第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c")
+		secondShardPlan := []string{"shard-a", "shard-d"}
+		setShardPlan(t, setup.FakeEtcd, ctx, secondShardPlan)
+
+		// 等待ServiceState更新分片状态（保留原有分片并标记删除）
+		// 预期会有4个分片：shard-a（保留）, shard-b（标记删除）, shard-c（标记删除）, shard-d（新增）
+		t.Logf("等待ServiceState更新分片状态...")
+		{
+			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 4, 1000, 100)
+			assert.True(t, waitSucc, "应该能在超时前更新所有分片, 耗时=%dms", elapsedMs)
+			t.Logf("分片更新完成, 耗时=%dms", elapsedMs)
+		}
+
+		// 验证第二次更新后的分片状态
+		t.Logf("验证第二次更新后的分片状态...")
+		expectedStates2 := map[data.ShardId]ExpectedShardState{
+			"shard-a": {LameDuck: false}, // 保留的分片
+			"shard-b": {LameDuck: true},  // 被移除的分片，标记为lameDuck
+			"shard-c": {LameDuck: true},  // 被移除的分片，标记为lameDuck
+			"shard-d": {LameDuck: false}, // 新增的分片
+		}
+		errors2 := verifyAllShardState(t, ss, expectedStates2)
+		assert.Empty(t, errors2, "第二次更新后分片状态验证失败: %v", errors2)
+
+		// 确保状态已持久化
+		t.Logf("确保第二次更新的状态已持久化...")
+		setup.FakeTime.VirtualTimeForward(ctx, 500) // 前进500ms，确保持久化完成
+		errors2storage := verifyAllShardsInStorage(t, setup, expectedStates2)
+		assert.Empty(t, errors2storage, "第二次更新后分片状态持久化验证失败: %v", errors2storage)
+
+		// 输出最终状态以供参考
+		safeAccessServiceState(ss, func(ss *ServiceState) {
+			t.Logf("最终状态：共有%d个分片", len(ss.AllShards))
+			for shardId, shard := range ss.AllShards {
+				t.Logf("  - 分片 %s: lameDuck=%v", shardId, shard.LameDuck)
+			}
+		})
+	})
+}
+
 // ### 1. 一致性验证（ConsistencyCheck）
 // **测试场景**：当初始分片状态与分片计划完全一致时的系统行为。
 // **具体步骤**：
@@ -51,6 +169,7 @@ func TestShardBasic_ConsistencyCheck(t *testing.T) {
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
 		}
+
 		expectedShardStates := map[data.ShardId]ExpectedShardState{
 			"shard-1": {LameDuck: false},
 			"shard-2": {LameDuck: false},

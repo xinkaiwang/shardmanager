@@ -1710,3 +1710,268 @@ ShardManager 中 worker 状态管理的关键流程如下：
    - 不能假设或模拟中间状态
 
 这条原则适用于所有测试场景，没有例外。即使测试难度增加，也必须模拟真实场景，否则测试将失去其价值和意义。
+
+## FakeTime 风格测试规范 [P1]
+
+FakeTime 风格测试是一种可控、确定性强的测试方法，通过模拟时间流逝和外部依赖，使复杂系统的行为可预测且快速验证。
+
+### 1. 核心概念
+
+FakeTime 测试的核心是控制时间，而不是依赖真实系统时钟，通过这种方式可以：
+- 加速测试执行（毫秒级模拟数小时的操作）
+- 确保测试结果的可重复性和确定性
+- 精确控制状态转换的时机
+- 避免使用 Sleep 等不稳定的等待机制
+
+### 2. 测试基础结构
+
+#### 2.1 测试环境设置
+
+```go
+// 创建测试环境
+setup := NewFakeTimeTestSetup(t)
+// 配置基本环境
+setup.SetupBasicConfig(ctx, WithOfflineGracePeriodSec(gracePeriodSec))
+// 获取FakeTime引用便于后续使用
+fakeTime := setup.FakeTime
+
+// 使用依赖注入运行测试函数
+setup.RunWith(func() {
+    // 测试代码
+})
+```
+
+#### 2.2 测试辅助结构
+
+```go
+type FakeTimeTestSetup struct {
+    ctx          context.Context
+    ServiceState *ServiceState      // 被测服务
+    FakeEtcd     *FakeEtcdProvider  // 模拟存储提供者
+    FakeStore    *FakeEtcdStore     // 模拟持久化存储
+    FakeTime     *FakeTimeProvider  // 模拟时间提供者
+}
+```
+
+### 3. 时间控制机制
+
+#### 3.1 时间推进
+
+```go
+// 推进虚拟时间（毫秒）
+fakeTime.VirtualTimeForward(ctx, 1000)  // 推进1秒
+
+// 等待特定状态出现，带超时
+waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, 
+    data.WS_Offline_graceful_period, 1000, 10)
+```
+
+#### 3.2 调度任务
+
+```go
+// 调度延时任务
+kcommon.ScheduleRun(100, func() {
+    // 在虚拟时间推进100ms后执行
+})
+```
+
+### 4. 状态验证技术
+
+#### 4.1 等待条件满足
+
+```go
+// 等待特定数量的分片加载
+waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
+
+// 等待任意条件满足
+waitSucc, elapsedMs := WaitUntil(t, func() (bool, string) {
+    results := verifyAllShardsInStorage(t, setup, expectedShardStates)
+    if len(results) > 0 {
+        return false, strings.Join(results, ",")
+    }
+    return true, ""
+}, 100, 10)
+```
+
+#### 4.2 安全访问内部状态
+
+```go
+// 安全访问ServiceState内部状态
+safeAccessServiceState(ss, func(ss *ServiceState) {
+    count = len(ss.AllShards)
+    // 执行验证逻辑
+})
+```
+
+### 5. 测试数据设置
+
+#### 5.1 初始状态设置
+
+```go
+// 设置分片计划
+shardPlan := []string{"shard-1", "shard-2", "shard-3"}
+setShardPlan(t, setup.FakeEtcd, ctx, shardPlan)
+
+// 创建工作节点
+workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, 
+    "worker-1", "session-1", "localhost:8080")
+```
+
+#### 5.2 模拟事件触发
+
+```go
+// 模拟节点临时失败（删除临时节点）
+setup.FakeEtcd.Delete(ctx, ephPath)
+
+// 更新分片计划触发状态变化
+newShardPlan := []string{"shard-1", "shard-3", "shard-4"}
+setShardPlan(t, setup.FakeEtcd, ctx, newShardPlan)
+```
+
+### 6. 常见测试模式
+
+#### 6.1 状态转换测试
+
+1. 设置初始状态
+2. 触发状态转换事件
+3. 等待特定状态出现
+4. 推进时间验证状态变化
+5. 验证最终状态
+
+#### 6.2 一致性验证测试
+
+1. 设置初始数据
+2. 加载服务组件
+3. 验证所有状态是否一致
+4. 验证持久化一致性
+
+#### 6.3 冲突解决测试
+
+1. 创建有冲突的初始状态
+2. 触发冲突解决机制
+3. 验证系统自动修复冲突
+4. 验证最终一致性
+
+### 7. 依赖注入机制
+
+```go
+// RunWith实现方式
+func (setup *FakeTimeTestSetup) RunWith(fn func()) {
+    etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
+        shadow.RunWithEtcdStore(setup.FakeStore, func() {
+            kcommon.RunWithTimeProvider(setup.FakeTime, func() {
+                fn()
+            })
+        })
+    })
+}
+```
+
+### 8. 最佳实践
+
+1. **隔离性原则**：每个测试应该独立，通过依赖注入确保状态不泄漏
+2. **确定性原则**：避免使用真实时间、随机数和其他不确定因素
+3. **等待机制**：使用`WaitUntil`系列函数等待条件满足，不使用固定等待时间
+4. **安全访问**：使用`safeAccessServiceState`访问内部状态而非直接访问
+5. **完整验证**：验证内存状态和持久化状态的一致性
+6. **时间控制**：使用虚拟时间推进，避免测试执行时间过长
+7. **详细日志**：记录关键步骤和状态变化，便于调试
+8. **清理资源**：测试结束时停止所有服务和资源
+
+### 9. 注意事项
+
+1. 在`safeAccessServiceState`回调中避免耗时操作，防止阻塞runloop
+2. 使用`RunWithXxx`模式而非直接设置全局provider，确保测试结束后状态恢复
+3. 设置合理的等待超时时间，过长会降低测试效率，过短可能导致误报
+4. 模拟时间推进时，确保推进足够的时间触发所有相关事件
+
+### 10. 典型测试案例解析
+
+#### TestWorkerGracePeriodExpiration_waitUntil（工作节点优雅期测试）
+
+```go
+func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
+    // 1. 设置测试环境
+    setup := NewFakeTimeTestSetup(t)
+    gracePeriodSec := int32(10)
+    setup.SetupBasicConfig(ctx, WithOfflineGracePeriodSec(gracePeriodSec))
+    fakeTime := setup.FakeTime
+
+    fn := func() {
+        // 2. 创建ServiceState
+        ss := NewServiceState(ctx, "TestWorkerGracePeriodExpiration_waitUntil")
+
+        // 3. 创建工作节点
+        workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, 
+            "worker-1", "session-1", "localhost:8080")
+        
+        // 4. 等待节点初始状态为健康
+        waitSucc, _ := WaitUntilWorkerState(t, ss, workerFullId, 
+            data.WS_Online_healthy, 1000, 10)
+        assert.True(t, waitSucc)
+
+        // 5. 模拟节点临时失败
+        setup.FakeEtcd.Delete(ctx, ephPath)
+        
+        // 6. 验证节点进入优雅期
+        waitSucc, _ = WaitUntilWorkerState(t, ss, workerFullId, 
+            data.WS_Offline_graceful_period, 1000, 10)
+        assert.True(t, waitSucc)
+
+        // 7. 推进时间，验证优雅期结束后状态变为离线
+        fakeTime.VirtualTimeForward(ctx, 10100)
+        waitSucc, _ = WaitUntilWorkerState(t, ss, workerFullId, 
+            data.WS_Offline_dead, 1000, 10)
+        assert.True(t, waitSucc)
+    }
+
+    // 使用依赖注入运行测试
+    setup.RunWith(fn)
+}
+```
+
+#### TestShardBasic_ConsistencyCheck（分片一致性测试）
+
+```go
+func TestShardBasic_ConsistencyCheck(t *testing.T) {
+    // 1. 设置测试环境
+    setup := NewFakeTimeTestSetup(t)
+    setup.SetupBasicConfig(ctx)
+
+    fn := func() {
+        // 2. 创建ServiceState
+        ss := NewServiceState(ctx, "TestShardBasic_ConsistencyCheck")
+        setup.ServiceState = ss
+
+        // 3. 设置分片计划
+        shardPlan := []string{"shard-1", "shard-2", "shard-3"}
+        setShardPlan(t, setup.FakeEtcd, ctx, shardPlan)
+
+        // 4. 等待分片加载
+        waitSucc, _ := WaitUntilShardCount(t, ss, 3, 1000, 100)
+        assert.True(t, waitSucc)
+
+        // 5. 验证分片状态
+        expectedShardStates := map[data.ShardId]ExpectedShardState{
+            "shard-1": {LameDuck: false},
+            "shard-2": {LameDuck: false},
+            "shard-3": {LameDuck: false},
+        }
+        allPassed := verifyAllShardState(t, ss, expectedShardStates)
+        assert.Equal(t, 0, len(allPassed))
+
+        // 6. 验证持久化状态
+        waitSucc, _ = WaitUntil(t, func() (bool, string) {
+            results := verifyAllShardsInStorage(t, setup, expectedShardStates)
+            return len(results) == 0, strings.Join(results, ",")
+        }, 100, 10)
+        assert.True(t, waitSucc)
+    }
+
+    // 使用依赖注入运行测试
+    setup.RunWith(fn)
+}
+```
+
+通过掌握FakeTime风格测试，我们可以高效地测试复杂的分布式系统，尤其是对时间敏感的状态转换逻辑，同时保持测试的快速执行和可重复性。
