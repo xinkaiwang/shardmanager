@@ -8,25 +8,23 @@ import (
 
 // UnboundedQueue implements an unbounded queue for events of type IEvent[T]
 type UnboundedQueue[T CriticalResource] struct {
-	input          chan IEvent[T] // Channel for receiving events
-	buffer         []IEvent[T]    // Internal buffer
-	output         chan IEvent[T] // Channel for sending events
-	closed         atomic.Bool    // Whether the queue is closed
-	size           atomic.Int64   // Current number of elements in the queue
-	closeInputOnce sync.Once      // Ensure input channel is closed only once
-	closeOnce      sync.Once      // Ensure output channel is closed only once
+	input     chan IEvent[T] // Channel for receiving events
+	buffer    []IEvent[T]    // Internal buffer
+	output    chan IEvent[T] // Channel for sending events
+	closed    atomic.Bool    // Whether the queue is closed
+	size      atomic.Int64   // Current number of elements in the queue
+	closeOnce sync.Once      // Ensure output channel is closed only once
 }
 
 // NewUnboundedQueue creates a new unbounded queue for events of type IEvent[T]
 func NewUnboundedQueue[T CriticalResource](ctx context.Context) *UnboundedQueue[T] {
 	q := &UnboundedQueue[T]{
-		input:          make(chan IEvent[T], 1), // Buffer of 1 to ensure Enqueue doesn't block
-		buffer:         make([]IEvent[T], 0),
-		output:         make(chan IEvent[T]),
-		closed:         atomic.Bool{},
-		size:           atomic.Int64{},
-		closeInputOnce: sync.Once{},
-		closeOnce:      sync.Once{},
+		input:     make(chan IEvent[T], 1), // Buffer of 1 to ensure Enqueue doesn't block
+		buffer:    make([]IEvent[T], 0),
+		output:    make(chan IEvent[T]),
+		closed:    atomic.Bool{},
+		size:      atomic.Int64{},
+		closeOnce: sync.Once{},
 	}
 	q.closed.Store(false)
 	q.size.Store(0)
@@ -72,9 +70,6 @@ func (q *UnboundedQueue[T]) process(ctx context.Context) {
 		case <-ctx.Done():
 			// Context canceled, exit immediately
 			q.closed.Store(true)
-			q.closeInputOnce.Do(func() {
-				close(q.input)
-			})
 			return
 		}
 	}
@@ -99,10 +94,5 @@ func (q *UnboundedQueue[T]) GetSize() int64 {
 
 // Close closes the queue
 func (q *UnboundedQueue[T]) Close() {
-	if !q.closed.CompareAndSwap(false, true) {
-		return
-	}
-	q.closeInputOnce.Do(func() {
-		close(q.input) // Close input channel
-	})
+	q.closed.Store(true)
 }
