@@ -5,8 +5,6 @@ import (
 	"context"
 	"sync"
 	"time"
-
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // FakeTimeProvider: implements TimeProvider interface
@@ -27,10 +25,14 @@ func NewFakeTimeProvider(currentTime int64) *FakeTimeProvider {
 }
 
 func (provider *FakeTimeProvider) GetWallTimeMs() int64 {
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
 	return provider.WallTime
 }
 
 func (provider *FakeTimeProvider) GetMonoTimeMs() int64 {
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
 	return provider.MonoTime
 }
 
@@ -64,10 +66,10 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 		needSleep := false
 		RunWithLock(&provider.mu, func() {
 			topTask := provider.taskQueue.Peek()
-			entry := klogging.Info(ctx).With("topTask", topTask).With("currentVt", currentVt).With("vtDeadline", vtDeadline).With("sleepCounter", sleepCounter).With("sleepAtThisTime", sleepAtThisTime)
-			defer func() {
-				entry.With("needSleep", needSleep).With("needRunTask", needRunTask).Log("SimulateForward", "topItem")
-			}()
+			// entry := klogging.Info(ctx).With("topTask", topTask).With("currentVt", currentVt).With("vtDeadline", vtDeadline).With("sleepCounter", sleepCounter).With("sleepAtThisTime", sleepAtThisTime)
+			// defer func() {
+			// 	entry.With("needSleep", needSleep).With("needRunTask", needRunTask).Log("SimulateForward", "topItem")
+			// }()
 			if topTask == nil {
 				needSleep = true
 				sleepCounter++
