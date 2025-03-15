@@ -11,6 +11,12 @@ import (
 )
 
 // TestWorkerGracePeriodExpiration 测试 worker 优雅期过期后的状态变化
+// 1. 工作节点处于正常"在线健康"状态
+// 2. 节点突然离线（临时节点被删除）
+// 3. 推进0.5秒，节点状态转变为"离线优雅期"（WS_Offline_graceful_period）
+// 4. 推进15秒（超过10秒优雅期），节点状态转为"排空完成"（WS_Offline_draining_complete）
+// 5. 推进25秒（超过20秒删除优雅期），节点状态变为"未知"（WS_Unknown），且被完全删除
+
 // 这个测试使用 FakeTimeProvider 来精确控制时间流逝，避免真实等待
 func TestWorkerGracePeriodExpiration(t *testing.T) {
 	ctx := context.Background()
@@ -102,6 +108,19 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)
 }
+
+// 这个测试与前一个测试验证相同的功能，但使用了不同的测试方法。它使用WaitUntilWorkerState函数主动等待特定状态的出现，而不是仅依赖于时间推进后的状态检查。这种方法更接近实际系统的行为模式，可以测试状态转换的时间特性和系统反应。
+// 主要区别是：
+// 1. TestWorkerGracePeriodExpiration使用直接的时间推进和状态检查
+// 2. TestWorkerGracePeriodExpiration_waitUntil使用WaitUntilWorkerState函数来等待状态变化
+
+// 1. 工作节点处于"未知"状态（WS_Unknown）
+// 2. 使用WaitUntilWorkerState等待节点状态变为"在线健康"（WS_Online_healthy）
+// 3. 节点突然离线（临时节点被删除）
+// 4. 使用WaitUntilWorkerState等待节点状态变为"离线优雅期"（WS_Offline_graceful_period）
+// 5. 推进0.5秒并验证状态仍为"离线优雅期"
+// 6. 使用WaitUntilWorkerState等待15秒直到节点状态变为"排空完成"（WS_Offline_draining_complete）
+// 7. 使用WaitUntilWorkerState等待30秒直到节点状态变为"未知"（WS_Unknown）并被删除
 
 func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 	ctx := context.Background()

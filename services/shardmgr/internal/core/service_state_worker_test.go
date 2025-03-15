@@ -16,6 +16,16 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
+// 1. 初始状态下ServiceState中没有工作节点（AllWorkers为空）
+// 2. 在etcd中创建第一个工作节点临时数据（worker-1:session-1）
+// 3. 等待并验证worker-1状态被正确创建为"在线健康"（WS_Online_healthy）
+// 4. 在etcd中创建第二个工作节点临时数据（worker-2:session-2）
+// 5. 等待并验证worker-2状态被正确创建为"在线健康"
+// 6. 验证ServiceState中现在有两个工作节点（AllWorkers长度为2）
+// 7. 确认两个工作节点状态都被正确持久化到存储中
+
+// 这个测试验证了ShardManager的核心功能之一：能够从etcd中的临时节点数据（WorkerEph）正确创建和同步工作节点状态（WorkerState）。这是工作节点注册和发现机制的基础，确保系统能够正确跟踪所有可用的工作节点。
+
 // TestServiceState_WorkerEphToState 测试ServiceState能否正确从worker eph创建worker state
 func TestServiceState_WorkerEphToState(t *testing.T) {
 	// 重置全局状态
@@ -74,6 +84,18 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 	})
 }
 
+// 这个测试验证了ShardManager的一个关键故障处理能力：当工作节点突然离线（临时节点丢失）时，系统能够正确检测并将节点标记为"离线优雅期"状态，而不是立即认为节点永久失效。这种设计允许节点在短暂网络中断后能够恢复，避免了频繁的任务重分配。
+
+// 1. 创建并初始化ServiceState
+// 2. 在etcd中创建并设置一个工作节点临时数据（worker-1:session-1）
+// 3. 确认工作节点初始状态为"在线健康"（WS_Online_healthy）
+// 4. 从etcd中删除工作节点临时节点，模拟节点离线
+// 5. 等待工作节点状态变为"离线优雅期"（WS_Offline_graceful_period）
+// 6. 验证最终状态正确，特别是：
+//    - 状态已变为WS_Offline_graceful_period
+//    - 优雅期开始时间已被正确设置（GracePeriodStartTimeMs > 0）
+// 7. 确认工作节点状态已正确持久化到存储中
+
 // TestWorkerState_EphNodeLost 测试临时节点丢失时的状态转换
 func TestWorkerState_EphNodeLost(t *testing.T) {
 	t.Run("worker ephemeral node lost", func(t *testing.T) {
@@ -113,7 +135,6 @@ func TestWorkerState_EphNodeLost(t *testing.T) {
 
 				// 等待worker状态变为离线状态
 				t.Logf("等待worker状态从online_healthy变为offline_graceful_period")
-				// waitForWorkerStateChange(t, ss, workerFullId, data.WS_Offline_graceful_period)
 				waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Offline_graceful_period, 1000, 50)
 				assert.True(t, waitSucc, "应该在超时前成功变为 offline_graceful_period elapsedMs=%d", elapsedMs)
 
@@ -133,6 +154,18 @@ func TestWorkerState_EphNodeLost(t *testing.T) {
 		})
 	})
 }
+
+// 这个测试验证了ShardManager的有序关闭机制：工作节点可以通过更新其临时节点数据来请求关闭，系统能够检测并适当地更新节点状态。这种机制允许工作节点在退出前进行优雅关闭，完成当前任务并避免新任务分配，实现平滑的服务降级。
+
+// 1. 创建并初始化ServiceState
+// 2. 在etcd中创建并设置一个工作节点临时数据（worker-1:session-1）
+// 3. 验证工作节点初始状态为"在线健康"（WS_Online_healthy）且ShutdownRequesting为false
+// 4. 更新etcd中的工作节点临时数据，将ReqShutDown设置为1（请求关闭）
+// 5. 等待工作节点状态变为"在线关闭请求"（WS_Online_shutdown_req）
+// 6. 验证最终状态正确：
+//    - 状态已变为WS_Online_shutdown_req
+//    - ShutdownRequesting标志已设置为true
+// 7. 确认工作节点状态已正确持久化到存储中
 
 // TestWorkerShutdownRequest 测试通过worker eph节点请求关闭的流程
 func TestWorkerShutdownRequest(t *testing.T) {
@@ -338,36 +371,6 @@ func getWorkerStateAndPath(t *testing.T, ss *ServiceState, workerFullId data.Wor
 
 	return workerState, workerStatePath
 }
-
-// // waitForWorkerStateChange 等待worker状态变为指定状态
-// func waitForWorkerStateChange(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum) {
-// 	waitForStateCondition := func() (bool, string) {
-// 		var state data.WorkerStateEnum
-// 		var exists bool
-
-// 		safeAccessServiceState(ss, func(ss *ServiceState) {
-// 			worker, ok := ss.AllWorkers[workerFullId]
-// 			if !ok {
-// 				exists = false
-// 				return
-// 			}
-// 			exists = true
-// 			state = worker.State
-// 		})
-
-// 		if !exists {
-// 			return false, "worker不存在"
-// 		}
-
-// 		// 检查状态是否变为期望状态
-// 		matched := state == expectedState
-// 		return matched, fmt.Sprintf("worker状态=%v, 是否匹配=%v", state, matched)
-// 	}
-
-// 	if !WaitUntil(t, waitForStateCondition, 1000, 50) {
-// 		t.Fatalf("等待超时，状态仍未变为 %v，测试失败", expectedState)
-// 	}
-// }
 
 // updateWorkerEphWithShutdownRequest 更新worker eph，设置关闭请求标志
 func updateWorkerEphWithShutdownRequest(t *testing.T, setup *ServiceStateTestSetup, ctx context.Context, ephPath string) {
