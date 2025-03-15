@@ -222,8 +222,8 @@ shard-3|{"migration_strategy":{"shard_move_type":"kill_before_start"}}`
 			items := fakeStore.List("/smg/shard_state/")
 			return len(items) >= 3, fmt.Sprintf("FakeEtcdStore中分片状态数量: %d，期望数量: %d", len(items), 3)
 		}
-		storeSuccess := WaitUntil(t, storeCondition, 1000, 20)
-		assert.True(t, storeSuccess, "应该能在超时前写入分片状态")
+		storeSuccess, elapsedMs := WaitUntil(t, storeCondition, 1000, 20)
+		assert.True(t, storeSuccess, "应该能在超时前写入分片状态, 耗时=%dms", elapsedMs)
 
 		// 检查FakeEtcdStore中的数据
 		t.Log("检查FakeEtcdStore中的数据")

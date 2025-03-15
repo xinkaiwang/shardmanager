@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -22,10 +24,11 @@ func resetGlobalState(_ *testing.T) {
 
 // FakeTimeTestSetup 包含服务状态测试所需的基本设置
 type FakeTimeTestSetup struct {
-	ctx       context.Context
-	FakeEtcd  *etcdprov.FakeEtcdProvider
-	FakeStore *shadow.FakeEtcdStore
-	FakeTime  *kcommon.FakeTimeProvider
+	ctx          context.Context
+	ServiceState *ServiceState
+	FakeEtcd     *etcdprov.FakeEtcdProvider
+	FakeStore    *shadow.FakeEtcdStore
+	FakeTime     *kcommon.FakeTimeProvider
 }
 
 // NewFakeTimeTestSetup 创建基本的测试环境
@@ -152,7 +155,8 @@ func ftCreateAndSetWorkerEph(t *testing.T, ss *ServiceState, setup *FakeTimeTest
 /******************************* WaitUntil *******************************/
 
 // WaitUntil 等待条件满足或超时
-func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) bool {
+func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
+	startMs := kcommon.GetMonoTimeMs()
 	maxDuration := maxWaitMs
 	intervalDuration := intervalMs
 	startTime := kcommon.GetMonoTimeMs()
@@ -162,28 +166,107 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 		if success {
 			elapsed := kcommon.GetMonoTimeMs() - startTime
 			t.Logf("条件满足，耗时 %v", elapsed)
-			return true
+			elapsedMs := kcommon.GetMonoTimeMs() - startMs
+			return true, elapsedMs
 		}
 
 		elapsed := int(kcommon.GetMonoTimeMs() - startTime)
 		if elapsed >= maxDuration {
 			t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
-			return false
+			elapsedMs := kcommon.GetMonoTimeMs() - startMs
+			return false, elapsedMs
 		}
 
 		t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
 			i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
 		kcommon.SleepMs(context.Background(), intervalDuration)
 	}
-	return false
+	elapsedMs := kcommon.GetMonoTimeMs() - startMs
+	return false, elapsedMs
 }
 
 func WaitUntilWorkerState(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum, maxWaitMs int, intervalMs int) (bool, int64) {
-	startMs := kcommon.GetMonoTimeMs()
-	ret := WaitUntil(t, func() (bool, string) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		state := safeGetWorkerStateEnum(ss, workerFullId)
 		return state == expectedState, string(state)
 	}, maxWaitMs, intervalMs)
-	elapsedMs := kcommon.GetMonoTimeMs() - startMs
 	return ret, elapsedMs
+}
+
+func WaitUntilShardCount(t *testing.T, ss *ServiceState, expectedShardCount int, maxWaitMs int, intervalMs int) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		var count int
+		safeAccessServiceState(ss, func(ss *ServiceState) {
+			count = len(ss.AllShards)
+		})
+		return count == expectedShardCount, strconv.Itoa(count)
+	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+// verifyAllShards 验证所有分片的状态
+func verifyAllShardState(t *testing.T, ss *ServiceState, expectedStates map[data.ShardId]ExpectedShardState) bool {
+	allPassed := true
+	// 创建事件来安全访问 ServiceState
+	safeAccessServiceState(ss, func(ss *ServiceState) {
+		// 首先输出当前所有分片状态，方便调试
+		t.Logf("当前存在 %d 个分片, 需要验证 %d 个", len(ss.AllShards), len(expectedStates))
+		for shardId, shard := range ss.AllShards {
+			t.Logf("    - 分片 %s 状态: lameDuck=%v", shardId, shard.LameDuck)
+		}
+
+		// 验证每个期望的分片
+		for shardId, expected := range expectedStates {
+			shard, ok := ss.AllShards[shardId]
+			if !ok {
+				errorMsg := fmt.Sprintf("未找到分片 %s", shardId)
+				t.Error(errorMsg)
+				allPassed = false
+				continue // 继续检查其他分片
+			}
+
+			if shard.LameDuck != expected.LameDuck {
+				errorMsg := fmt.Sprintf("分片 %s 的 lameDuck 状态不符合预期，期望: %v，实际: %v",
+					shardId, expected.LameDuck, shard.LameDuck)
+				t.Error(errorMsg)
+				allPassed = false
+				continue // 继续检查其他分片
+			}
+
+			t.Logf("分片 %s 状态验证通过: lameDuck=%v", shardId, shard.LameDuck)
+		}
+	})
+
+	// 返回验证结果
+	return allPassed
+}
+
+type ExpectedShardState struct {
+	LameDuck bool
+}
+
+func verifyAllShardsInStorage(t *testing.T, setup *FakeTimeTestSetup, expectedStates map[data.ShardId]ExpectedShardState) []string {
+	var result []string
+	for shardName, expected := range expectedStates {
+		shardId := data.ShardId(shardName)
+		shardStatePath := setup.ServiceState.PathManager.FmtShardStatePath(shardId)
+		val := setup.FakeStore.GetByKey(shardStatePath)
+		if val == "" {
+			result = append(result, fmt.Sprintf("分片状态未持久化, shard=%s", shardName))
+			continue
+		}
+
+		if val != "" {
+			shardState := smgjson.ShardStateJsonFromJson(val)
+			if shardState.ShardName != shardId {
+				result = append(result, fmt.Sprintf("分片状态持久化错误, shard=%s, shardState=%v", shardName, shardState))
+				continue
+			}
+			if shardState.LameDuck != smgjson.Bool2Int8(expected.LameDuck) {
+				result = append(result, fmt.Sprintf("分片状态持久化错误, shard=%s, shardState=%v", shardName, shardState))
+				continue
+			}
+		}
+	}
+	return result
 }

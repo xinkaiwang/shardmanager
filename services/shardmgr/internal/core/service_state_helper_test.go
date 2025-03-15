@@ -148,15 +148,13 @@ func (s *ServiceStateTestSetup) UpdateShardPlan(t *testing.T, shardNames []strin
 // waitForServiceShards 等待 ServiceState 中的分片数量达到预期
 // 返回是否成功和等待时间ms
 func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bool, int64) {
-	startTime := kcommon.GetMonoTimeMs()
-
 	// 添加一个同步通道，用于在 runloop 中安全地获取分片信息
 	type shardInfo struct {
 		count int
 		ids   []string
 	}
 
-	result := WaitUntil(t, func() (bool, string) {
+	result, elapsedMs := WaitUntil(t, func() (bool, string) {
 		// 使用 safeAccessServiceState 在 runloop 中安全地访问 ServiceState
 		info := make(chan shardInfo, 1)
 		safeAccessServiceState(ss, func(ss *ServiceState) {
@@ -181,14 +179,12 @@ func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bo
 		return false, fmt.Sprintf("当前分片数量: %d, 分片列表: %v", shardData.count, shardData.ids)
 	}, 2000, 20)
 
-	waitDuration := kcommon.GetMonoTimeMs() - startTime
-	t.Logf("waitForServiceShards 总等待时间: %v，结果: %v", waitDuration, result)
-	return result, waitDuration
+	t.Logf("waitForServiceShards 总等待时间: %v，结果: %v", elapsedMs, result)
+	return result, elapsedMs
 }
 
 func waitForWorkerCounts(t *testing.T, ss *ServiceState, expectedCount int) (bool, int64) { // 返回是否成功和等待时间ms
-	startTime := kcommon.GetMonoTimeMs()
-	result := WaitUntil(t, func() (bool, string) {
+	result, elapsedMs := WaitUntil(t, func() (bool, string) {
 		if len(ss.AllWorkers) >= expectedCount {
 			t.Logf("ServiceState 中的 Worker 数量已达到预期：%d", len(ss.AllWorkers))
 			return true, ""
@@ -200,9 +196,8 @@ func waitForWorkerCounts(t *testing.T, ss *ServiceState, expectedCount int) (boo
 		return false, fmt.Sprintf("当前 Worker 数量: %d, Worker 列表: %v", len(ss.AllWorkers), workerIds)
 	}, 2000, 20)
 
-	waitDuration := kcommon.GetMonoTimeMs() - startTime
-	t.Logf("waitForWorkerCounts 总等待时间: %v，结果: %v", waitDuration, result)
-	return result, waitDuration
+	t.Logf("waitForWorkerCounts 总等待时间: %v，结果: %v", elapsedMs, result)
+	return result, elapsedMs
 }
 
 // serviceStateReadEvent 用于安全读取 ServiceState
@@ -287,18 +282,6 @@ func setupBasicConfig(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx con
 	fakeEtcd.Set(ctx, "/smg/config/service_config.json", serviceConfig.ToJson())
 }
 
-// setShardPlan 设置分片计划
-func setShardPlan(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context, shardNames []string) {
-	shardPlanStr := ""
-	for i, name := range shardNames {
-		if i > 0 {
-			shardPlanStr += "\n"
-		}
-		shardPlanStr += name
-	}
-	fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
-}
-
 // createPreExistingShards 创建预先存在的分片状态
 func createPreExistingShards(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, ctx context.Context, shardStates map[string]bool) {
 	pm := config.NewPathManager()
@@ -329,7 +312,6 @@ func createPreExistingShards(t *testing.T, fakeEtcd *etcdprov.FakeEtcdProvider, 
 func waitForWorkerStateCreation(t *testing.T, ss *ServiceState, workerId string) (bool, int64) {
 	t.Helper()
 
-	startMs := kcommon.GetMonoTimeMs()
 	fn := func() (bool, string) {
 		// 使用 safeAccessServiceState 安全访问 ServiceState
 		var workerIds []string
@@ -357,15 +339,13 @@ func waitForWorkerStateCreation(t *testing.T, ss *ServiceState, workerId string)
 		return exists, debugInfo
 	}
 	// 使用已有的WaitUntil函数实现等待
-	succ := WaitUntil(t, fn, 1000, 20)
-	return succ, kcommon.GetMonoTimeMs() - startMs
+	return WaitUntil(t, fn, 1000, 20)
 }
 
 // waitForWorkerStatePersistence 等待特定路径的worker状态被持久化到存储中
 func waitForWorkerStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, path string) (bool, int64) {
 	t.Helper()
 
-	startMs := kcommon.GetMonoTimeMs()
 	fn := func() (bool, string) {
 		// 获取存储数据
 		storeData := store.GetData()
@@ -384,6 +364,5 @@ func waitForWorkerStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, pa
 	}
 
 	// 使用已有的WaitUntil函数实现等待，最多等待1秒，每50ms检查一次
-	succ := WaitUntil(t, fn, 1000, 50)
-	return succ, kcommon.GetMonoTimeMs() - startMs
+	return WaitUntil(t, fn, 1000, 50)
 }
