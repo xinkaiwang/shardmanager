@@ -250,19 +250,32 @@ func (f *FakeEtcdProvider) removeWatcher(prefix string, ch chan EtcdKvItem) {
 // 辅助方法：发送历史事件
 func (f *FakeEtcdProvider) sendHistoricalEvents(ctx context.Context, prefix string, revision EtcdRevision, ch chan EtcdKvItem) {
 	f.mu.RLock()
-	defer f.mu.RUnlock()
 
+	// 1. 收集所有符合条件的历史事件
+	var events []EtcdKvItem
 	for k, v := range f.data {
 		if strings.HasPrefix(k, prefix) && v.ModRevision >= revision {
-			select {
-			case <-ctx.Done():
-				return
-			case ch <- EtcdKvItem{
+			events = append(events, EtcdKvItem{
 				Key:         k,
 				Value:       v.Value,
 				ModRevision: v.ModRevision,
-			}:
-			}
+			})
+		}
+	}
+
+	f.mu.RUnlock() // 尽快释放读锁，避免长时间持有锁
+
+	// 2. 按照 ModRevision 排序事件
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].ModRevision < events[j].ModRevision
+	})
+
+	// 3. 按顺序发送排序后的事件
+	for _, event := range events {
+		select {
+		case <-ctx.Done():
+			return
+		case ch <- event:
 		}
 	}
 }
