@@ -39,11 +39,11 @@ type RunLoop[T CriticalResource] struct {
 	resource         T
 	queue            *UnboundedQueue[T]
 	currentEventName atomic.Value // 使用原子操作保护事件名
-	sampler          *RunloopSampler
-	mu               sync.Mutex // 保护 ctx 和 cancel
-	ctx              context.Context
-	cancel           context.CancelFunc
-	exited           chan struct{}
+	// sampler          *RunloopSampler
+	mu     sync.Mutex // 保护 ctx 和 cancel
+	ctx    context.Context
+	cancel context.CancelFunc
+	exited chan struct{}
 }
 
 // NewRunLoop creates a new RunLoop for the given resource.
@@ -55,13 +55,13 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 		queue:    NewUnboundedQueue[T](ctx),
 		exited:   make(chan struct{}), // 初始化 exited 通道
 	}
-	rl.sampler = NewRunloopSampler(ctx, func() string {
-		val := rl.currentEventName.Load()
-		if val == nil {
-			return ""
-		}
-		return val.(string)
-	}, name)
+	// rl.sampler = NewRunloopSampler(ctx, func() string {
+	// 	val := rl.currentEventName.Load()
+	// 	if val == nil {
+	// 		return ""
+	// 	}
+	// 	return val.(string)
+	// }, name)
 	return rl
 }
 

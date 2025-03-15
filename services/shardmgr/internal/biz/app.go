@@ -14,7 +14,7 @@ type App struct {
 }
 
 func NewApp(ctx context.Context) *App {
-	ss := core.NewServiceState(ctx)
+	ss := core.NewServiceState(ctx, "app")
 	app := &App{
 		ss: ss,
 	}

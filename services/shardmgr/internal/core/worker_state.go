@@ -219,6 +219,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 }
 
 func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {
+	currentState := ws.State
 	dirty := NewDirtyFlag()
 	switch ws.State {
 	case data.WS_Online_healthy:
@@ -230,7 +231,7 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 	case data.WS_Online_shutdown_permit:
 		// nothing to do
 	case data.WS_Offline_graceful_period:
-		if ws.GracePeriodStartTimeMs+int64(ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec)*1000 < kcommon.GetWallTimeMs() { // not expired yet
+		if kcommon.GetWallTimeMs() < ws.GracePeriodStartTimeMs+int64(ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec)*1000 { // not expired yet
 			break
 		}
 		// Worker Event: Grace period expired, worker becomes offline
@@ -258,7 +259,7 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 		dirty.AddDirtyFlag("WorkerState")
 		fallthrough
 	case data.WS_Offline_draining_complete:
-		if ws.GracePeriodStartTimeMs+20*1000 < kcommon.GetWallTimeMs() { // graceful for 20 seconds, then clean it up
+		if kcommon.GetWallTimeMs() < ws.GracePeriodStartTimeMs+20*1000 { // graceful for 20 seconds, then clean it up
 			break
 		}
 		// Worker Event: Grace period expired, worker becomes offline
@@ -268,6 +269,8 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 	}
 	klogging.Info(ctx).With("workerId", ws.WorkerId).
 		With("dirty", dirty.String()).
+		With("currentState", currentState).
+		With("newState", ws.State).
 		Log("checkWorkerForTimeout", "worker timeout check finished")
 	if dirty.IsDirty() {
 		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))

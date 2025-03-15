@@ -21,6 +21,7 @@ type ServiceStateTestSetup struct {
 	Context       context.Context
 	FakeEtcd      *etcdprov.FakeEtcdProvider
 	FakeStore     *shadow.FakeEtcdStore
+	FakeTime      *kcommon.FakeTimeProvider
 	ServiceState  *ServiceState
 	InitialShards map[data.ShardId]bool // 初始分片及其 LameDuck 状态 (true = lameDuck)
 	TestLock      sync.RWMutex          // 用于测试助手的锁
@@ -32,15 +33,30 @@ func CreateTestSetup(t *testing.T) *ServiceStateTestSetup {
 
 	fakeEtcd := etcdprov.NewFakeEtcdProvider()
 	fakeStore := shadow.NewFakeEtcdStore()
+	// 创建并配置 FakeTimeProvider
+	fakeTime := kcommon.NewFakeTimeProvider(1234500000000)
 
 	ctx := context.Background()
 
-	return &ServiceStateTestSetup{
+	setup := &ServiceStateTestSetup{
 		Context:       ctx,
 		FakeEtcd:      fakeEtcd,
 		FakeStore:     fakeStore,
+		FakeTime:      fakeTime,
 		InitialShards: make(map[data.ShardId]bool),
 	}
+
+	return setup
+}
+
+func (setup *ServiceStateTestSetup) RunWith(fn func()) {
+	etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
+		shadow.RunWithEtcdStore(setup.FakeStore, func() {
+			kcommon.RunWithTimeProvider(setup.FakeTime, func() {
+				fn()
+			})
+		})
+	})
 }
 
 // SetupBasicConfig 设置基本配置
@@ -97,7 +113,7 @@ func (s *ServiceStateTestSetup) CreatePreExistingShards(t *testing.T, shardState
 
 // CreateServiceState 创建 ServiceState 并等待分片加载完成
 func (s *ServiceStateTestSetup) CreateServiceState(t *testing.T, expectedShardCount int) {
-	s.ServiceState = NewServiceState(s.Context)
+	s.ServiceState = NewServiceState(s.Context, "ServiceStateTest")
 	success, waitDuration := waitForServiceShards(t, s.ServiceState, expectedShardCount)
 	assert.True(t, success, "应该能在超时前加载分片状态")
 	t.Logf("加载分片状态等待时间: %v", waitDuration)
@@ -129,36 +145,28 @@ func (s *ServiceStateTestSetup) UpdateShardPlan(t *testing.T, shardNames []strin
 	t.Logf("更新分片等待时间: %v", waitDuration)
 }
 
-// 安全地访问 ServiceState 内部状态（同步方式）
-func safeAccessServiceState(ss *ServiceState, fn func(*ServiceState)) {
-	// 创建同步通道
-	completed := make(chan struct{})
-
-	// 创建一个事件并加入队列
-	ss.PostEvent(&serviceStateAccessEvent{
-		callback: fn,
-		done:     completed,
+func safeGetWorkerStateEnum(ss *ServiceState, workerFullId data.WorkerFullId) data.WorkerStateEnum {
+	var state data.WorkerStateEnum
+	safeAccessWorkerById(ss, workerFullId, func(worker *WorkerState) {
+		if worker == nil {
+			state = data.WS_Unknown
+			return
+		}
+		state = worker.State
 	})
+	return state
+}
 
-	// 等待事件处理完成
+func safeAccessWorkerById(ss *ServiceState, workerFullId data.WorkerFullId, fn func(*WorkerState)) {
+	completed := make(chan struct{})
+	ss.PostEvent(&serviceStateAccessEvent{
+		callback: func(ss *ServiceState) {
+			worker := ss.AllWorkers[workerFullId]
+			fn(worker)
+			close(completed)
+		},
+	})
 	<-completed
-}
-
-// serviceStateAccessEvent 是一个用于访问 ServiceState 的事件
-type serviceStateAccessEvent struct {
-	callback func(*ServiceState)
-	done     chan struct{}
-}
-
-// GetName 返回事件名称
-func (e *serviceStateAccessEvent) GetName() string {
-	return "ServiceStateAccess"
-}
-
-// Process 实现 IEvent 接口
-func (e *serviceStateAccessEvent) Process(ctx context.Context, ss *ServiceState) {
-	e.callback(ss)
-	close(e.done)
 }
 
 // WaitUntil 等待条件满足或超时

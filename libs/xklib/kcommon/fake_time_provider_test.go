@@ -9,7 +9,7 @@ import (
 
 func TestFakeTimeProvider(t *testing.T) {
 	ctx := context.Background()
-	time := NewFakeTimeProvider()
+	time := NewFakeTimeProvider(0)
 
 	RunWithTimeProvider(time, func() {
 		res := 0

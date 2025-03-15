@@ -9,9 +9,7 @@ import (
 
 func TestPilotNodeJsonMarshal(t *testing.T) {
 	// 使用 FakeTimeProvider 控制时间
-	fakeTime := kcommon.NewFakeTimeProvider()
-	fakeTime.WallTime = 1234567890000
-	fakeTime.MonoTime = 1234567890000
+	fakeTime := kcommon.NewFakeTimeProvider(1234567890000)
 
 	kcommon.RunWithTimeProvider(fakeTime, func() {
 		tests := []struct {
@@ -59,9 +57,7 @@ func TestPilotNodeJsonMarshal(t *testing.T) {
 
 func TestPilotNodeJsonUnmarshal(t *testing.T) {
 	// 使用 FakeTimeProvider 控制时间
-	fakeTime := kcommon.NewFakeTimeProvider()
-	fakeTime.WallTime = 1234567890000
-	fakeTime.MonoTime = 1234567890000
+	fakeTime := kcommon.NewFakeTimeProvider(1234567890000)
 
 	kcommon.RunWithTimeProvider(fakeTime, func() {
 		tests := []struct {
@@ -204,9 +200,7 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 
 func TestNewPilotNodeJson(t *testing.T) {
 	// 使用 FakeTimeProvider 控制时间
-	fakeTime := kcommon.NewFakeTimeProvider()
-	fakeTime.WallTime = 1234567890000
-	fakeTime.MonoTime = 1234567890000
+	fakeTime := kcommon.NewFakeTimeProvider(1234567890000)
 
 	kcommon.RunWithTimeProvider(fakeTime, func() {
 		workerId := "pilot-worker-75fffc88f9-fkbcm"

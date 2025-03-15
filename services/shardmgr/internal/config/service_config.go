@@ -56,6 +56,7 @@ type SystemLimitConfig struct {
 func ServiceConfigJsonToServiceConfig(si *smgjson.ServiceConfigJson) *ServiceConfig {
 	return &ServiceConfig{
 		ShardConfig:  ShardConfigJsonToConfig(si.ShardConfig),
+		WorkerConfig: WorkerConfigJsonToConfig(si.WorkerConfig),
 		SystemLimit:  SystemLimitConfigJsonToConfig(si.SystemLimit),
 		CostFuncCfg:  CostFuncConfigJsonToConfig(si.CostFuncCfg),
 		SolverConfig: SolverConfigJsonToConfig(si.SolverConfig),
@@ -120,8 +121,8 @@ func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimi
 	if sc.MaxAssignmentCountLimit != nil {
 		cfg.MaxAssignmentCountLimit = *sc.MaxAssignmentCountLimit
 	}
-	if sc.MaxHatCountCount != nil {
-		cfg.MaxHatCountLimit = *sc.MaxHatCountCount
+	if sc.MaxHatCountLimit != nil {
+		cfg.MaxHatCountLimit = *sc.MaxHatCountLimit
 	}
 	return cfg
 }

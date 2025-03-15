@@ -49,6 +49,7 @@ func CreateTestServiceConfig() *ServiceConfigJson {
 			MaxShardsCountLimit:     NewInt32Pointer(1000),
 			MaxReplicaCountLimit:    NewInt32Pointer(1000),
 			MaxAssignmentCountLimit: NewInt32Pointer(1000),
+			MaxHatCountLimit:        NewInt32Pointer(10),
 		},
 		CostFuncCfg: &CostFuncConfigJson{
 			ShardCountCostEnable: NewBoolPointer(true),

@@ -15,15 +15,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
-// 确保全局状态在每个测试之前被正确重置
-func resetGlobalState(t *testing.T) {
-	if t != nil {
-		t.Log("重置全局状态：EtcdStore 和 EtcdProvider")
-	}
-	shadow.ResetEtcdStore()
-	etcdprov.ResetEtcdProvider()
-}
-
 // TestMain 用于设置和清理测试环境
 func TestMain(m *testing.M) {
 	// 在所有测试开始前重置全局状态
@@ -59,7 +50,7 @@ func TestServiceState_Basic(t *testing.T) {
 	// 使用 RunWithEtcdProvider 运行测试
 	etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx)
+		ss := NewServiceState(ctx, "TestServiceState_Basic")
 
 		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
 		// defer ss.StopAndWaitForExit(ctx)
@@ -113,7 +104,7 @@ shard-3|{"move_type":"kill_before_start"}`
 	// 使用 RunWithEtcdProvider 运行测试
 	etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx)
+		ss := NewServiceState(ctx, "TestServiceState_ShardManagement")
 
 		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
 		// defer ss.StopAndWaitForExit(ctx)
@@ -194,7 +185,7 @@ shard-3|{"migration_strategy":{"shard_move_type":"kill_before_start"}}`
 
 		// 2. 创建ServiceState
 		t.Log("创建ServiceState")
-		ss := NewServiceState(ctx)
+		ss := NewServiceState(ctx, "TestServiceState_ShadowStateWrite")
 
 		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
 		// defer ss.StopAndWaitForExit(ctx)
@@ -281,7 +272,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", "")
 
 		// 2. 创建ServiceState
-		ss := NewServiceState(ctx)
+		ss := NewServiceState(ctx, "TestServiceState_DynamicShardPlanUpdate")
 
 		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
 		// defer ss.StopAndWaitForExit(ctx)
@@ -416,7 +407,7 @@ shard-2`
 		shadow.RunWithEtcdStore(fakeStore, func() {
 			// 2. 创建 ServiceState (在分片状态已存在的情况下启动)
 			t.Log("创建 ServiceState，应该加载预先存在的分片状态")
-			ss := NewServiceState(ctx)
+			ss := NewServiceState(ctx, "TestServiceState_PreexistingShardState")
 
 			// 3. 等待分片状态被加载
 			success, waitDuration := waitForServiceShards(t, ss, 3)

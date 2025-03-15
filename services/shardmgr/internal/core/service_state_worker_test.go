@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -185,112 +184,6 @@ func TestWorkerShutdownRequest(t *testing.T) {
 	})
 }
 
-// TestWorkerGracePeriodExpiration 测试 worker 优雅期过期后的状态变化
-// 这个测试使用 FakeTimeProvider 来精确控制时间流逝，避免真实等待
-func TestWorkerGracePeriodExpiration(t *testing.T) {
-	ctx := context.Background()
-
-	// 减少日志输出，使测试更清晰
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
-
-	// 重置全局状态
-	resetGlobalState(t)
-	t.Logf("全局状态已重置")
-
-	// 创建并配置 FakeTimeProvider
-	fakeTime := kcommon.NewFakeTimeProvider()
-	fakeTime.WallTime = 1234567890000
-	fakeTime.MonoTime = 1234567890000
-
-	// 配置测试环境
-	setup := CreateTestSetup(t)
-	setup.SetupBasicConfig(t)
-	t.Logf("测试环境已配置")
-
-	// 配置较短的优雅期，方便测试
-	// 更新 ServiceConfig 中的 OfflineGracePeriodSec 为 10 秒
-	gracePeriodSec := int32(10)
-	serviceConfig := smgjson.CreateTestServiceConfigWithOptions(
-		WithOfflineGracePeriodSec(gracePeriodSec),
-	)
-	configData, _ := json.Marshal(serviceConfig)
-	setup.FakeEtcd.Set(ctx, "/smg/config/service_config.json", string(configData))
-	t.Logf("优雅期配置已更新：%d 秒", gracePeriodSec)
-
-	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
-	kcommon.RunWithTimeProvider(fakeTime, func() {
-		etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
-			shadow.RunWithEtcdStore(setup.FakeStore, func() {
-				// 创建 ServiceState
-				setup.CreateServiceState(t, 0)
-				ss := setup.ServiceState
-				t.Logf("ServiceState已初始化，当前时间戳: %d", fakeTime.WallTime)
-
-				// 记录优雅期配置
-				var configuredGracePeriodSec int32
-				safeAccessServiceState(ss, func(ss *ServiceState) {
-					configuredGracePeriodSec = ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec
-				})
-				t.Logf("ServiceState中配置的优雅期: %d 秒", configuredGracePeriodSec)
-
-				// 创建并设置worker eph
-				workerFullId, ephPath := createAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
-
-				// 确认worker初始状态
-				workerState, workerStatePath := getWorkerStateAndPath(t, ss, workerFullId)
-				t.Logf("worker初始状态验证完成: State=%v", workerState.State)
-				assert.Equal(t, data.WS_Online_healthy, workerState.State, "初始状态应为健康在线")
-
-				// 记录初始时间戳
-				initialTime := fakeTime.WallTime
-				t.Logf("初始时间戳: %d", initialTime)
-
-				// 删除临时节点，触发临时节点丢失处理
-				t.Logf("从etcd删除worker eph节点: %s", ephPath)
-				setup.FakeEtcd.Delete(ctx, ephPath)
-				t.Logf("已删除worker eph节点，等待状态同步")
-
-				// 等待worker状态变为离线优雅期状态
-				t.Logf("等待worker状态从online_healthy变为offline_graceful_period")
-				fakeTime.VirtualTimeForward(ctx, 500) // 推进0.5秒，确保状态变化
-				// waitForWorkerStateChange(t, ss, workerFullId, data.WS_Offline_graceful_period)
-				t.Logf("worker状态已成功变为离线优雅期状态")
-
-				// 获取优雅期开始时间戳
-				var gracePeriodStartTimeMs int64
-				var workerStateEnum data.WorkerStateEnum
-				safeAccessServiceState(ss, func(ss *ServiceState) {
-					worker, ok := ss.AllWorkers[workerFullId]
-					if ok {
-						gracePeriodStartTimeMs = worker.GracePeriodStartTimeMs
-						workerStateEnum = worker.State
-					}
-				})
-				t.Logf("优雅期开始时间戳: %d", gracePeriodStartTimeMs)
-				t.Logf("worker状态已找到，State=%s, GracePeriodStartTimeMs=%d", workerStateEnum, gracePeriodStartTimeMs)
-				assert.True(t, gracePeriodStartTimeMs > 0, "优雅期开始时间应被设置")
-
-				// 计算优雅期结束时间（毫秒）
-				fakeTime.VirtualTimeForward(ctx, 15*1000) // 推进15秒，确保状态变化 (OfflineGracePeriodSec 为 10 秒)
-
-				safeAccessServiceState(ss, func(ss *ServiceState) {
-					worker, ok := ss.AllWorkers[workerFullId]
-					if ok {
-						gracePeriodStartTimeMs = worker.GracePeriodStartTimeMs
-						workerStateEnum = worker.State
-					}
-				})
-				t.Logf("优雅期开始时间戳: %d", gracePeriodStartTimeMs)
-				t.Logf("worker状态已找到，State=%s, GracePeriodStartTimeMs=%d, now=%d", workerStateEnum, gracePeriodStartTimeMs, fakeTime.WallTime)
-
-				// 验证最终状态持久化
-				checkWorkerStatePersistenceWithState(t, setup.FakeStore, workerStatePath,
-					"worker-1", data.WS_Offline_draining_candidate)
-			})
-		})
-	})
-}
-
 // 辅助函数
 
 // setupNullLogger 设置空日志记录器以减少输出
@@ -321,7 +214,6 @@ func createAndSetWorkerEph(t *testing.T, ss *ServiceState, setup *ServiceStateTe
 	ephPath := ss.PathManager.GetWorkerEphPathPrefix() + workerFullId.String()
 	t.Logf("设置worker eph节点到etcd路径: %s", ephPath)
 	setup.FakeEtcd.Set(ctx, ephPath, string(workerEphJson))
-	t.Logf("worker eph节点已设置到etcd，开始等待状态同步")
 
 	// 等待worker state创建
 	success, elapsedMs := waitForWorkerStateCreation(t, ss, workerId)

@@ -15,6 +15,7 @@ import (
 
 // ServiceState implements the CriticalResource interface
 type ServiceState struct {
+	Name          string
 	runloop       *krunloop.RunLoop[*ServiceState]
 	PathManager   *config.PathManager
 	ServiceInfo   *ServiceInfo
@@ -40,13 +41,15 @@ type ServiceState struct {
 	syncWorkerBatchManager *BatchManager
 }
 
-func NewServiceState(ctx context.Context) *ServiceState {
+func NewServiceState(ctx context.Context, name string) *ServiceState { // name is for logging purpose only
 	ss := &ServiceState{
+		Name:             name,
 		AllShards:        make(map[data.ShardId]*ShardState),
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
 		AllAssignments:   make(map[data.AssignmentId]*AssignmentState),
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
+		ShutdownHat:      make(map[data.WorkerFullId]common.Unit),
 	}
 	ss.PathManager = config.NewPathManager()
 	ss.ShadowState = shadow.NewShadowState(ctx, ss.PathManager)

@@ -18,8 +18,10 @@ type FakeTimeProvider struct {
 	mu        sync.Mutex
 }
 
-func NewFakeTimeProvider() *FakeTimeProvider {
+func NewFakeTimeProvider(currentTime int64) *FakeTimeProvider {
 	return &FakeTimeProvider{
+		WallTime:  currentTime,
+		MonoTime:  currentTime,
 		taskQueue: NewTaskQueue(),
 	}
 }

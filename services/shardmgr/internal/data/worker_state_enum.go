@@ -3,6 +3,7 @@ package data
 type WorkerStateEnum string
 
 const (
+	WS_Unknown                    WorkerStateEnum = "unknown"
 	WS_Online_healthy             WorkerStateEnum = "online_healthy"
 	WS_Online_shutdown_req        WorkerStateEnum = "online_shutdown_req"
 	WS_Online_shutdown_hat        WorkerStateEnum = "online_shutdown_hat"
