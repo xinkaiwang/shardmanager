@@ -49,6 +49,8 @@ type SystemLimitConfig struct {
 	MaxReplicaCountLimit int32
 	// MaxAssignmentCountLimit 是 shard 的最大 assignment 数量限制
 	MaxAssignmentCountLimit int32
+	// MaxHatCount
+	MaxHatCountLimit int32
 }
 
 func ServiceConfigJsonToServiceConfig(si *smgjson.ServiceConfigJson) *ServiceConfig {
@@ -104,6 +106,7 @@ func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimi
 		MaxShardsCountLimit:     1000, // default 1000
 		MaxReplicaCountLimit:    1000, // default 1000
 		MaxAssignmentCountLimit: 1000, // default 1000
+		MaxHatCountLimit:        10,   // default 10
 	}
 	if sc == nil {
 		return cfg
@@ -116,6 +119,9 @@ func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimi
 	}
 	if sc.MaxAssignmentCountLimit != nil {
 		cfg.MaxAssignmentCountLimit = *sc.MaxAssignmentCountLimit
+	}
+	if sc.MaxHatCountCount != nil {
+		cfg.MaxHatCountLimit = *sc.MaxHatCountCount
 	}
 	return cfg
 }

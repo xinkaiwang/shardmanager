@@ -230,24 +230,41 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 	case data.WS_Online_shutdown_permit:
 		// nothing to do
 	case data.WS_Offline_graceful_period:
-		if ws.GracePeriodStartTimeMs+int64(ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec)*1000 <= kcommon.GetWallTimeMs() { // expired
-			// Worker Event: Grace period expired, worker becomes offline
-			ws.State = data.WS_Offline_draining_candidate
-			dirty.AddDirtyFlag("WorkerState")
+		if ws.GracePeriodStartTimeMs+int64(ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec)*1000 < kcommon.GetWallTimeMs() { // not expired yet
+			break
 		}
+		// Worker Event: Grace period expired, worker becomes offline
+		ws.State = data.WS_Offline_draining_candidate
+		dirty.AddDirtyFlag("WorkerState")
+		fallthrough
 	case data.WS_Offline_draining_candidate:
-		// nothing to do
-	case data.WS_Offline_draining_hat:
-		// nothing to do
-	case data.WS_Offline_draining_complete:
-		// nothing to do
-	case data.WS_Offline_dead:
-		if ws.GracePeriodStartTimeMs+20*1000 > kcommon.GetWallTimeMs() { // worker in this state for 20 seconds, then clean it up
-			// Worker Event: Grace period expired, worker becomes offline
-			ws.State = data.WS_Deleted
-			needsDelete = true
-			dirty.AddDirtyFlag("WorkerState")
+		// try to apply the draining hat
+		if !ss.hatTryApply(ctx, ws.GetWorkerFullId(ss)) {
+			break
 		}
+		// Worker Event: Hat applied, worker becomes offline
+		ws.State = data.WS_Offline_draining_hat
+		dirty.AddDirtyFlag("WorkerState")
+		fallthrough
+	case data.WS_Offline_draining_hat:
+		// try to see if the worker is already empty (no assignments)
+		if len(ws.Assignments) > 0 {
+			break
+		}
+		// Worker Event: Draining complete, worker becomes offline
+		ws.State = data.WS_Offline_draining_complete
+		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
+		ss.hatReturn(ctx, ws.GetWorkerFullId(ss))
+		dirty.AddDirtyFlag("WorkerState")
+		fallthrough
+	case data.WS_Offline_draining_complete:
+		if ws.GracePeriodStartTimeMs+20*1000 < kcommon.GetWallTimeMs() { // graceful for 20 seconds, then clean it up
+			break
+		}
+		// Worker Event: Grace period expired, worker becomes offline
+		ws.State = data.WS_Offline_dead
+		dirty.AddDirtyFlag("WorkerState")
+		needsDelete = true
 	}
 	klogging.Info(ctx).With("workerId", ws.WorkerId).
 		With("dirty", dirty.String()).

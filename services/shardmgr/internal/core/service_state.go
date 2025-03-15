@@ -32,6 +32,7 @@ type ServiceState struct {
 
 	EphDirty         map[data.WorkerFullId]common.Unit
 	EphWorkerStaging map[data.WorkerFullId]*cougarjson.WorkerEphJson
+	ShutdownHat      map[data.WorkerFullId]common.Unit // those worker with hat means they are in shutdown process
 
 	ShardPlanWatcher *ShardPlanWatcher
 	WorkerEphWatcher *WorkerEphWatcher

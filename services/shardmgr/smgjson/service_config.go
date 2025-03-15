@@ -29,6 +29,8 @@ type SystemLimitConfigJson struct {
 	MaxReplicaCountLimit *int32 `json:"max_replica_count_limit"`
 	// MaxAssignmentCountLimit 是 shard 的最大 assignment 数量限制
 	MaxAssignmentCountLimit *int32 `json:"max_assignment_count_limit"`
+	// MaxHatCount
+	MaxHatCountCount *int32 `json:"max_hat_count_count"`
 }
 
 type CostFuncConfigJson struct {

@@ -21,6 +21,12 @@ func NewFakeEtcdStore() *FakeEtcdStore {
 	}
 }
 
+func (store *FakeEtcdStore) GetByKey(key string) string {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	return store.data[key]
+}
+
 // Put implements EtcdStore.Put
 func (store *FakeEtcdStore) Put(ctx context.Context, key string, value string, name string) {
 	klogging.Info(ctx).

@@ -281,10 +281,10 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 					}
 				})
 				t.Logf("优雅期开始时间戳: %d", gracePeriodStartTimeMs)
-				t.Logf("worker状态已找到，State=%s, GracePeriodStartTimeMs=%d", workerStateEnum, gracePeriodStartTimeMs)
+				t.Logf("worker状态已找到，State=%s, GracePeriodStartTimeMs=%d, now=%d", workerStateEnum, gracePeriodStartTimeMs, fakeTime.WallTime)
 
 				// 验证最终状态持久化
-				validateWorkerStatePersistenceWithState(t, setup.FakeStore, workerStatePath,
+				checkWorkerStatePersistenceWithState(t, setup.FakeStore, workerStatePath,
 					"worker-1", data.WS_Offline_draining_candidate)
 			})
 		})
@@ -347,6 +347,15 @@ func validateWorkerState(t *testing.T, ss *ServiceState, workerId string, sessio
 	})
 }
 
+// checkWorkerStatePersistence 验证worker state持久化
+func checkWorkerStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, workerStatePath string) {
+	// 等待worker状态持久化
+	t.Logf("等待worker state持久化到路径: %s", workerStatePath)
+	success := store.GetByKey(workerStatePath)
+	assert.True(t, success != "", "worker状态应成功持久化")
+	t.Logf("等待worker状态持久化结果: success=%v", success)
+}
+
 // validateWorkerStatePersistence 验证worker state持久化
 func validateWorkerStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, workerStatePath string) {
 	// 等待worker状态持久化
@@ -354,6 +363,24 @@ func validateWorkerStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, w
 	success, waitDuration := waitForWorkerStatePersistence(t, store, workerStatePath)
 	assert.True(t, success, "worker状态应成功持久化")
 	t.Logf("等待worker状态持久化结果: success=%v, 等待时间=%dms", success, waitDuration)
+}
+
+// validateWorkerStatePersistenceWithState 验证持久化的worker state内容
+func checkWorkerStatePersistenceWithState(t *testing.T, store *shadow.FakeEtcdStore, workerStatePath string,
+	expectedWorkerId string, expectedState data.WorkerStateEnum) {
+
+	// 验证状态持久化
+	checkWorkerStatePersistence(t, store, workerStatePath)
+
+	// 验证持久化的内容
+	jsonStr := store.GetByKey(workerStatePath)
+	storedWorkerState := smgjson.WorkerStateJsonFromJson(jsonStr)
+
+	assert.NotNil(t, storedWorkerState, "应该能解析worker state json")
+	assert.Equal(t, data.WorkerId(expectedWorkerId), storedWorkerState.WorkerId, "持久化的WorkerId应正确")
+	assert.Equal(t, expectedState, storedWorkerState.WorkerState, "持久化的状态应符合预期")
+	t.Logf("持久化数据验证完成: WorkerId=%s, State=%v",
+		storedWorkerState.WorkerId, storedWorkerState.WorkerState)
 }
 
 // validateWorkerStatePersistenceWithState 验证持久化的worker state内容
