@@ -259,7 +259,7 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 		dirty.AddDirtyFlag("WorkerState")
 		fallthrough
 	case data.WS_Offline_draining_complete:
-		if kcommon.GetWallTimeMs() < ws.GracePeriodStartTimeMs+20*1000 { // graceful for 20 seconds, then clean it up
+		if kcommon.GetWallTimeMs() < ws.GracePeriodStartTimeMs+20*1000 { // DeleteGracePeriodSec = 20 seconds, then clean it up
 			break
 		}
 		// Worker Event: Grace period expired, worker becomes offline
@@ -273,7 +273,11 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 		With("newState", ws.State).
 		Log("checkWorkerForTimeout", "worker timeout check finished")
 	if dirty.IsDirty() {
-		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))
+		if needsDelete {
+			ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), nil)
+		} else {
+			ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))
+		}
 	}
 	return
 }

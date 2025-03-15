@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // TestWorkerGracePeriodExpiration 测试 worker 优雅期过期后的状态变化
@@ -39,6 +40,7 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 
 		// 创建 worker-1 eph
 		workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
+		workerStatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
 
 		{
 			// worker 未创建时，状态应为 WS_Unknown
@@ -54,10 +56,6 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		workerState, _ := getWorkerStateAndPath(t, ss, workerFullId)
 		t.Logf("worker初始状态验证完成: State=%v", workerState.State)
 		assert.Equal(t, data.WS_Online_healthy, workerState.State, "初始状态应为健康在线")
-
-		// 记录初始时间戳
-		initialTime := fakeTime.WallTime
-		t.Logf("初始时间戳: %d", initialTime)
 
 		// 删除临时节点，触发临时节点丢失处理
 		t.Logf("从etcd删除worker eph节点: %s", ephPath)
@@ -83,11 +81,23 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 			// 15 秒后应该变为 WS_Offline_draining_complete
 			workerStateEnum := safeGetWorkerStateEnum(ss, workerFullId)
 			assert.Equal(t, data.WS_Offline_draining_complete, workerStateEnum, "worker状态应变为 WS_Offline_draining_complete")
+			// 验证最终状态持久化
+			nodeStr := setup.FakeStore.GetByKey(workerStatePath)
+			ws := smgjson.WorkerStateJsonFromJson(nodeStr)
+			assert.Equal(t, data.WS_Offline_draining_complete, ws.WorkerState, "worker state 状态已持久化")
 		}
 
-		// // 验证最终状态持久化
-		// checkWorkerStatePersistenceWithState(t, setup.FakeStore, workerStatePath,
-		// 	"worker-1", data.WS_Offline_draining_candidate)
+		// 推进25秒，确保状态变化 (DeleteGracePeriodSec 为 20 秒)
+		fakeTime.VirtualTimeForward(ctx, 25*1000)
+
+		{
+			// 25 秒后应该变为 WS_Unknow (已删除)
+			workerStateEnum := safeGetWorkerStateEnum(ss, workerFullId)
+			assert.Equal(t, data.WS_Unknown, workerStateEnum, "worker状态应变为 WS_Unknown")
+			// 验证最终状态持久化
+			val := setup.FakeStore.GetByKey(workerStatePath)
+			assert.Equal(t, "", val, "worker state 已删除")
+		}
 	}
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)

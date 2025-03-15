@@ -145,30 +145,6 @@ func (s *ServiceStateTestSetup) UpdateShardPlan(t *testing.T, shardNames []strin
 	t.Logf("更新分片等待时间: %v", waitDuration)
 }
 
-func safeGetWorkerStateEnum(ss *ServiceState, workerFullId data.WorkerFullId) data.WorkerStateEnum {
-	var state data.WorkerStateEnum
-	safeAccessWorkerById(ss, workerFullId, func(worker *WorkerState) {
-		if worker == nil {
-			state = data.WS_Unknown
-			return
-		}
-		state = worker.State
-	})
-	return state
-}
-
-func safeAccessWorkerById(ss *ServiceState, workerFullId data.WorkerFullId, fn func(*WorkerState)) {
-	completed := make(chan struct{})
-	ss.PostEvent(&serviceStateAccessEvent{
-		callback: func(ss *ServiceState) {
-			worker := ss.AllWorkers[workerFullId]
-			fn(worker)
-			close(completed)
-		},
-	})
-	<-completed
-}
-
 // WaitUntil 等待条件满足或超时
 func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) bool {
 	maxDuration := maxWaitMs

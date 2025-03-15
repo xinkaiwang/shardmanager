@@ -13,10 +13,12 @@ import (
 )
 
 // 确保全局状态在每个测试之前被正确重置
-func resetGlobalState(t *testing.T) {
+func resetGlobalState(_ *testing.T) {
 	shadow.ResetEtcdStore()
 	etcdprov.ResetEtcdProvider()
 }
+
+/******************************* FakeTimeTestSetup *******************************/
 
 // FakeTimeTestSetup 包含服务状态测试所需的基本设置
 type FakeTimeTestSetup struct {
@@ -65,16 +67,17 @@ func (setup *FakeTimeTestSetup) RunWith(fn func()) {
 	})
 }
 
+/******************************* safeAccessServiceState *******************************/
 // 安全地访问 ServiceState 内部状态（同步方式）
 func safeAccessServiceState(ss *ServiceState, fn func(*ServiceState)) {
 	// 创建同步通道
 	completed := make(chan struct{})
 
 	// 创建一个事件并加入队列
-	ss.PostEvent(&serviceStateAccessEvent{
-		callback: fn,
-		done:     completed,
-	})
+	ss.PostEvent(NewServiceStateAccessEvent(func(ss *ServiceState) {
+		fn(ss)
+		close(completed)
+	}))
 
 	// 等待事件处理完成
 	<-completed
@@ -83,7 +86,12 @@ func safeAccessServiceState(ss *ServiceState, fn func(*ServiceState)) {
 // serviceStateAccessEvent 是一个用于访问 ServiceState 的事件
 type serviceStateAccessEvent struct {
 	callback func(*ServiceState)
-	done     chan struct{}
+}
+
+func NewServiceStateAccessEvent(callback func(*ServiceState)) *serviceStateAccessEvent {
+	return &serviceStateAccessEvent{
+		callback: callback,
+	}
 }
 
 // GetName 返回事件名称
@@ -94,8 +102,33 @@ func (e *serviceStateAccessEvent) GetName() string {
 // Process 实现 IEvent 接口
 func (e *serviceStateAccessEvent) Process(ctx context.Context, ss *ServiceState) {
 	e.callback(ss)
-	close(e.done)
 }
+
+func safeGetWorkerStateEnum(ss *ServiceState, workerFullId data.WorkerFullId) data.WorkerStateEnum {
+	var state data.WorkerStateEnum
+	safeAccessWorkerById(ss, workerFullId, func(worker *WorkerState) {
+		if worker == nil {
+			state = data.WS_Unknown
+			return
+		}
+		state = worker.State
+	})
+	return state
+}
+
+func safeAccessWorkerById(ss *ServiceState, workerFullId data.WorkerFullId, fn func(*WorkerState)) {
+	completed := make(chan struct{})
+	ss.PostEvent(&serviceStateAccessEvent{
+		callback: func(ss *ServiceState) {
+			worker := ss.AllWorkers[workerFullId]
+			fn(worker)
+			close(completed)
+		},
+	})
+	<-completed
+}
+
+/******************************* ftCreateAndSetWorkerEph *******************************/
 
 // ftCreateAndSetWorkerEph 创建worker eph节点并设置到etcd
 // 返回workerFullId和ephPath
