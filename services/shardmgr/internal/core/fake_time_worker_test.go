@@ -289,3 +289,106 @@ func ftUpdateWorkerEphWithShutdownRequest(t *testing.T, ss *ServiceState, setup 
 	// 更新到etcd
 	setup.FakeEtcd.Set(setup.ctx, ephPath, workerEph.ToJson())
 }
+
+// 1. 初始状态下ServiceState中没有工作节点（AllWorkers为空）
+// 2. 在etcd中创建第一个工作节点临时数据（worker-1:session-1）
+// 3. 等待并验证worker-1状态被正确创建为"在线健康"（WS_Online_healthy）
+// 4. 在etcd中创建第二个工作节点临时数据（worker-2:session-2）
+// 5. 等待并验证worker-2状态被正确创建为"在线健康"
+// 6. 验证ServiceState中现在有两个工作节点（AllWorkers长度为2）
+// 7. 确认两个工作节点状态都被正确持久化到存储中
+
+// 这个测试验证了ShardManager的核心功能之一：能够从etcd中的临时节点数据（WorkerEph）正确创建和同步工作节点状态（WorkerState）。这是工作节点注册和发现机制的基础，确保系统能够正确跟踪所有可用的工作节点。
+
+// TestServiceState_WorkerEphToState 测试ServiceState能否正确从worker eph创建worker state
+func TestServiceState_WorkerEphToState(t *testing.T) {
+	ctx := context.Background()
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
+
+	// 配置测试环境
+	setup := NewFakeTimeTestSetup(t)
+	setup.SetupBasicConfig(ctx)
+	t.Logf("测试环境已配置")
+
+	fn := func() {
+		// 创建 ServiceState
+		ss := NewServiceState(ctx, "TestServiceState_WorkerEphToState")
+		t.Logf("ServiceState已创建: %s", ss.Name)
+
+		// 1. 初始状态下验证ServiceState中没有工作节点
+		{
+			workerCount := safeGetWorkerCount(ss)
+			assert.Equal(t, 0, workerCount, "初始状态应该没有worker")
+			t.Logf("初始状态验证完成：AllWorkers数量=%d", workerCount)
+		}
+
+		// 2. 在etcd中创建第一个工作节点临时数据
+		t.Logf("创建第一个worker eph节点")
+		workerFullId1, ephPath1 := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
+		workerStatePath1 := ss.PathManager.FmtWorkerStatePath(workerFullId1)
+		t.Logf("worker-1 eph节点路径: %s", ephPath1)
+
+		// 3. 等待并验证worker-1状态被正确创建为"在线健康"
+		{
+			// 等待worker-1 state创建，状态变为WS_Online_healthy
+			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId1, data.WS_Online_healthy, 1000, 10)
+			assert.Equal(t, true, waitSucc, "worker-1 state 已创建并状态为online_healthy, elapsedMs=%d", elapsedMs)
+			t.Logf("worker-1状态验证完成: 状态=WS_Online_healthy, 耗时=%dms", elapsedMs)
+
+			// 验证worker数量为1
+			workerCount := safeGetWorkerCount(ss)
+			assert.Equal(t, 1, workerCount, "此时应该有1个worker")
+		}
+
+		// 4. 在etcd中创建第二个工作节点临时数据
+		t.Logf("创建第二个worker eph节点")
+		workerFullId2, ephPath2 := ftCreateAndSetWorkerEph(t, ss, setup, "worker-2", "session-2", "localhost:8081")
+		workerStatePath2 := ss.PathManager.FmtWorkerStatePath(workerFullId2)
+		t.Logf("worker-2 eph节点路径: %s", ephPath2)
+
+		// 5. 等待并验证worker-2状态被正确创建为"在线健康"
+		{
+			// 等待worker-2 state创建，状态变为WS_Online_healthy
+			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId2, data.WS_Online_healthy, 1000, 10)
+			assert.Equal(t, true, waitSucc, "worker-2 state 已创建并状态为online_healthy, elapsedMs=%d", elapsedMs)
+			t.Logf("worker-2状态验证完成: 状态=WS_Online_healthy, 耗时=%dms", elapsedMs)
+		}
+
+		// 6. 验证ServiceState中现在有两个工作节点
+		{
+			workerCount := safeGetWorkerCount(ss)
+			assert.Equal(t, 2, workerCount, "此时应该有2个worker")
+			t.Logf("最终状态验证：AllWorkers数量=%d", workerCount)
+		}
+
+		// 7. 确认两个工作节点状态都被正确持久化到存储中
+		{
+			// 验证worker-1状态持久化
+			nodeStr1 := setup.FakeStore.GetByKey(workerStatePath1)
+			assert.NotEqual(t, "", nodeStr1, "worker-1 state应该已持久化")
+			ws1 := smgjson.WorkerStateJsonFromJson(nodeStr1)
+			assert.Equal(t, data.WorkerId("worker-1"), ws1.WorkerId, "持久化的WorkerId-1应正确")
+			assert.Equal(t, data.WS_Online_healthy, ws1.WorkerState, "持久化的状态应为online_healthy")
+			t.Logf("worker-1状态持久化验证完成: WorkerId=%s, State=%v", ws1.WorkerId, ws1.WorkerState)
+
+			// 验证worker-2状态持久化
+			nodeStr2 := setup.FakeStore.GetByKey(workerStatePath2)
+			assert.NotEqual(t, "", nodeStr2, "worker-2 state应该已持久化")
+			ws2 := smgjson.WorkerStateJsonFromJson(nodeStr2)
+			assert.Equal(t, data.WorkerId("worker-2"), ws2.WorkerId, "持久化的WorkerId-2应正确")
+			assert.Equal(t, data.WS_Online_healthy, ws2.WorkerState, "持久化的状态应为online_healthy")
+			t.Logf("worker-2状态持久化验证完成: WorkerId=%s, State=%v", ws2.WorkerId, ws2.WorkerState)
+		}
+	}
+	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
+	setup.RunWith(fn)
+}
+
+// safeGetWorkerCount 安全获取ServiceState中的worker数量
+func safeGetWorkerCount(ss *ServiceState) int {
+	var count int
+	safeAccessServiceState(ss, func(ss *ServiceState) {
+		count = len(ss.AllWorkers)
+	})
+	return count
+}
