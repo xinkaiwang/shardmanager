@@ -366,3 +366,28 @@ func waitForWorkerStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, pa
 	// 使用已有的WaitUntil函数实现等待，最多等待1秒，每50ms检查一次
 	return WaitUntil(t, fn, 1000, 50)
 }
+
+// waitForShardStatePersistence 等待特定路径的worker状态被持久化到存储中
+func waitForShardStatePersistence(t *testing.T, store *shadow.FakeEtcdStore, path string) (bool, int64) {
+	t.Helper()
+
+	fn := func() (bool, string) {
+		// 获取存储数据
+		storeData := store.GetData()
+
+		// 检查目标路径是否存在
+		value, exists := storeData[path]
+
+		// 生成调试信息
+		debugInfo := fmt.Sprintf("路径=%s, 存在=%v, 数据长度=%d, 总存储项数=%d",
+			path, exists, len(value), len(storeData))
+
+		// 记录当前尝试的状态
+		t.Logf("检查分片状态持久化: %s", debugInfo)
+
+		return exists, debugInfo
+	}
+
+	// 使用已有的WaitUntil函数实现等待，最多等待1秒，每50ms检查一次
+	return WaitUntil(t, fn, 1000, 50)
+}

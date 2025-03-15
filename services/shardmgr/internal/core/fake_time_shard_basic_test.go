@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -127,6 +128,277 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 				t.Logf("  - 分片 %s: lameDuck=%v", shardId, shard.LameDuck)
 			}
 		})
+	})
+}
+
+// FakeTime style test case
+// **测试场景**：验证分片状态的持久化流程
+//
+// **初始状态**：
+// - 系统配置了包含3个分片的分片计划
+// - 尚未创建任何实际分片状态
+//
+// **触发行为**：
+// - 启动服务状态管理器（加载配置并初始化系统）
+// - 系统根据分片计划创建分片状态
+//
+// **期望结果**：
+// - 所有分片被正确加载到内存中
+// - 分片状态被自动持久化到存储系统
+// - 存储系统中包含与内存状态一致的完整分片信息
+func TestServiceState_ShadowStateWrite(t *testing.T) {
+	ctx := context.Background()
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
+	t.Logf("设置测试环境...")
+
+	// 配置测试环境
+	setup := NewFakeTimeTestSetup(t)
+	setup.SetupBasicConfig(ctx)
+	t.Logf("测试环境已配置")
+
+	// 使用FakeTime环境运行测试
+	setup.RunWith(func() {
+		// 1. 准备分片计划
+		t.Logf("准备分片计划...")
+		shardPlan := []string{
+			"shard-a",
+			"shard-b|{\"min_replica_count\":2,\"max_replica_count\":5}",
+			"shard-c|{\"move_type\":\"kill_before_start\"}",
+		}
+		setShardPlan(t, setup.FakeEtcd, ctx, shardPlan)
+		t.Logf("分片计划已设置：%v", shardPlan)
+
+		// 记录初始写入次数，用于后续验证
+		initialPutCount := setup.FakeStore.GetPutCalledCount()
+		t.Logf("初始EtcdStore写入次数: %d", initialPutCount)
+
+		// 2. 创建 ServiceState
+		ss := NewServiceState(ctx, "TestServiceState_ShadowStateWrite")
+		setup.ServiceState = ss
+		t.Logf("ServiceState已创建: %s", ss.Name)
+
+		// 3. 等待ServiceState加载分片状态
+		t.Logf("等待ServiceState加载分片状态...")
+		{
+			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
+			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
+		}
+
+		// 4. 验证分片内存状态
+		t.Logf("验证分片内存状态...")
+		// 使用safeAccessServiceState安全访问ServiceState内部状态
+		safeAccessServiceState(ss, func(ss *ServiceState) {
+			// 验证分片数量
+			assert.Equal(t, 3, len(ss.AllShards), "内存中应有3个分片")
+
+			// 验证特定分片存在
+			_, ok := ss.AllShards["shard-a"]
+			assert.True(t, ok, "应能找到shard-a")
+
+			_, ok = ss.AllShards["shard-b"]
+			assert.True(t, ok, "应能找到shard-b")
+
+			_, ok = ss.AllShards["shard-c"]
+			assert.True(t, ok, "应能找到shard-c")
+
+			t.Logf("内存中的分片状态验证通过：共%d个分片", len(ss.AllShards))
+		})
+
+		// 5. 前进虚拟时间，以确保持久化有足够时间完成
+		t.Logf("推进虚拟时间以确保状态持久化...")
+		setup.FakeTime.VirtualTimeForward(ctx, 500) // 前进500ms
+
+		// 6. 验证分片状态持久化
+		t.Logf("验证分片状态持久化...")
+		// 验证写入次数增加
+		currentPutCount := setup.FakeStore.GetPutCalledCount()
+		t.Logf("当前EtcdStore写入次数: %d, 增加了: %d", currentPutCount, currentPutCount-initialPutCount)
+		assert.Greater(t, currentPutCount, initialPutCount, "应该有新的写入操作")
+
+		// 验证存储中的数据
+		storeItems := setup.FakeStore.List("/smg/shard_state/")
+		t.Logf("存储中的分片状态数量: %d", len(storeItems))
+		assert.GreaterOrEqual(t, len(storeItems), 3, "存储中应至少有3个分片状态")
+
+		for _, item := range storeItems {
+			t.Logf("  - 存储项: %s, 值长度: %d", item.Key, len(item.Value))
+		}
+
+		// 7. 验证存储内容与内存状态一致
+		t.Logf("验证存储内容与内存状态一致...")
+		expectedShardStates := map[data.ShardId]ExpectedShardState{
+			"shard-a": {LameDuck: false},
+			"shard-b": {LameDuck: false},
+			"shard-c": {LameDuck: false},
+		}
+		errors := verifyAllShardsInStorage(t, setup, expectedShardStates)
+		assert.Empty(t, errors, "分片状态持久化验证失败: %v", errors)
+		t.Logf("分片状态持久化验证通过")
+
+		// 8. 停止ServiceState
+		ss.StopAndWaitForExit(ctx)
+		t.Logf("测试完成，ServiceState已停止")
+	})
+}
+
+// FakeTime style test case
+// ## 测试目的
+// 验证系统能否正确处理已存在于存储中的分片状态，特别是在分片计划变更时的行为。
+
+// ## 测试流程
+// 1. **初始设置**：
+//    - 创建分片计划（shard-1, shard-2）
+//    - 预先在存储中创建三个分片状态：
+//      * shard-1：正常状态
+//      * shard-2：正常状态
+//      * shard-3：lameDuck状态（不在计划中）
+
+// 2. **启动服务**：
+//    - 创建ServiceState实例
+//    - 验证三个分片状态被正确加载
+
+// 3. **计划变更**：
+//    - 更新分片计划（保留shard-1，添加shard-4）
+//    - 验证状态变化：
+//      * shard-1：保持正常
+//      * shard-2：变为lameDuck（已移除）
+//      * shard-3：保持lameDuck（不在计划中）
+//      * shard-4：新创建为正常状态
+
+// ## 关键验证点
+// - 系统能正确加载已存在的分片状态
+// - 分片状态会根据计划变更自动调整（添加/移除/保持）
+// - 状态变更应正确持久化到存储系统
+
+// TestServiceState_PreexistingShardState 测试预先存在的分片状态如何被加载和更新
+func TestServiceState_PreexistingShardState(t *testing.T) {
+	ctx := context.Background()
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
+
+	// 配置测试环境
+	setup := NewFakeTimeTestSetup(t)
+	setup.SetupBasicConfig(ctx)
+	t.Logf("测试环境已配置")
+
+	// 使用辅助函数运行测试，确保资源正确清理
+	setup.RunWith(func() {
+		// 1. 设置初始分片计划
+		initialShardPlan := []string{"shard-1", "shard-2", "shard-3"}
+		setShardPlan(t, setup.FakeEtcd, ctx, initialShardPlan)
+		t.Logf("初始分片计划已设置：%v", initialShardPlan)
+
+		// 2. 在 etcd 中预先创建分片状态，包括一些不在计划中的分片和 lameDuck 标记
+		// 创建几种不同情况的分片状态:
+		// - shard-1: 在计划中，正常状态（非 lameDuck）
+		// - shard-2: 在计划中，但标记为 lameDuck（异常状态）
+		// - shard-3: 在计划中，正常状态
+		// - shard-4: 不在计划中，标记为 lameDuck（正常）
+		// - shard-5: 不在计划中，但没有标记 lameDuck（异常状态）
+		preExistingShardStates := map[data.ShardId]smgjson.ShardStateJson{
+			"shard-1": {ShardName: "shard-1", LameDuck: 0}, // 正常状态
+			"shard-2": {ShardName: "shard-2", LameDuck: 1}, // 异常状态（应该被自动修复）
+			"shard-3": {ShardName: "shard-3", LameDuck: 0}, // 正常状态
+			"shard-4": {ShardName: "shard-4", LameDuck: 1}, // 正常状态（不在计划中）
+			"shard-5": {ShardName: "shard-5", LameDuck: 0}, // 异常状态（不在计划中，应该被自动修复）
+		}
+
+		// 将预先存在的分片状态写入 etcd
+		for shardId, shardState := range preExistingShardStates {
+			shardStatePath := fmt.Sprintf("/smg/shard_state/%s", shardId)
+			setup.FakeEtcd.Set(ctx, shardStatePath, shardState.ToJson())
+			t.Logf("预设分片状态: %s, lameDuck=%v", shardId, shardState.LameDuck == 1)
+		}
+
+		// 3. 创建 ServiceState 实例，它会加载预先存在的分片状态
+		ss := NewServiceState(ctx, "TestServiceState_PreexistingShardState")
+		setup.ServiceState = ss
+		t.Logf("ServiceState 已创建: %s", ss.Name)
+
+		// 4. 等待 ServiceState 加载和处理分片状态
+		waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 5, 1000, 100)
+		assert.True(t, waitSucc, "应该能在超时前加载所有预先存在的分片状态, 耗时=%dms", elapsedMs)
+		t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
+
+		// 5. 验证分片状态是否被正确加载和修复
+		// 预期状态（ServiceState 应该自动修复异常情况）:
+		// - shard-1: 在计划中，正常状态（非 lameDuck）
+		// - shard-2: 在计划中，应该被修复为非 lameDuck
+		// - shard-3: 在计划中，正常状态（非 lameDuck）
+		// - shard-4: 不在计划中，保持 lameDuck 状态
+		// - shard-5: 不在计划中，应该被修复为 lameDuck
+		expectedShardStates := map[data.ShardId]ExpectedShardState{
+			"shard-1": {LameDuck: false}, // 在计划中，应为正常状态
+			"shard-2": {LameDuck: false}, // 在计划中，应被修复为正常状态
+			"shard-3": {LameDuck: false}, // 在计划中，应为正常状态
+			"shard-4": {LameDuck: true},  // 不在计划中，应为 lameDuck 状态
+			"shard-5": {LameDuck: true},  // 不在计划中，应被修复为 lameDuck 状态
+		}
+
+		allErrors := verifyAllShardState(t, ss, expectedShardStates)
+		assert.Equal(t, 0, len(allErrors), "分片状态验证应该全部通过，错误: %v", allErrors)
+		t.Logf("分片状态验证完成: 所有分片状态符合预期")
+
+		// 6. 验证分片状态是否被正确持久化到 etcd
+		{
+			succ, persistenceErrors := WaitUntil(t, func() (bool, string) {
+				// 验证所有分片状态是否正确持久化
+				persistenceErrors := verifyAllShardsInStorage(t, setup, expectedShardStates)
+				if len(persistenceErrors) > 0 {
+					return false, strings.Join(persistenceErrors, "\n")
+				}
+				return true, ""
+			}, 1000, 100)
+			// persistenceErrors := verifyAllShardsInStorage(t, setup, expectedShardStates)
+			assert.Equal(t, true, succ, "分片状态持久化验证应该全部通过，错误: %v", persistenceErrors)
+			t.Logf("分片状态持久化验证完成: 所有分片状态已正确持久化")
+		}
+
+		// 7. 更新分片计划，测试动态更新能力
+		updatedShardPlan := []string{"shard-1", "shard-3", "shard-5", "shard-6"}
+		setShardPlan(t, setup.FakeEtcd, ctx, updatedShardPlan)
+		t.Logf("分片计划已更新：%v", updatedShardPlan)
+
+		// 8. 等待更新后的状态生效
+		// 分片总数应该是 6: shard-1, shard-2(lameDuck), shard-3, shard-4(lameDuck), shard-5(不再lameDuck), shard-6(新增)
+		waitSucc, elapsedMs = WaitUntilShardCount(t, ss, 6, 1000, 100)
+		assert.True(t, waitSucc, "应该能在超时前更新分片状态, 耗时=%dms", elapsedMs)
+		t.Logf("分片状态更新完成, 耗时=%dms", elapsedMs)
+
+		// 9. 验证更新后的分片状态
+		updatedExpectedStates := map[data.ShardId]ExpectedShardState{
+			"shard-1": {LameDuck: false}, // 仍在计划中，保持正常状态
+			"shard-2": {LameDuck: true},  // 不再在计划中，应变为 lameDuck
+			"shard-3": {LameDuck: false}, // 仍在计划中，保持正常状态
+			"shard-4": {LameDuck: true},  // 仍不在计划中，保持 lameDuck
+			"shard-5": {LameDuck: false}, // 新加入计划，应变为正常状态
+			"shard-6": {LameDuck: false}, // 新加入计划，应为正常状态
+		}
+
+		{
+			allErrors = verifyAllShardState(t, ss, updatedExpectedStates)
+			assert.Equal(t, 0, len(allErrors), "更新后的分片状态验证应该全部通过，错误: %v", allErrors)
+			t.Logf("更新后的分片状态验证完成: 所有分片状态符合预期")
+		}
+
+		// 10. 验证更新后的分片状态是否被正确持久化
+		{
+			succ, elapsedMs := WaitUntil(t, func() (bool, string) {
+				// 验证所有分片状态是否正确持久化
+				result := verifyAllShardsInStorage(t, setup, updatedExpectedStates)
+				if len(result) > 0 {
+					return false, strings.Join(result, "\n")
+				}
+				return true, ""
+			}, 100, 10)
+			// persistenceErrors := verifyAllShardsInStorage(t, setup, updatedExpectedStates)
+			assert.Equal(t, true, succ, "更新后的分片状态持久化验证应该全部通过, 耗时=%dms", elapsedMs)
+			t.Logf("更新后的分片状态持久化验证完成: 所有分片状态已正确持久化")
+		}
+
+		// 结束前停止 ServiceState
+		ss.StopAndWaitForExit(ctx)
+		t.Logf("ServiceState已停止，测试完成")
 	})
 }
 
