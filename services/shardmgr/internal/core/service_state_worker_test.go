@@ -113,8 +113,9 @@ func TestWorkerState_EphNodeLost(t *testing.T) {
 
 				// 等待worker状态变为离线状态
 				t.Logf("等待worker状态从online_healthy变为offline_graceful_period")
-				waitForWorkerStateChange(t, ss, workerFullId, data.WS_Offline_graceful_period)
-				t.Logf("worker状态已成功变为离线状态")
+				// waitForWorkerStateChange(t, ss, workerFullId, data.WS_Offline_graceful_period)
+				waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Offline_graceful_period, 1000, 50)
+				assert.True(t, waitSucc, "应该在超时前成功变为 offline_graceful_period elapsedMs=%d", elapsedMs)
 
 				// 验证最终状态
 				finalWorkerState, _ := getWorkerStateAndPath(t, ss, workerFullId)
@@ -338,35 +339,35 @@ func getWorkerStateAndPath(t *testing.T, ss *ServiceState, workerFullId data.Wor
 	return workerState, workerStatePath
 }
 
-// waitForWorkerStateChange 等待worker状态变为指定状态
-func waitForWorkerStateChange(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum) {
-	waitForStateCondition := func() (bool, string) {
-		var state data.WorkerStateEnum
-		var exists bool
+// // waitForWorkerStateChange 等待worker状态变为指定状态
+// func waitForWorkerStateChange(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum) {
+// 	waitForStateCondition := func() (bool, string) {
+// 		var state data.WorkerStateEnum
+// 		var exists bool
 
-		safeAccessServiceState(ss, func(ss *ServiceState) {
-			worker, ok := ss.AllWorkers[workerFullId]
-			if !ok {
-				exists = false
-				return
-			}
-			exists = true
-			state = worker.State
-		})
+// 		safeAccessServiceState(ss, func(ss *ServiceState) {
+// 			worker, ok := ss.AllWorkers[workerFullId]
+// 			if !ok {
+// 				exists = false
+// 				return
+// 			}
+// 			exists = true
+// 			state = worker.State
+// 		})
 
-		if !exists {
-			return false, "worker不存在"
-		}
+// 		if !exists {
+// 			return false, "worker不存在"
+// 		}
 
-		// 检查状态是否变为期望状态
-		matched := state == expectedState
-		return matched, fmt.Sprintf("worker状态=%v, 是否匹配=%v", state, matched)
-	}
+// 		// 检查状态是否变为期望状态
+// 		matched := state == expectedState
+// 		return matched, fmt.Sprintf("worker状态=%v, 是否匹配=%v", state, matched)
+// 	}
 
-	if !WaitUntil(t, waitForStateCondition, 1000, 50) {
-		t.Fatalf("等待超时，状态仍未变为 %v，测试失败", expectedState)
-	}
-}
+// 	if !WaitUntil(t, waitForStateCondition, 1000, 50) {
+// 		t.Fatalf("等待超时，状态仍未变为 %v，测试失败", expectedState)
+// 	}
+// }
 
 // updateWorkerEphWithShutdownRequest 更新worker eph，设置关闭请求标志
 func updateWorkerEphWithShutdownRequest(t *testing.T, setup *ServiceStateTestSetup, ctx context.Context, ephPath string) {

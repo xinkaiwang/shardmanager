@@ -145,33 +145,6 @@ func (s *ServiceStateTestSetup) UpdateShardPlan(t *testing.T, shardNames []strin
 	t.Logf("更新分片等待时间: %v", waitDuration)
 }
 
-// WaitUntil 等待条件满足或超时
-func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, intervalMs int) bool {
-	maxDuration := maxWaitMs
-	intervalDuration := intervalMs
-	startTime := kcommon.GetMonoTimeMs()
-
-	for i := 0; i < maxWaitMs/intervalMs; i++ {
-		success, debugInfo := condition()
-		if success {
-			elapsed := kcommon.GetMonoTimeMs() - startTime
-			t.Logf("条件满足，耗时 %v", elapsed)
-			return true
-		}
-
-		elapsed := int(kcommon.GetMonoTimeMs() - startTime)
-		if elapsed >= maxDuration {
-			t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
-			return false
-		}
-
-		t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
-			i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
-		kcommon.SleepMs(context.Background(), intervalDuration)
-	}
-	return false
-}
-
 // waitForServiceShards 等待 ServiceState 中的分片数量达到预期
 // 返回是否成功和等待时间ms
 func waitForServiceShards(t *testing.T, ss *ServiceState, expectedCount int) (bool, int64) {
