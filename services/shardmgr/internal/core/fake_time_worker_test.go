@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -194,4 +195,97 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 	}
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)
+}
+
+// 这个测试验证了ShardManager的有序关闭机制：工作节点可以通过更新其临时节点数据来请求关闭，系统能够检测并适当地更新节点状态。这种机制允许工作节点在退出前进行优雅关闭，完成当前任务并避免新任务分配，实现平滑的服务降级。
+
+// 1. 创建并初始化ServiceState
+// 2. 在etcd中创建并设置一个工作节点临时数据（worker-1:session-1）
+// 3. 验证工作节点初始状态为"在线健康"（WS_Online_healthy）且ShutdownRequesting为false
+// 4. 更新etcd中的工作节点临时数据，将ReqShutDown设置为1（请求关闭）
+// 5. 等待工作节点状态变为"在线关闭请求"（WS_Online_shutdown_req）
+// 6. 验证最终状态正确：
+//    - 状态已变为WS_Online_shutdown_req
+//    - ShutdownRequesting标志已设置为true
+// 7. 确认工作节点状态已正确持久化到存储中
+
+// TestWorkerShutdownRequest 测试通过worker eph节点请求关闭的流程
+func TestWorkerShutdownRequest(t *testing.T) {
+	ctx := context.Background()
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
+
+	// 配置测试环境
+	setup := NewFakeTimeTestSetup(t)
+	setup.SetupBasicConfig(ctx)
+	t.Logf("测试环境已配置")
+
+	fn := func() {
+		// 创建 ServiceState
+		ss := NewServiceState(ctx, "TestWorkerShutdownRequest")
+		t.Logf("ServiceState已创建: %s", ss.Name)
+
+		// 创建 worker-1 eph
+		workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
+		workerStatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
+
+		{
+			// 等待worker state创建，状态变为WS_Online_healthy
+			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Online_healthy, 1000, 10)
+			assert.Equal(t, true, waitSucc, "worker state 已创建 elapsedMs=%d", elapsedMs)
+		}
+
+		{
+			// 验证初始ShutdownRequesting状态为false
+			var shutdownRequesting bool
+			safeAccessWorkerById(ss, workerFullId, func(ws *WorkerState) {
+				shutdownRequesting = ws.ShutdownRequesting
+			})
+			assert.Equal(t, false, shutdownRequesting, "初始ShutdownRequesting应为false")
+		}
+
+		// 更新worker eph节点，设置ReqShutDown=1
+		t.Logf("更新worker eph节点，设置ReqShutDown=1")
+		ftUpdateWorkerEphWithShutdownRequest(t, ss, setup, ephPath)
+		t.Logf("已更新worker eph节点，等待状态同步")
+
+		// 等待worker状态变为WS_Online_shutdown_req
+		t.Logf("等待worker状态从WS_Online_healthy变为WS_Online_shutdown_req")
+		{
+			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Online_shutdown_req, 1000, 10)
+			assert.Equal(t, true, waitSucc, "worker state 状态已变为 WS_Online_shutdown_req elapsedMs=%d", elapsedMs)
+		}
+
+		{
+			// 验证ShutdownRequesting状态为true
+			var shutdownRequesting bool
+			safeAccessWorkerById(ss, workerFullId, func(ws *WorkerState) {
+				shutdownRequesting = ws.ShutdownRequesting
+			})
+			assert.Equal(t, true, shutdownRequesting, "ShutdownRequesting应为true")
+		}
+
+		// 验证worker状态持久化
+		t.Logf("验证worker状态持久化")
+		{
+			nodeStr := setup.FakeStore.GetByKey(workerStatePath)
+			ws := smgjson.WorkerStateJsonFromJson(nodeStr)
+			assert.Equal(t, data.WS_Online_shutdown_req, ws.WorkerState, "worker state 状态已持久化")
+		}
+	}
+	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
+	setup.RunWith(fn)
+}
+
+// ftUpdateWorkerEphWithShutdownRequest 更新worker eph，设置关闭请求标志
+func ftUpdateWorkerEphWithShutdownRequest(t *testing.T, ss *ServiceState, setup *FakeTimeTestSetup, ephPath string) {
+	// 获取当前eph内容
+	kvItem := setup.FakeEtcd.Get(setup.ctx, ephPath)
+	assert.NotEqual(t, "", kvItem.Value, "应能找到worker eph节点")
+
+	// 解析当前eph内容
+	workerEph := cougarjson.WorkerEphJsonFromJson(kvItem.Value)
+	// 设置关闭请求
+	workerEph.ReqShutDown = 1 // 设置为true
+	// 更新到etcd
+	setup.FakeEtcd.Set(setup.ctx, ephPath, workerEph.ToJson())
 }

@@ -155,69 +155,6 @@ func TestWorkerState_EphNodeLost(t *testing.T) {
 	})
 }
 
-// 这个测试验证了ShardManager的有序关闭机制：工作节点可以通过更新其临时节点数据来请求关闭，系统能够检测并适当地更新节点状态。这种机制允许工作节点在退出前进行优雅关闭，完成当前任务并避免新任务分配，实现平滑的服务降级。
-
-// 1. 创建并初始化ServiceState
-// 2. 在etcd中创建并设置一个工作节点临时数据（worker-1:session-1）
-// 3. 验证工作节点初始状态为"在线健康"（WS_Online_healthy）且ShutdownRequesting为false
-// 4. 更新etcd中的工作节点临时数据，将ReqShutDown设置为1（请求关闭）
-// 5. 等待工作节点状态变为"在线关闭请求"（WS_Online_shutdown_req）
-// 6. 验证最终状态正确：
-//    - 状态已变为WS_Online_shutdown_req
-//    - ShutdownRequesting标志已设置为true
-// 7. 确认工作节点状态已正确持久化到存储中
-
-// TestWorkerShutdownRequest 测试通过worker eph节点请求关闭的流程
-func TestWorkerShutdownRequest(t *testing.T) {
-	ctx := context.Background()
-
-	// 减少日志输出，使测试更清晰
-	setupNullLogger(t)
-
-	// 重置全局状态
-	resetGlobalState(t)
-	t.Logf("全局状态已重置")
-
-	// 配置测试环境
-	setup := CreateTestSetup(t)
-	setup.SetupBasicConfig(t)
-	t.Logf("测试环境已配置")
-
-	etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
-		shadow.RunWithEtcdStore(setup.FakeStore, func() {
-			setup.CreateServiceState(t, 0)
-			ss := setup.ServiceState
-			t.Logf("ServiceState已初始化")
-
-			// 创建并设置worker eph
-			workerFullId, ephPath := createAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
-
-			// It's not mutable so let's reuse it
-			_, workerStatePath := getWorkerStateAndPath(t, ss, workerFullId)
-
-			// 验证初始状态
-			validateInitialWorkerState(t, ss, workerFullId)
-
-			// 更新worker eph，设置关闭请求标志
-			t.Logf("更新worker eph，设置ReqShutDown=1")
-			updateWorkerEphWithShutdownRequest(t, setup, ctx, ephPath)
-			t.Logf("已更新worker eph节点，等待状态同步")
-
-			// 等待worker状态变为shutdown_req
-			t.Logf("等待worker状态变为online_shutdown_req")
-			waitForWorkerShutdownRequest(t, ss, workerFullId)
-			t.Logf("worker状态已成功变为shutdown_req")
-
-			// 验证最终状态
-			validateWorkerFinalState(t, ss, workerFullId, data.WS_Online_healthy, data.WS_Online_shutdown_req)
-
-			// 验证状态持久化
-			validateWorkerStatePersistenceWithState(t, setup.FakeStore, workerStatePath,
-				"worker-1", data.WS_Online_shutdown_req)
-		})
-	})
-}
-
 // 辅助函数
 
 // setupNullLogger 设置空日志记录器以减少输出
