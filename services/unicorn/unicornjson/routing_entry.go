@@ -17,7 +17,7 @@ type WorkerEntryJson struct {
 	// Capacity 表示工作节点的处理容量
 	Capacity int32 `json:"capacity"`
 
-	Assignments []*AssignmentJson `json:"assignments,omitempty"`
+	Assignments []*AssignmentJson `json:"assignments,omitempty"` // assignments is always sorted by shardId
 
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`
@@ -66,4 +66,51 @@ func WorkerEntryJsonFromJson(stringJson string) *WorkerEntryJson {
 		panic(ke)
 	}
 	return &obj
+}
+
+func (a *WorkerEntryJson) EqualsTo(b *WorkerEntryJson) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.WorkerId != b.WorkerId {
+		return false
+	}
+	if a.AddressPort != b.AddressPort {
+		return false
+	}
+	if a.Capacity != b.Capacity {
+		return false
+	}
+	if len(a.Assignments) != len(b.Assignments) {
+		return false
+	}
+	for i, assignA := range a.Assignments {
+		if !assignA.EqualsTo(b.Assignments[i]) {
+			return false
+		}
+	}
+	// last update time is not compared
+	return true
+}
+
+func (a *AssignmentJson) EqualsTo(b *AssignmentJson) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.ShardId != b.ShardId {
+		return false
+	}
+	if a.ReplicaIdx != b.ReplicaIdx {
+		return false
+	}
+	if a.AsginmentId != b.AsginmentId {
+		return false
+	}
+	return true
 }

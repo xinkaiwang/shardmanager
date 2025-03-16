@@ -86,6 +86,46 @@ func NewPilotAssignmentJson(shardId string, replicaIdx int, assignmentId string,
 	}
 }
 
+func (obj *PilotNodeJson) EqualsTo(other *PilotNodeJson) bool {
+	if obj.WorkerId != other.WorkerId {
+		return false
+	}
+	if obj.SessionId != other.SessionId {
+		return false
+	}
+	if len(obj.Assignments) != len(other.Assignments) {
+		return false
+	}
+	for i, assignment := range obj.Assignments {
+		if !assignment.EqualsTo(other.Assignments[i]) {
+			return false
+		}
+	}
+	if obj.LastUpdateAtMs != other.LastUpdateAtMs {
+		return false
+	}
+	if obj.LastUpdateReason != other.LastUpdateReason {
+		return false
+	}
+	return true
+}
+
+func (obj *PilotAssignmentJson) EqualsTo(other *PilotAssignmentJson) bool {
+	if obj.ShardId != other.ShardId {
+		return false
+	}
+	if obj.ReplicaIdx != other.ReplicaIdx {
+		return false
+	}
+	if obj.AsginmentId != other.AsginmentId {
+		return false
+	}
+	if obj.State != other.State {
+		return false
+	}
+	return true
+}
+
 // Define a custom type for State
 type PilotAssignmentState string
 
@@ -104,4 +144,4 @@ func isValidPilotAssignmentState(state PilotAssignmentState) bool {
 	default:
 		return false
 	}
-} 
+}
