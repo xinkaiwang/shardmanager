@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -66,6 +67,9 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
 		WorkerState := NewWorkerStateFromJson(workerStateJson)
 		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), ss.IsStateInMemory())
+		if WorkerState.HasShutdownHat() {
+			ss.ShutdownHat[workerFullId] = common.Unit{}
+		}
 		ss.ShadowState.InitWorkerState(workerFullId, workerStateJson)
 		ss.AllWorkers[workerFullId] = WorkerState
 		// assignments

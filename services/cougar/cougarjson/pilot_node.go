@@ -91,6 +91,7 @@ type PilotAssignmentState string
 
 // Define constants for each possible state
 const (
+	PAS_Unknown   PilotAssignmentState = "unknown"
 	PAS_Active    PilotAssignmentState = "active"
 	PAS_Completed PilotAssignmentState = "completed" // means this assignment needs to be removed.
 )
@@ -98,7 +99,7 @@ const (
 // isValidPilotAssignmentState 检查任务状态是否有效
 func isValidPilotAssignmentState(state PilotAssignmentState) bool {
 	switch state {
-	case PAS_Active, PAS_Completed:
+	case PAS_Unknown, PAS_Active, PAS_Completed:
 		return true
 	default:
 		return false

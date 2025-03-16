@@ -8,7 +8,7 @@ import (
 )
 
 // return true means you get a hat
-func (ss *ServiceState) hatTryApply(ctx context.Context, workerFullId data.WorkerFullId) bool {
+func (ss *ServiceState) hatTryGet(ctx context.Context, workerFullId data.WorkerFullId) bool {
 	if len(ss.ShutdownHat) >= int(ss.ServiceConfig.SystemLimit.MaxHatCountLimit) {
 		return false
 	}

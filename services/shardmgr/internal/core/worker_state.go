@@ -225,9 +225,24 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 	case data.WS_Online_healthy:
 		// nothing to do
 	case data.WS_Online_shutdown_req:
-		// nothing to do
+		// try to get a hat
+		if !ss.hatTryGet(ctx, ws.GetWorkerFullId(ss)) {
+			break
+		}
+		// Worker Event: Hat got, worker becomes offline
+		ws.State = data.WS_Online_shutdown_hat
+		dirty.AddDirtyFlag("WorkerState")
+		fallthrough
 	case data.WS_Online_shutdown_hat:
-		// nothing to do
+		// try to see if the worker is already empty (no assignments)
+		if len(ws.Assignments) > 0 {
+			break
+		}
+		// Worker Event: Draining complete, worker becomes offline
+		ws.State = data.WS_Online_shutdown_permit
+		ss.hatReturn(ctx, ws.GetWorkerFullId(ss))
+		dirty.AddDirtyFlag("WorkerState")
+		fallthrough
 	case data.WS_Online_shutdown_permit:
 		// nothing to do
 	case data.WS_Offline_graceful_period:
@@ -239,8 +254,8 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 		dirty.AddDirtyFlag("WorkerState")
 		fallthrough
 	case data.WS_Offline_draining_candidate:
-		// try to apply the draining hat
-		if !ss.hatTryApply(ctx, ws.GetWorkerFullId(ss)) {
+		// try to get the draining hat
+		if !ss.hatTryGet(ctx, ws.GetWorkerFullId(ss)) {
 			break
 		}
 		// Worker Event: Hat applied, worker becomes offline
@@ -348,4 +363,8 @@ func (df *DirtyFlag) IsDirty() bool {
 
 func (df *DirtyFlag) String() string {
 	return strings.Join(df.flags, ",")
+}
+
+func (ws *WorkerState) HasShutdownHat() bool {
+	return ws.State == data.WS_Online_shutdown_hat || ws.State == data.WS_Offline_draining_hat
 }
