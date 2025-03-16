@@ -27,7 +27,7 @@ func NewHousekeep1sEvent() *Housekeep1sEvent {
 
 func (ss *ServiceState) checkWorkerForTimeout(ctx context.Context) {
 	for workerFullId, worker := range ss.AllWorkers {
-		needsDelete := worker.checkWorkerForTimeout(ctx, ss)
+		needsDelete := worker.checkWorkerOnTimeout(ctx, ss)
 		if needsDelete {
 			delete(ss.AllWorkers, workerFullId)
 		}

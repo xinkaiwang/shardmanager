@@ -14,11 +14,11 @@ import (
 )
 
 type WorkerState struct {
-	WorkerId               data.WorkerId
-	SessionId              data.SessionId
-	State                  data.WorkerStateEnum
-	ShutdownRequesting     bool
-	ShutdownPermited       bool
+	WorkerId           data.WorkerId
+	SessionId          data.SessionId
+	State              data.WorkerStateEnum
+	ShutdownRequesting bool
+	// ShutdownPermited       bool
 	GracePeriodStartTimeMs int64
 
 	Assignments map[data.AssignmentId]common.Unit
@@ -32,11 +32,11 @@ type WorkerState struct {
 
 func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId) *WorkerState {
 	return &WorkerState{
-		WorkerId:                  workerId,
-		SessionId:                 sessionId,
-		State:                     data.WS_Online_healthy,
-		ShutdownRequesting:        false,
-		ShutdownPermited:          false,
+		WorkerId:           workerId,
+		SessionId:          sessionId,
+		State:              data.WS_Online_healthy,
+		ShutdownRequesting: false,
+		// ShutdownPermited:          false,
 		Assignments:               make(map[data.AssignmentId]common.Unit),
 		NotifyCh:                  make(chan struct{}, 1),
 		WorkerInfo:                smgjson.WorkerInfoJson{},
@@ -90,11 +90,21 @@ func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
 	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ss.IsStateInMemory())
 }
 
+func (ws *WorkerState) GetShutdownRequesting() bool {
+	return ws.ShutdownRequesting
+}
+func (ws *WorkerState) GetShutdownPermited() bool {
+	return ws.State == data.WS_Online_shutdown_permit ||
+		ws.State == data.WS_Offline_draining_complete ||
+		ws.State == data.WS_Offline_dead ||
+		ws.State == data.WS_Deleted
+}
+
 // syncEphStagingToWorkerState: must be called in runloop.
 // syncs from eph staging to worker state, should batch as much as possible
 func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
-	klogging.Info(ctx).With("dirtyCount", len(ss.EphDirty)).
-		Log("syncEphStagingToWorkerState", "开始同步worker eph到worker state")
+	// klogging.Info(ctx).With("dirtyCount", len(ss.EphDirty)).
+	// 	Log("syncEphStagingToWorkerState", "开始同步worker eph到worker state")
 
 	// only updates those have dirty flag
 	for workerFullId := range ss.EphDirty {
@@ -158,7 +168,7 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		dirty.AddDirtyFlag("WorkerState")
 	case data.WS_Online_shutdown_permit:
 		// Worker Event: Eph node lost, worker becomes offline
-		ws.State = data.WS_Offline_dead
+		ws.State = data.WS_Offline_draining_complete
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
 		dirty.AddDirtyFlag("WorkerState")
 	case data.WS_Offline_graceful_period:
@@ -219,7 +229,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	}
 }
 
-func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {
+func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {
 	currentState := ws.State
 	dirty := NewDirtyFlag()
 	switch ws.State {
@@ -283,11 +293,13 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 		dirty.AddDirtyFlag("WorkerState")
 		needsDelete = true
 	}
-	klogging.Info(ctx).With("workerId", ws.WorkerId).
-		With("dirty", dirty.String()).
-		With("currentState", currentState).
-		With("newState", ws.State).
-		Log("checkWorkerForTimeout", "worker timeout check finished")
+	if dirty.IsDirty() {
+		klogging.Info(ctx).With("workerId", ws.WorkerId).
+			With("dirty", dirty.String()).
+			With("currentState", currentState).
+			With("newState", ws.State).
+			Log("checkWorkerOnTimeout", "worker 定时任务完成")
+	}
 	if dirty.IsDirty() {
 		if needsDelete {
 			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), nil, dirty.String())
@@ -379,9 +391,9 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 		string(ws.SessionId),
 		updateReason,
 	)
-
-	// 当前时间作为更新时间
-	pilotNode.LastUpdateAtMs = kcommon.GetWallTimeMs()
+	if ws.GetShutdownPermited() {
+		pilotNode.ShutdownPermited = 1
+	}
 
 	// 将WorkerState中的Assignments转换为PilotAssignmentJson列表
 	pilotNode.Assignments = make([]*cougarjson.PilotAssignmentJson, 0, len(ws.Assignments))
@@ -408,12 +420,6 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 		// 添加到PilotNode
 		pilotNode.Assignments = append(pilotNode.Assignments, pilotAssignment)
 	}
-
-	klogging.Info(ctx).
-		With("workerId", ws.WorkerId).
-		With("sessionId", ws.SessionId).
-		With("assignmentCount", len(pilotNode.Assignments)).
-		Log("ToPilotNode", "转换WorkerState到PilotNodeJson")
 
 	return pilotNode
 }
@@ -463,14 +469,6 @@ func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, upd
 		// 添加到WorkerEntry
 		entry.Assignments = append(entry.Assignments, assignment)
 	}
-
-	klogging.Info(ctx).
-		With("workerId", ws.WorkerId).
-		With("sessionId", ws.SessionId).
-		With("addressPort", entry.AddressPort).
-		With("capacity", entry.Capacity).
-		With("assignmentCount", len(entry.Assignments)).
-		Log("ToRoutingEntry", "转换WorkerState到WorkerEntryJson")
 
 	return entry
 }

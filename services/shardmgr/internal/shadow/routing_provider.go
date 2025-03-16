@@ -3,7 +3,6 @@ package shadow
 import (
 	"context"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
@@ -39,27 +38,27 @@ func (provider *defaultRoutingProvider) StoreRoutingEntry(ctx context.Context, w
 	existingEntry, ok := provider.dict[workerFullId]
 	if ok {
 		if existingEntry.EqualsTo(routingEntry) {
-			klogging.Info(ctx).
-				With("workerFullId", workerFullId).
-				With("reason", routingEntry.LastUpdateReason).
-				Log("StoreRoutingEntry", "routing entry is the same, skip")
+			// klogging.Info(ctx).
+			// 	With("workerFullId", workerFullId).
+			// 	With("reason", routingEntry.LastUpdateReason).
+			// 	Log("StoreRoutingEntry", "routing entry is the same, skip")
 			return
 		}
 	}
 	path := provider.pathManager.FmtRoutingPath(workerFullId)
 	GetCurrentEtcdStore(ctx).Put(ctx, path, routingEntry.ToJson(), "RoutingEntry")
-	klogging.Info(ctx).
-		With("workerFullId", workerFullId).
-		With("routingEntry", routingEntry.ToJson()).
-		With("reason", routingEntry.LastUpdateReason).
-		Log("StoreRoutingEntry", "routing entry written")
+	// klogging.Info(ctx).
+	// 	With("workerFullId", workerFullId).
+	// 	With("routingEntry", routingEntry.ToJson()).
+	// 	With("reason", routingEntry.LastUpdateReason).
+	// 	Log("StoreRoutingEntry", "routing entry written")
 }
 
 func (provider *defaultRoutingProvider) DeleteRoutingEntry(ctx context.Context, workerFullId data.WorkerFullId) {
 	delete(provider.dict, workerFullId)
 	path := provider.pathManager.FmtRoutingPath(workerFullId)
 	GetCurrentEtcdStore(ctx).Put(ctx, path, "", "RoutingEntry")
-	klogging.Info(ctx).
-		With("workerFullId", workerFullId).
-		Log("StoreRoutingEntry", "routing entry deleted")
+	// klogging.Info(ctx).
+	// 	With("workerFullId", workerFullId).
+	// 	Log("StoreRoutingEntry", "routing entry deleted")
 }

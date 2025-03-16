@@ -9,6 +9,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
 )
 
 // TestWorkerGracePeriodExpiration 测试 worker 优雅期过期后的状态变化
@@ -110,18 +111,18 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 	setup.RunWith(fn)
 }
 
-// 这个测试与前一个测试验证相同的功能，但使用了不同的测试方法。它使用WaitUntilWorkerState函数主动等待特定状态的出现，而不是仅依赖于时间推进后的状态检查。这种方法更接近实际系统的行为模式，可以测试状态转换的时间特性和系统反应。
+// 这个测试与前一个测试验证相同的功能，但使用了不同的测试方法。它使用WaitUntilWorkerStateEnum函数主动等待特定状态的出现，而不是仅依赖于时间推进后的状态检查。这种方法更接近实际系统的行为模式，可以测试状态转换的时间特性和系统反应。
 // 主要区别是：
 // 1. TestWorkerGracePeriodExpiration使用直接的时间推进和状态检查
-// 2. TestWorkerGracePeriodExpiration_waitUntil使用WaitUntilWorkerState函数来等待状态变化
+// 2. TestWorkerGracePeriodExpiration_waitUntil使用WaitUntilWorkerStateEnum函数来等待状态变化
 
 // 1. 工作节点处于"未知"状态（WS_Unknown）
-// 2. 使用WaitUntilWorkerState等待节点状态变为"在线健康"（WS_Online_healthy）
+// 2. 使用WaitUntilWorkerStateEnum等待节点状态变为"在线健康"（WS_Online_healthy）
 // 3. 节点突然离线（临时节点被删除）
-// 4. 使用WaitUntilWorkerState等待节点状态变为"离线优雅期"（WS_Offline_graceful_period）
+// 4. 使用WaitUntilWorkerStateEnum等待节点状态变为"离线优雅期"（WS_Offline_graceful_period）
 // 5. 推进0.5秒并验证状态仍为"离线优雅期"
-// 6. 使用WaitUntilWorkerState等待15秒直到节点状态变为"排空完成"（WS_Offline_draining_complete）
-// 7. 使用WaitUntilWorkerState等待30秒直到节点状态变为"未知"（WS_Unknown）并被删除
+// 6. 使用WaitUntilWorkerStateEnum等待15秒直到节点状态变为"排空完成"（WS_Offline_draining_complete）
+// 7. 使用WaitUntilWorkerStateEnum等待30秒直到节点状态变为"未知"（WS_Unknown）并被删除
 
 func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 	ctx := context.Background()
@@ -150,7 +151,7 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 			assert.Equal(t, data.WS_Unknown, workerStateEnum, "worker 未创建")
 
 			// 等待worker state创建
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Online_healthy, 1000, 10)
+			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId, data.WS_Online_healthy, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker state 已创建 elapsedMs=%d", elapsedMs)
 		}
 
@@ -160,7 +161,7 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 		t.Logf("已删除worker eph节点，等待状态同步")
 
 		{
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Offline_graceful_period, 1000, 10)
+			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId, data.WS_Offline_graceful_period, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker state 状态已变为 WS_Offline_graceful_period elapsedMs=%d", elapsedMs)
 		}
 
@@ -175,13 +176,13 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 
 		{
 			// 15 秒后应该变为 WS_Offline_draining_complete
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Offline_draining_complete, 15*1000, 1000)
+			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId, data.WS_Offline_draining_complete, 15*1000, 1000)
 			assert.Equal(t, true, waitSucc, "worker state 状态已变为 WS_Offline_draining_complete elapsedMs=%d", elapsedMs)
 		}
 
 		{
 			// 25 秒后应该变为 WS_Unknow (已删除)
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Unknown, 30*1000, 1000)
+			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, func(pilot *WorkerState) bool { return pilot == nil }, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "worker state 状态已变为 WS_Unknown elapsedMs=%d", elapsedMs)
 		}
 		{
@@ -222,6 +223,7 @@ func TestWorkerShutdownRequest(t *testing.T) {
 	fn := func() {
 		// 创建 ServiceState
 		ss := NewServiceState(ctx, "TestWorkerShutdownRequest")
+		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		// 创建 worker-1 eph
@@ -230,7 +232,7 @@ func TestWorkerShutdownRequest(t *testing.T) {
 
 		{
 			// 等待worker state创建，状态变为WS_Online_healthy
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Online_healthy, 1000, 10)
+			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId, data.WS_Online_healthy, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker state 已创建 elapsedMs=%d", elapsedMs)
 		}
 
@@ -242,6 +244,20 @@ func TestWorkerShutdownRequest(t *testing.T) {
 			})
 			assert.Equal(t, false, shutdownRequesting, "初始ShutdownRequesting应为false")
 		}
+		{
+			// 等待 pilot 创建，状态变为WS_Online_healthy
+			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pilot *cougarjson.PilotNodeJson) bool {
+				return pilot != nil && pilot.WorkerId == string(workerFullId.WorkerId)
+			}, 1000, 10)
+			assert.Equal(t, true, waitSucc, "pilot 已创建 elapsedMs=%d", elapsedMs)
+		}
+		{
+			// 等待 routing 创建
+			waitSucc, elapsedMs := WaitUntilRoutingState(t, setup, workerFullId, func(entry *unicornjson.WorkerEntryJson) bool {
+				return entry != nil && entry.WorkerId == string(workerFullId.WorkerId)
+			}, 1000, 10)
+			assert.Equal(t, true, waitSucc, "routing 已创建 elapsedMs=%d", elapsedMs)
+		}
 
 		// 更新worker eph节点，设置ReqShutDown=1
 		t.Logf("更新worker eph节点，设置ReqShutDown=1")
@@ -251,7 +267,7 @@ func TestWorkerShutdownRequest(t *testing.T) {
 		// 等待worker状态变为WS_Online_shutdown_req
 		t.Logf("等待worker状态从WS_Online_healthy变为WS_Online_shutdown_req")
 		{
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, data.WS_Online_shutdown_req, 1000, 10)
+			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId, data.WS_Online_shutdown_req, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker state 状态已变为 WS_Online_shutdown_req elapsedMs=%d", elapsedMs)
 		}
 
@@ -331,7 +347,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 		// 3. 等待并验证worker-1状态被正确创建为"在线健康"
 		{
 			// 等待worker-1 state创建，状态变为WS_Online_healthy
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId1, data.WS_Online_healthy, 1000, 10)
+			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId1, data.WS_Online_healthy, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker-1 state 已创建并状态为online_healthy, elapsedMs=%d", elapsedMs)
 			t.Logf("worker-1状态验证完成: 状态=WS_Online_healthy, 耗时=%dms", elapsedMs)
 
@@ -349,7 +365,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 		// 5. 等待并验证worker-2状态被正确创建为"在线健康"
 		{
 			// 等待worker-2 state创建，状态变为WS_Online_healthy
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId2, data.WS_Online_healthy, 1000, 10)
+			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId2, data.WS_Online_healthy, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker-2 state 已创建并状态为online_healthy, elapsedMs=%d", elapsedMs)
 			t.Logf("worker-2状态验证完成: 状态=WS_Online_healthy, 耗时=%dms", elapsedMs)
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
 )
 
 // 确保全局状态在每个测试之前被正确重置
@@ -185,10 +186,20 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 	return false, elapsedMs
 }
 
-func WaitUntilWorkerState(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum, maxWaitMs int, intervalMs int) (bool, int64) {
+func WaitUntilWorkerStateEnum(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum, maxWaitMs int, intervalMs int) (bool, int64) {
+	return WaitUntilWorkerState(t, ss, workerFullId, func(ws *WorkerState) bool {
+		return ws != nil && ws.State == expectedState
+	}, maxWaitMs, intervalMs)
+}
+
+func WaitUntilWorkerState(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, fn func(pilot *WorkerState) bool, maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
-		state := safeGetWorkerStateEnum(ss, workerFullId)
-		return state == expectedState, string(state)
+		var result bool
+		safeAccessServiceState(ss, func(ss *ServiceState) {
+			worker := ss.AllWorkers[workerFullId]
+			result = fn(worker)
+		})
+		return result, ""
 	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
 }
@@ -200,6 +211,45 @@ func WaitUntilShardCount(t *testing.T, ss *ServiceState, expectedShardCount int,
 			count = len(ss.AllShards)
 		})
 		return count == expectedShardCount, strconv.Itoa(count)
+	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+func WaitUntilWorkerStatePersisted(t *testing.T, setup *FakeTimeTestSetup, workerFullId data.WorkerFullId, fn func(wsj *smgjson.WorkerStateJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		path := setup.ServiceState.PathManager.FmtWorkerStatePath(workerFullId)
+		item := setup.FakeStore.GetByKey(path)
+		if item == "" {
+			return fn(nil), ""
+		}
+		wsj := smgjson.WorkerStateJsonFromJson(item)
+		return fn(wsj), ""
+	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+func (setup *FakeTimeTestSetup) WaitUntilPilotNode(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *cougarjson.PilotNodeJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		path := setup.ServiceState.PathManager.FmtPilotPath(workerFullId)
+		item := setup.FakeStore.GetByKey(path)
+		if item == "" {
+			return fn(nil), ""
+		}
+		pilot := cougarjson.ParsePilotNodeJson(item)
+		return fn(pilot), ""
+	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+func WaitUntilRoutingState(t *testing.T, setup *FakeTimeTestSetup, workerFullId data.WorkerFullId, fn func(entry *unicornjson.WorkerEntryJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		path := setup.ServiceState.PathManager.FmtRoutingPath(workerFullId)
+		item := setup.FakeStore.GetByKey(path)
+		if item == "" {
+			return fn(nil), ""
+		}
+		entry := unicornjson.WorkerEntryJsonFromJson(item)
+		return fn(entry), ""
 	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
 }
@@ -267,4 +317,26 @@ func verifyAllShardsInStorage(t *testing.T, setup *FakeTimeTestSetup, expectedSt
 		}
 	}
 	return result
+}
+
+/******************************* UpdateEphNode *******************************/
+
+func (setup *FakeTimeTestSetup) UpdateEphNode(t *testing.T, workerFullId data.WorkerFullId, fn func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson) {
+	path := setup.ServiceState.PathManager.FmtWorkerEphPath(workerFullId)
+	item := setup.FakeEtcd.Get(setup.ctx, path)
+	if item.Value == "" {
+		newNode := fn(nil)
+		if newNode == nil {
+			return
+		}
+		setup.FakeEtcd.Set(setup.ctx, path, newNode.ToJson())
+		return
+	}
+	eph := cougarjson.WorkerEphJsonFromJson(item.Value)
+	newNode := fn(eph)
+	if newNode == nil {
+		setup.FakeEtcd.Delete(setup.ctx, path)
+		return
+	}
+	setup.FakeEtcd.Set(setup.ctx, path, newNode.ToJson())
 }

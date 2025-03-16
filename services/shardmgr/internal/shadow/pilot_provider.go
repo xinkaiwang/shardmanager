@@ -3,7 +3,6 @@ package shadow
 import (
 	"context"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -38,27 +37,27 @@ func (store *defaultPilotStore) StorePilotNode(ctx context.Context, workerFullId
 	existingNode, ok := store.dict[workerFullId]
 	if ok {
 		if existingNode.EqualsTo(pilotNode) {
-			klogging.Info(ctx).
-				With("workerFullId", workerFullId).
-				With("reason", pilotNode.LastUpdateReason).
-				Log("StorePilotNode", "pilot node is the same, skip")
+			// klogging.Info(ctx).
+			// 	With("workerFullId", workerFullId).
+			// 	With("reason", pilotNode.LastUpdateReason).
+			// 	Log("StorePilotNode", "pilot node is the same, skip")
 			return
 		}
 	}
 	path := config.GetCurrentPathManager().FmtPilotPath(workerFullId)
 	GetCurrentEtcdStore(ctx).Put(ctx, path, pilotNode.ToJson(), "PilotNode")
-	klogging.Info(ctx).
-		With("workerFullId", workerFullId).
-		With("pilotNode", pilotNode.ToJson()).
-		With("reason", pilotNode.LastUpdateReason).
-		Log("StorePilotNode", "pilot node stored")
+	// klogging.Info(ctx).
+	// 	With("workerFullId", workerFullId).
+	// 	With("pilotNode", pilotNode.ToJson()).
+	// 	With("reason", pilotNode.LastUpdateReason).
+	// 	Log("StorePilotNode", "pilot node stored")
 }
 
 func (store *defaultPilotStore) DeleteNode(ctx context.Context, workerFullId data.WorkerFullId) {
 	delete(store.dict, workerFullId)
 	path := config.GetCurrentPathManager().FmtPilotPath(workerFullId)
 	GetCurrentEtcdStore(ctx).Put(ctx, path, "", "PilotNode")
-	klogging.Info(ctx).
-		With("workerFullId", workerFullId).
-		Log("StorePilotNode", "pilot node deleted")
+	// klogging.Info(ctx).
+	// 	With("workerFullId", workerFullId).
+	// 	Log("StorePilotNode", "pilot node deleted")
 }

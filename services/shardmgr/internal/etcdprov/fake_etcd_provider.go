@@ -160,24 +160,19 @@ func (f *FakeEtcdProvider) LoadAllByPrefix(ctx context.Context, pathPrefix strin
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	klogging.Info(ctx).With("pathPrefix", pathPrefix).With("dataCount", len(f.data)).Log("LoadAllByPrefix", "加载所有键值")
-
-	// 打印所有存储的键值，帮助调试
-	for k, v := range f.data {
-		klogging.Info(ctx).With("key", k).With("valueLength", len(v.Value)).With("revision", v.ModRevision).Log("LoadAllByPrefixData", "存储的键值")
-	}
+	// klogging.Info(ctx).With("pathPrefix", pathPrefix).With("dataCount", len(f.data)).Log("LoadAllByPrefix", "加载所有键值")
 
 	var items []EtcdKvItem
 	for k, v := range f.data {
 		if strings.HasPrefix(k, pathPrefix) {
-			klogging.Info(ctx).With("key", k).With("matches", true).Log("LoadAllByPrefixCheck", "键前缀匹配")
+			// klogging.Info(ctx).With("key", k).With("matches", true).Log("LoadAllByPrefixCheck", "键前缀匹配")
 			items = append(items, EtcdKvItem{
 				Key:         k,
 				Value:       v.Value,
 				ModRevision: v.ModRevision,
 			})
 		} else {
-			klogging.Info(ctx).With("key", k).With("matches", false).Log("LoadAllByPrefixCheck", "键前缀不匹配")
+			// klogging.Info(ctx).With("key", k).With("matches", false).Log("LoadAllByPrefixCheck", "键前缀不匹配")
 		}
 	}
 
@@ -186,7 +181,7 @@ func (f *FakeEtcdProvider) LoadAllByPrefix(ctx context.Context, pathPrefix strin
 		return items[i].Key < items[j].Key
 	})
 
-	klogging.Info(ctx).With("pathPrefix", pathPrefix).With("count", len(items)).With("revision", f.currentRevision).Log("LoadAllByPrefix", "加载完成")
+	// klogging.Info(ctx).With("pathPrefix", pathPrefix).With("count", len(items)).With("revision", f.currentRevision).Log("LoadAllByPrefix", "加载完成")
 	return items, f.currentRevision
 }
 

@@ -17,6 +17,7 @@ type PilotNodeJson struct {
 
 	Assignments []*PilotAssignmentJson `json:"assignments"`
 
+	ShutdownPermited int8   `json:"shutdown_permited,omitempty"`
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`
 }
@@ -100,6 +101,9 @@ func (obj *PilotNodeJson) EqualsTo(other *PilotNodeJson) bool {
 		if !assignment.EqualsTo(other.Assignments[i]) {
 			return false
 		}
+	}
+	if obj.ShutdownPermited != other.ShutdownPermited {
+		return false
 	}
 	if obj.LastUpdateAtMs != other.LastUpdateAtMs {
 		return false

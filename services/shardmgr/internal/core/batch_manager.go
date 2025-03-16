@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 )
 
@@ -35,7 +34,7 @@ func (bm *BatchManager) TrySchedule(ctx context.Context) {
 		needSchedule = true
 	}
 	bm.mutex.Unlock()
-	klogging.Info(ctx).With("name", bm.name).With("needSchedule", needSchedule).Log("TrySchedule", "done")
+	// klogging.Info(ctx).With("name", bm.name).With("needSchedule", needSchedule).Log("TrySchedule", "done")
 	if !needSchedule {
 		return
 	}
