@@ -15,14 +15,15 @@ import (
 
 // ServiceState implements the CriticalResource interface
 type ServiceState struct {
-	Name          string
-	runloop       *krunloop.RunLoop[*ServiceState]
-	PathManager   *config.PathManager
-	ServiceInfo   *ServiceInfo
-	ServiceConfig *config.ServiceConfig
-	StoreProvider shadow.StoreProvider
-	PilotProvider shadow.PilotProvider
-	ShadowState   *shadow.ShadowState
+	Name            string
+	runloop         *krunloop.RunLoop[*ServiceState]
+	PathManager     *config.PathManager
+	ServiceInfo     *ServiceInfo
+	ServiceConfig   *config.ServiceConfig
+	storeProvider   shadow.StoreProvider
+	PilotProvider   shadow.PilotProvider
+	RoutingProvider shadow.RoutingProvider
+	ShadowState     *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
 	AllShards      map[data.ShardId]*ShardState
@@ -54,8 +55,9 @@ func NewServiceState(ctx context.Context, name string) *ServiceState { // name i
 	}
 	ss.PathManager = config.NewPathManager()
 	ss.ShadowState = shadow.NewShadowState(ctx, ss.PathManager)
-	ss.StoreProvider = ss.ShadowState
+	ss.storeProvider = ss.ShadowState
 	ss.PilotProvider = shadow.GetCurrentPilotProvider()
+	ss.RoutingProvider = shadow.GetCurrentRoutingProvider()
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.Init(ctx)
 	// strt runloop
@@ -87,12 +89,19 @@ func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
 	}
 }
 
-func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.WorkerFullId, workerState WorkerState, reason string) {
+// FlushWorkerState: call this to flush all the in-memory state to the store
+func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.WorkerFullId, workerState *WorkerState, reason string) {
+	if workerState == nil {
+		ss.storeProvider.StoreWorkerState(workerFullId, nil)
+		ss.PilotProvider.StorePilotNode(ctx, workerFullId, nil)
+		ss.RoutingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
+		return
+	}
 	// workerStateJson
 	workerStateJson := workerState.ToWorkerStateJson(ctx, ss, reason)
-	ss.StoreProvider.StoreWorkerState(workerFullId, workerStateJson)
+	ss.storeProvider.StoreWorkerState(workerFullId, workerStateJson)
 	// pilot
 	ss.PilotProvider.StorePilotNode(ctx, workerFullId, workerState.ToPilotNode(ctx, ss, reason))
 	// routing table
-	shadow.GetCurrentRoutingProvider().StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
+	ss.RoutingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
 }

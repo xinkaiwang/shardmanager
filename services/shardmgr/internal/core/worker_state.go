@@ -114,7 +114,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId))
 				workerState.updateWorkerByEph(ctx, workerEph)
 				ss.AllWorkers[workerFullId] = workerState
-				ss.StoreProvider.StoreWorkerState(workerFullId, workerState.ToWorkerStateJson(ctx, ss, "NewWorker"))
+				ss.FlushWorkerState(ctx, workerFullId, workerState, "NewWorker")
 			}
 		} else {
 			if workerEph == nil {
@@ -179,7 +179,7 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		Log("onEphNodeLostDone", "worker eph lost")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, reason))
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
 		ws.signalAll(reason)
 	}
 }
@@ -214,7 +214,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		Log("onEphNodeUpdateDone", "workerEph updated finished")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, reason))
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
 		ws.signalAll(reason)
 	}
 }
@@ -290,9 +290,11 @@ func (ws *WorkerState) checkWorkerForTimeout(ctx context.Context, ss *ServiceSta
 		Log("checkWorkerForTimeout", "worker timeout check finished")
 	if dirty.IsDirty() {
 		if needsDelete {
-			ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), nil)
+			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), nil, dirty.String())
+			// ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), nil)
 		} else {
-			ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))
+			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, dirty.String())
+			// ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))
 		}
 	}
 	return

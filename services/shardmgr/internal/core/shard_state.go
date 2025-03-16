@@ -66,20 +66,20 @@ func (ss *ServiceState) FlushShardState(ctx context.Context, updated []data.Shar
 
 	for _, shardId := range updated {
 		klogging.Info(ctx).With("shardId", shardId).Log("FlushShardState", "更新分片")
-		ss.StoreProvider.StoreShardState(shardId, ss.AllShards[shardId].ToJson())
+		ss.storeProvider.StoreShardState(shardId, ss.AllShards[shardId].ToJson())
 	}
 	for _, shardId := range inserted {
 		klogging.Info(ctx).With("shardId", shardId).Log("FlushShardState", "插入分片")
-		ss.StoreProvider.StoreShardState(shardId, ss.AllShards[shardId].ToJson())
+		ss.storeProvider.StoreShardState(shardId, ss.AllShards[shardId].ToJson())
 	}
 	for _, shardId := range deleted {
 		if shard, ok := ss.AllShards[shardId]; ok {
 			// 使用当前分片的状态创建软删除记录
 			// 分片已经在MarkAsSoftDelete中设置了LameDuck=true
-			ss.StoreProvider.StoreShardState(shardId, shard.ToJson())
+			ss.storeProvider.StoreShardState(shardId, shard.ToJson())
 		} else {
 			// 如果分片已经不在内存中，则删除分片状态
-			ss.StoreProvider.StoreShardState(shardId, nil)
+			ss.storeProvider.StoreShardState(shardId, nil)
 		}
 	}
 }

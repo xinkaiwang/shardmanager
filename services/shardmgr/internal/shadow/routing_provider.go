@@ -47,6 +47,10 @@ func (provider *defaultRoutingProvider) SetInitialRouting(ctx context.Context, w
 }
 
 func (provider *defaultRoutingProvider) StoreRoutingEntry(ctx context.Context, workerFullId data.WorkerFullId, routingEntry *unicornjson.WorkerEntryJson) {
+	if routingEntry == nil {
+		provider.DeleteRoutingEntry(ctx, workerFullId)
+		return
+	}
 	existingEntry, ok := provider.dict[workerFullId]
 	if ok {
 		if existingEntry.EqualsTo(routingEntry) {
@@ -64,4 +68,13 @@ func (provider *defaultRoutingProvider) StoreRoutingEntry(ctx context.Context, w
 		With("routingEntry", routingEntry.ToJson()).
 		With("reason", routingEntry.LastUpdateReason).
 		Log("StoreRoutingEntry", "routing entry written")
+}
+
+func (provider *defaultRoutingProvider) DeleteRoutingEntry(ctx context.Context, workerFullId data.WorkerFullId) {
+	delete(provider.dict, workerFullId)
+	path := config.GetCurrentPathManager().FmtRoutingPath(workerFullId)
+	GetCurrentEtcdStore(ctx).Put(ctx, path, "", "RoutingEntry")
+	klogging.Info(ctx).
+		With("workerFullId", workerFullId).
+		Log("StoreRoutingEntry", "routing entry deleted")
 }

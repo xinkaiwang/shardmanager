@@ -49,6 +49,10 @@ func (store *defaultPilotStore) SetInitialPilotNode(ctx context.Context, workerF
 }
 
 func (store *defaultPilotStore) StorePilotNode(ctx context.Context, workerFullId data.WorkerFullId, pilotNode *cougarjson.PilotNodeJson) {
+	if pilotNode == nil {
+		store.DeleteNode(ctx, workerFullId)
+		return
+	}
 	existingNode, ok := store.dict[workerFullId]
 	if ok {
 		if existingNode.EqualsTo(pilotNode) {
@@ -66,4 +70,13 @@ func (store *defaultPilotStore) StorePilotNode(ctx context.Context, workerFullId
 		With("pilotNode", pilotNode.ToJson()).
 		With("reason", pilotNode.LastUpdateReason).
 		Log("StorePilotNode", "pilot node stored")
+}
+
+func (store *defaultPilotStore) DeleteNode(ctx context.Context, workerFullId data.WorkerFullId) {
+	delete(store.dict, workerFullId)
+	path := config.GetCurrentPathManager().FmtPilotPath(workerFullId)
+	GetCurrentEtcdStore(ctx).Put(ctx, path, "", "PilotNode")
+	klogging.Info(ctx).
+		With("workerFullId", workerFullId).
+		Log("StorePilotNode", "pilot node deleted")
 }
