@@ -3,6 +3,7 @@ package unicornjson
 import (
 	"encoding/json"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
@@ -17,14 +18,19 @@ type WorkerEntryJson struct {
 	Capacity int32 `json:"capacity"`
 
 	Assignments []*AssignmentJson `json:"assignments,omitempty"`
+
+	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
+	LastUpdateReason string `json:"update_reason,omitempty"`
 }
 
-func NewWorkerEntryJson(workerId string, addressPort string, capacity int32) *WorkerEntryJson {
+func NewWorkerEntryJson(workerId string, addressPort string, capacity int32, updateReason string) *WorkerEntryJson {
 	return &WorkerEntryJson{
-		WorkerId:    workerId,
-		AddressPort: addressPort,
-		Capacity:    capacity,
-		Assignments: make([]*AssignmentJson, 0),
+		WorkerId:         workerId,
+		AddressPort:      addressPort,
+		Capacity:         capacity,
+		Assignments:      make([]*AssignmentJson, 0),
+		LastUpdateAtMs:   kcommon.GetWallTimeMs(),
+		LastUpdateReason: updateReason,
 	}
 }
 

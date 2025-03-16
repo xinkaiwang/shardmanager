@@ -2,6 +2,17 @@ package config
 
 import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 
+var (
+	currentPathManager *PathManager
+)
+
+func GetCurrentPathManager() *PathManager {
+	if currentPathManager == nil {
+		currentPathManager = NewPathManager()
+	}
+	return currentPathManager
+}
+
 type PathManager struct {
 }
 
@@ -31,8 +42,16 @@ func (pm *PathManager) GetWorkerEphPathPrefix() string {
 	return "/smg/eph/"
 }
 
+func (pm *PathManager) GetPilotPathPrefix() string {
+	return "/smg/pilot/"
+}
+
 func (pm *PathManager) GetExecutionPlanPrefix() string {
 	return "/smg/move/"
+}
+
+func (pm *PathManager) GetRoutingPathPrefix() string {
+	return "/smg/routing/"
 }
 
 func (pm *PathManager) FmtShardStatePath(shardId data.ShardId) string {
@@ -49,4 +68,12 @@ func (pm *PathManager) FmtExecutionPlanPath(proposalId data.ProposalId) string {
 
 func (pm *PathManager) FmtWorkerEphPath(workerFullId data.WorkerFullId) string {
 	return pm.GetWorkerEphPathPrefix() + workerFullId.String()
+}
+
+func (pm *PathManager) FmtPilotPath(workerFullId data.WorkerFullId) string {
+	return pm.GetPilotPathPrefix() + workerFullId.String()
+}
+
+func (pm *PathManager) FmtRoutingPath(workerFullId data.WorkerFullId) string {
+	return pm.GetRoutingPathPrefix() + workerFullId.String()
 }

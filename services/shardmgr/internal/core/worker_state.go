@@ -10,6 +10,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
 )
 
 type WorkerState struct {
@@ -399,7 +400,7 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 			string(assign.ShardId),
 			int(assign.ReplicaIdx),
 			string(assignmentId),
-			cougarjson.PAS_Active,
+			ws.Ase2PilotState(assign.TargetState),
 		)
 
 		// 添加到PilotNode
@@ -426,4 +427,49 @@ func (ws *WorkerState) Ase2PilotState(targetState smgjson.AssignmentStateEnum) c
 	default:
 		return cougarjson.PAS_Active
 	}
+}
+
+func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, updateReason string) *unicornjson.WorkerEntryJson {
+	// 创建WorkerEntryJson对象
+	entry := unicornjson.NewWorkerEntryJson(
+		string(ws.WorkerId),
+		ws.WorkerInfo.AddressPort,
+		ws.WorkerInfo.Capacity,
+		updateReason,
+	)
+
+	// 将WorkerState中的Assignments转换为AssignmentJson列表
+	entry.Assignments = make([]*unicornjson.AssignmentJson, 0, len(ws.Assignments))
+
+	// 遍历每个分配任务，创建相应的AssignmentJson
+	for assignmentId := range ws.Assignments {
+		assign := ss.AllAssignments[assignmentId]
+		if assign == nil {
+			klogging.Fatal(ctx).
+				With("workerId", ws.WorkerId).
+				With("sessionId", ws.SessionId).
+				With("assignmentId", assignmentId).
+				Log("ToRoutingEntry", "assignment not found")
+			continue
+		}
+		// 创建AssignmentJson
+		assignment := unicornjson.NewAssignmentJson(
+			string(assign.ShardId),
+			int(assign.ReplicaIdx),
+			string(assignmentId),
+		)
+
+		// 添加到WorkerEntry
+		entry.Assignments = append(entry.Assignments, assignment)
+	}
+
+	klogging.Info(ctx).
+		With("workerId", ws.WorkerId).
+		With("sessionId", ws.SessionId).
+		With("addressPort", entry.AddressPort).
+		With("capacity", entry.Capacity).
+		With("assignmentCount", len(entry.Assignments)).
+		Log("ToRoutingEntry", "转换WorkerState到WorkerEntryJson")
+
+	return entry
 }

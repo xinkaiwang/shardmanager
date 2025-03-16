@@ -30,6 +30,7 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/prometheus/statsd_exporter v0.22.7 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/xinkaiwang/shardmanager/services/unicorn v0.0.0-20250316022534-98239ec20f34 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.11 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.11 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
@@ -48,4 +49,5 @@ require (
 )
 
 replace github.com/xinkaiwang/shardmanager/libs/xklib => ../../libs/xklib
+
 replace github.com/xinkaiwang/shardmanager/services/cougar => ../cougar

@@ -21,6 +21,7 @@ type ServiceState struct {
 	ServiceInfo   *ServiceInfo
 	ServiceConfig *config.ServiceConfig
 	StoreProvider shadow.StoreProvider
+	PilotProvider shadow.PilotProvider
 	ShadowState   *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
@@ -54,6 +55,7 @@ func NewServiceState(ctx context.Context, name string) *ServiceState { // name i
 	ss.PathManager = config.NewPathManager()
 	ss.ShadowState = shadow.NewShadowState(ctx, ss.PathManager)
 	ss.StoreProvider = ss.ShadowState
+	ss.PilotProvider = shadow.GetCurrentPilotProvider()
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.Init(ctx)
 	// strt runloop
@@ -83,4 +85,14 @@ func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
 	if ss.ShadowState != nil {
 		ss.ShadowState.StopAndWaitForExit(ctx)
 	}
+}
+
+func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.WorkerFullId, workerState WorkerState, reason string) {
+	// workerStateJson
+	workerStateJson := workerState.ToWorkerStateJson(ctx, ss, reason)
+	ss.StoreProvider.StoreWorkerState(workerFullId, workerStateJson)
+	// pilot
+	ss.PilotProvider.StorePilotNode(ctx, workerFullId, workerState.ToPilotNode(ctx, ss, reason))
+	// routing table
+	shadow.GetCurrentRoutingProvider().StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
 }
