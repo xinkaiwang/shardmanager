@@ -13,3 +13,11 @@ func NewAssignmentStateJson(shardId data.ShardId, replicaIdx data.ReplicaIdx) *A
 		ReplicaIdx: replicaIdx,
 	}
 }
+
+type AssignmentStateEnum string
+
+const (
+	ASE_Unknown AssignmentStateEnum = "unknown"
+	ASE_Healthy AssignmentStateEnum = "healthy"
+	ASE_Dropped AssignmentStateEnum = "dropped"
+)

@@ -368,3 +368,62 @@ func (df *DirtyFlag) String() string {
 func (ws *WorkerState) HasShutdownHat() bool {
 	return ws.State == data.WS_Online_shutdown_hat || ws.State == data.WS_Offline_draining_hat
 }
+
+func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, updateReason string) *cougarjson.PilotNodeJson {
+	// 创建PilotNodeJson对象
+	pilotNode := cougarjson.NewPilotNodeJson(
+		string(ws.WorkerId),
+		string(ws.SessionId),
+		updateReason,
+	)
+
+	// 当前时间作为更新时间
+	pilotNode.LastUpdateAtMs = kcommon.GetWallTimeMs()
+
+	// 将WorkerState中的Assignments转换为PilotAssignmentJson列表
+	pilotNode.Assignments = make([]*cougarjson.PilotAssignmentJson, 0, len(ws.Assignments))
+
+	// 遍历每个分配任务，创建相应的PilotAssignmentJson
+	for assignmentId := range ws.Assignments {
+		assign := ss.AllAssignments[assignmentId]
+		if assign == nil {
+			klogging.Fatal(ctx).
+				With("workerId", ws.WorkerId).
+				With("sessionId", ws.SessionId).
+				With("assignmentId", assignmentId).
+				Log("ToPilotNode", "assignment not found")
+			continue
+		}
+		// 创建PilotAssignmentJson
+		pilotAssignment := cougarjson.NewPilotAssignmentJson(
+			string(assign.ShardId),
+			int(assign.ReplicaIdx),
+			string(assignmentId),
+			cougarjson.PAS_Active,
+		)
+
+		// 添加到PilotNode
+		pilotNode.Assignments = append(pilotNode.Assignments, pilotAssignment)
+	}
+
+	klogging.Info(ctx).
+		With("workerId", ws.WorkerId).
+		With("sessionId", ws.SessionId).
+		With("assignmentCount", len(pilotNode.Assignments)).
+		Log("ToPilotNode", "转换WorkerState到PilotNodeJson")
+
+	return pilotNode
+}
+
+func (ws *WorkerState) Ase2PilotState(targetState smgjson.AssignmentStateEnum) cougarjson.PilotAssignmentState {
+	switch targetState {
+	case smgjson.ASE_Unknown:
+		return cougarjson.PAS_Unknown
+	case smgjson.ASE_Healthy:
+		return cougarjson.PAS_Active
+	case smgjson.ASE_Dropped:
+		return cougarjson.PAS_Completed
+	default:
+		return cougarjson.PAS_Active
+	}
+}
