@@ -21,8 +21,8 @@ type ServiceState struct {
 	ServiceInfo     *ServiceInfo
 	ServiceConfig   *config.ServiceConfig
 	storeProvider   shadow.StoreProvider
-	PilotProvider   shadow.PilotProvider
-	RoutingProvider shadow.RoutingProvider
+	pilotProvider   shadow.PilotProvider
+	routingProvider shadow.RoutingProvider
 	ShadowState     *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
@@ -56,8 +56,8 @@ func NewServiceState(ctx context.Context, name string) *ServiceState { // name i
 	ss.PathManager = config.NewPathManager()
 	ss.ShadowState = shadow.NewShadowState(ctx, ss.PathManager)
 	ss.storeProvider = ss.ShadowState
-	ss.PilotProvider = shadow.GetCurrentPilotProvider()
-	ss.RoutingProvider = shadow.GetCurrentRoutingProvider()
+	ss.pilotProvider = shadow.NewPilotStore(ss.PathManager)
+	ss.routingProvider = shadow.NewDefaultRoutingProvider(ss.PathManager)
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.Init(ctx)
 	// strt runloop
@@ -93,15 +93,15 @@ func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
 func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.WorkerFullId, workerState *WorkerState, reason string) {
 	if workerState == nil {
 		ss.storeProvider.StoreWorkerState(workerFullId, nil)
-		ss.PilotProvider.StorePilotNode(ctx, workerFullId, nil)
-		ss.RoutingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
+		ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
+		ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
 		return
 	}
 	// workerStateJson
 	workerStateJson := workerState.ToWorkerStateJson(ctx, ss, reason)
 	ss.storeProvider.StoreWorkerState(workerFullId, workerStateJson)
 	// pilot
-	ss.PilotProvider.StorePilotNode(ctx, workerFullId, workerState.ToPilotNode(ctx, ss, reason))
+	ss.pilotProvider.StorePilotNode(ctx, workerFullId, workerState.ToPilotNode(ctx, ss, reason))
 	// routing table
-	ss.RoutingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
+	ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
 }

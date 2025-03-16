@@ -2,29 +2,12 @@ package shadow
 
 import (
 	"context"
-	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
 )
-
-var (
-	currentCoutingProvider RoutingProvider
-	routingProviderMutex   sync.RWMutex
-)
-
-func GetCurrentRoutingProvider() RoutingProvider {
-	routingProviderMutex.Lock()
-	defer routingProviderMutex.Unlock()
-
-	if currentCoutingProvider == nil {
-		currentCoutingProvider = NewDefaultRoutingProvider()
-	}
-
-	return currentCoutingProvider
-}
 
 type RoutingProvider interface {
 	SetInitialRouting(ctx context.Context, workerFullId data.WorkerFullId, routingEntry *unicornjson.WorkerEntryJson)
@@ -33,12 +16,14 @@ type RoutingProvider interface {
 
 // defaultRoutingProvider implements RoutingProvider
 type defaultRoutingProvider struct {
-	dict map[data.WorkerFullId]*unicornjson.WorkerEntryJson
+	pathManager *config.PathManager
+	dict        map[data.WorkerFullId]*unicornjson.WorkerEntryJson
 }
 
-func NewDefaultRoutingProvider() RoutingProvider {
+func NewDefaultRoutingProvider(pathManager *config.PathManager) RoutingProvider {
 	return &defaultRoutingProvider{
-		dict: make(map[data.WorkerFullId]*unicornjson.WorkerEntryJson),
+		pathManager: pathManager,
+		dict:        make(map[data.WorkerFullId]*unicornjson.WorkerEntryJson),
 	}
 }
 
@@ -61,7 +46,7 @@ func (provider *defaultRoutingProvider) StoreRoutingEntry(ctx context.Context, w
 			return
 		}
 	}
-	path := config.GetCurrentPathManager().FmtRoutingPath(workerFullId)
+	path := provider.pathManager.FmtRoutingPath(workerFullId)
 	GetCurrentEtcdStore(ctx).Put(ctx, path, routingEntry.ToJson(), "RoutingEntry")
 	klogging.Info(ctx).
 		With("workerFullId", workerFullId).
@@ -72,7 +57,7 @@ func (provider *defaultRoutingProvider) StoreRoutingEntry(ctx context.Context, w
 
 func (provider *defaultRoutingProvider) DeleteRoutingEntry(ctx context.Context, workerFullId data.WorkerFullId) {
 	delete(provider.dict, workerFullId)
-	path := config.GetCurrentPathManager().FmtRoutingPath(workerFullId)
+	path := provider.pathManager.FmtRoutingPath(workerFullId)
 	GetCurrentEtcdStore(ctx).Put(ctx, path, "", "RoutingEntry")
 	klogging.Info(ctx).
 		With("workerFullId", workerFullId).
