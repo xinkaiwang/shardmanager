@@ -435,8 +435,7 @@ func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, upd
 		string(ws.WorkerId),
 		ws.WorkerInfo.AddressPort,
 		ws.WorkerInfo.Capacity,
-		updateReason,
-	)
+		updateReason)
 
 	// 将WorkerState中的Assignments转换为AssignmentJson列表
 	entry.Assignments = make([]*unicornjson.AssignmentJson, 0, len(ws.Assignments))
