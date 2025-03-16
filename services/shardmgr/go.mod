@@ -6,7 +6,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/stretchr/testify v1.9.0
 	github.com/xinkaiwang/shardmanager/libs/xklib v0.0.0
-	github.com/xinkaiwang/shardmanager/services/cougar v0.0.0-20250219071034-f0f83f414d39
+	github.com/xinkaiwang/shardmanager/services/cougar v0.0.0
 	go.etcd.io/etcd/client/v3 v3.5.11
 	go.opencensus.io v0.24.0
 )
@@ -48,3 +48,4 @@ require (
 )
 
 replace github.com/xinkaiwang/shardmanager/libs/xklib => ../../libs/xklib
+replace github.com/xinkaiwang/shardmanager/services/cougar => ../cougar

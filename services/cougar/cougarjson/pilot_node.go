@@ -104,4 +104,4 @@ func isValidPilotAssignmentState(state PilotAssignmentState) bool {
 	default:
 		return false
 	}
-}
+} 
