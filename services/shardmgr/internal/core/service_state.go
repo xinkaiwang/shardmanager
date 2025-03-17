@@ -23,6 +23,7 @@ type ServiceState struct {
 	storeProvider   shadow.StoreProvider
 	pilotProvider   shadow.PilotProvider
 	routingProvider shadow.RoutingProvider
+	actionProvider  shadow.ActionProvider
 	ShadowState     *shadow.ShadowState
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
@@ -58,6 +59,7 @@ func NewServiceState(ctx context.Context, name string) *ServiceState { // name i
 	ss.storeProvider = ss.ShadowState
 	ss.pilotProvider = shadow.NewPilotStore(ss.PathManager)
 	ss.routingProvider = shadow.NewDefaultRoutingProvider(ss.PathManager)
+	ss.actionProvider = shadow.NewDefaultActionProvider(ss.PathManager)
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.Init(ctx)
 	// strt runloop

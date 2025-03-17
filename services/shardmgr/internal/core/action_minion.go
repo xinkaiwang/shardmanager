@@ -23,7 +23,21 @@ func NewActionMinion(ss *ServiceState, moveState *MoveState) *ActionMinion {
 	}
 }
 
-func (am *ActionMinion) Run(ctx context.Context) {
+func (ss *ServiceState) ActionMinionRun(ctx context.Context, am *ActionMinion) {
+	startMs := kcommon.GetWallTimeMs()
+	ke := kcommon.TryCatchRun(ctx, func() {
+		am.run(ctx)
+	})
+	elapseMs := kcommon.GetWallTimeMs() - startMs
+	if ke != nil {
+		klogging.Error(ctx).WithError(ke).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion", "Run")
+	} else {
+		klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion", "Run")
+	}
+	ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, nil)
+}
+
+func (am *ActionMinion) run(ctx context.Context) {
 	klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).Log("ActionMinion", "Run")
 	for am.moveState.CurrentAction < len(am.moveState.Actions) {
 		action := am.moveState.Actions[am.moveState.CurrentAction]
@@ -73,6 +87,7 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 			panic(ke)
 		}
 		am.moveState.ActionConducted = 1
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
 
 	// step 2: sleep
@@ -108,6 +123,7 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 			panic(ke)
 		}
 		am.moveState.ActionConducted = 1
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
 }
 
@@ -158,6 +174,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			panic(ke)
 		}
 		am.moveState.ActionConducted = 1
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
 	// step 2: wail until this assignment is completed (based on feedback from ephemeral node)
 	completed := false
@@ -165,34 +182,36 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 		if chanWait != nil {
 			select {
 			case <-chanWait:
-				succ := true
-				var ke *kerror.Kerror
-				am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
-					workerState, ok := ss.AllWorkers[data.WorkerFullIdParseFromString(action.To)]
-					if !ok {
-						succ = false
-						ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", action.To)
-						return
-					}
-					assign, ok := ss.AllAssignments[action.AssignmentId]
-					if !ok {
-						succ = false
-						ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
-						return
-					}
-					if assign.CurrentConfirmedState == smgjson.ASE_Healthy {
-						completed = true
-						return
-					}
-					chanWait = workerState.NotifyCh
-				}))
-				if !succ {
-					panic(ke)
-				}
+				klogging.Info(ctx).With("worker", action.To).Log("ActionMinion", "wake up")
 			case <-ctx.Done():
 				panic(kerror.Create("ContextCanceled", "context canceled"))
 			}
 		}
+		succ := true
+		var ke *kerror.Kerror
+		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+			workerState, ok := ss.AllWorkers[data.WorkerFullIdParseFromString(action.To)]
+			if !ok {
+				succ = false
+				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", action.To)
+				return
+			}
+			assign, ok := ss.AllAssignments[action.AssignmentId]
+			if !ok {
+				succ = false
+				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
+				return
+			}
+			if assign.CurrentConfirmedState == smgjson.ASE_Healthy {
+				completed = true
+				return
+			}
+			chanWait = workerState.NotifyCh
+		}))
+		if !succ {
+			panic(ke)
+		}
+
 	}
 }
 
@@ -245,6 +264,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			panic(ke)
 		}
 		am.moveState.ActionConducted = 1
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
 	// step 2: wail until drop assignment is completed (based on feedback from ephemeral node)
 	completed := false
@@ -252,33 +272,34 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 		if chanWait != nil {
 			select {
 			case <-chanWait:
-				succ := true
-				var ke *kerror.Kerror
-				am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
-					workerState, ok := ss.AllWorkers[data.WorkerFullIdParseFromString(action.From)]
-					if !ok {
-						succ = false
-						ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", action.From)
-						return
-					}
-					assign, ok := ss.AllAssignments[action.AssignmentId]
-					if !ok {
-						succ = false
-						ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
-						return
-					}
-					if assign.CurrentConfirmedState == smgjson.ASE_Dropped {
-						completed = true
-						return
-					}
-					chanWait = workerState.NotifyCh
-				}))
-				if !succ {
-					panic(ke)
-				}
+				klogging.Info(ctx).With("worker", action.From).Log("ActionMinion", "wake up")
 			case <-ctx.Done():
 				panic(kerror.Create("ContextCanceled", "context canceled"))
 			}
+		}
+		succ := true
+		var ke *kerror.Kerror
+		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+			workerState, ok := ss.AllWorkers[data.WorkerFullIdParseFromString(action.From)]
+			if !ok {
+				succ = false
+				ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", action.From)
+				return
+			}
+			assign, ok := ss.AllAssignments[action.AssignmentId]
+			if !ok {
+				succ = false
+				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
+				return
+			}
+			if assign.CurrentConfirmedState == smgjson.ASE_Dropped {
+				completed = true
+				return
+			}
+			chanWait = workerState.NotifyCh
+		}))
+		if !succ {
+			panic(ke)
 		}
 	}
 }

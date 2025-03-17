@@ -25,3 +25,22 @@ func NewMoveStateFromProposal(ss *ServiceState, proposal *costfunc.Proposal) *Mo
 	moveState.Actions = proposal.Move.GetActions(ss.ServiceConfig.ShardConfig)
 	return moveState
 }
+
+func (ms *MoveState) ToMoveStateJson() *smgjson.MoveStateJson {
+	return &smgjson.MoveStateJson{
+		ProposalId: ms.ProposalId,
+		Signature:  ms.Signature,
+		Actions:    ms.Actions,
+		NextMove:   ms.CurrentAction,
+	}
+}
+
+func MoveStateFromJson(msj *smgjson.MoveStateJson) *MoveState {
+	return &MoveState{
+		ProposalId:      msj.ProposalId,
+		Signature:       msj.Signature,
+		Actions:         msj.Actions,
+		CurrentAction:   msj.NextMove,
+		ActionConducted: 0,
+	}
+}
