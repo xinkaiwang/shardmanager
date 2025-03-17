@@ -15,7 +15,7 @@ type ShadowState struct {
 	PathManager *config.PathManager
 	AllShards   map[data.ShardId]*smgjson.ShardStateJson
 	AllWorkers  map[data.WorkerFullId]*smgjson.WorkerStateJson
-	AllExePlans map[data.ProposalId]*smgjson.ExecutionPlanJson
+	AllExePlans map[data.ProposalId]*smgjson.MoveStateJson
 	runloop     *krunloop.RunLoop[*ShadowState]
 }
 
@@ -24,7 +24,7 @@ func NewShadowState(ctx context.Context, pm *config.PathManager) *ShadowState {
 		PathManager: pm,
 		AllShards:   make(map[data.ShardId]*smgjson.ShardStateJson),
 		AllWorkers:  make(map[data.WorkerFullId]*smgjson.WorkerStateJson),
-		AllExePlans: make(map[data.ProposalId]*smgjson.ExecutionPlanJson),
+		AllExePlans: make(map[data.ProposalId]*smgjson.MoveStateJson),
 	}
 	shadow.runloop = krunloop.NewRunLoop(ctx, shadow, "shadow")
 	go shadow.runloop.Run(ctx)
@@ -44,7 +44,7 @@ func (shadow *ShadowState) InitWorkerState(workerFullId data.WorkerFullId, worke
 }
 
 // InitProposalState is only called once when the service starts, that's why it doesn't need to be thread-safe
-func (shadow *ShadowState) InitProposalState(proposalId data.ProposalId, proposalState *smgjson.ExecutionPlanJson) {
+func (shadow *ShadowState) InitProposalState(proposalId data.ProposalId, proposalState *smgjson.MoveStateJson) {
 	shadow.AllExePlans[proposalId] = proposalState
 }
 
@@ -68,13 +68,13 @@ func (shadow *ShadowState) StoreWorkerState(workerFullId data.WorkerFullId, work
 	shadow.runloop.PostEvent(eve)
 }
 
-func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.ExecutionPlanJson) {
-	eve := &ExecutionPlanJsonEvent{
-		ProposalId: proposalId,
-		ExtPlan:    proposalState,
-	}
-	shadow.runloop.PostEvent(eve)
-}
+// func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.MoveStateJson) {
+// 	eve := &ExecutionPlanJsonEvent{
+// 		ProposalId: proposalId,
+// 		ExtPlan:    proposalState,
+// 	}
+// 	shadow.runloop.PostEvent(eve)
+// }
 
 func (shadow *ShadowState) StopAndWaitForExit(ctx context.Context) {
 	if shadow.runloop != nil {
@@ -131,24 +131,24 @@ func (eve *WorkerStateJsonEvent) Process(ctx context.Context, shadow *ShadowStat
 	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "WorkerState")
 }
 
-// ExecutionPlanJsonEvent implements krunloop.IEvent[*ShadowState]
-type ExecutionPlanJsonEvent struct {
-	ProposalId data.ProposalId
-	ExtPlan    *smgjson.ExecutionPlanJson
-}
+// // ExecutionPlanJsonEvent implements krunloop.IEvent[*ShadowState]
+// type ExecutionPlanJsonEvent struct {
+// 	ProposalId data.ProposalId
+// 	ExtPlan    *smgjson.MoveStateJson
+// }
 
-func (eve *ExecutionPlanJsonEvent) GetName() string {
-	return "ProposalStateJsonEvent"
-}
-func (eve *ExecutionPlanJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
-	key := shadow.PathManager.FmtExecutionPlanPath(eve.ProposalId)
-	if eve.ExtPlan == nil {
-		delete(shadow.AllExePlans, eve.ProposalId)
-		GetCurrentEtcdStore(ctx).Put(ctx, key, "", "ExecutionPlan")
-		return
-	}
-	shadow.AllExePlans[eve.ProposalId] = eve.ExtPlan
-	// write to etcd
-	value := eve.ExtPlan.ToJson()
-	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ExecutionPlan")
-}
+// func (eve *ExecutionPlanJsonEvent) GetName() string {
+// 	return "ProposalStateJsonEvent"
+// }
+// func (eve *ExecutionPlanJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
+// 	key := shadow.PathManager.FmtMoveStatePath(eve.ProposalId)
+// 	if eve.ExtPlan == nil {
+// 		delete(shadow.AllExePlans, eve.ProposalId)
+// 		GetCurrentEtcdStore(ctx).Put(ctx, key, "", "ExecutionPlan")
+// 		return
+// 	}
+// 	shadow.AllExePlans[eve.ProposalId] = eve.ExtPlan
+// 	// write to etcd
+// 	value := eve.ExtPlan.ToJson()
+// 	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ExecutionPlan")
+// }

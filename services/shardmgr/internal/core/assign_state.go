@@ -12,6 +12,8 @@ type AssignmentState struct {
 	WorkerFullId          data.WorkerFullId
 	CurrentConfirmedState smgjson.AssignmentStateEnum
 	TargetState           smgjson.AssignmentStateEnum
+	ShouldInPilot         bool
+	ShouldInRoutingTable  bool
 }
 
 func NewAssignmentState(assignmentId data.AssignmentId, shardId data.ShardId, replicaIdx data.ReplicaIdx, workerFullId data.WorkerFullId) *AssignmentState {

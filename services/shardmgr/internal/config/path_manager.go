@@ -46,7 +46,7 @@ func (pm *PathManager) GetPilotPathPrefix() string {
 	return "/smg/pilot/"
 }
 
-func (pm *PathManager) GetExecutionPlanPrefix() string {
+func (pm *PathManager) GetMoveStatePrefix() string {
 	return "/smg/move/"
 }
 
@@ -62,8 +62,8 @@ func (pm *PathManager) FmtWorkerStatePath(workerFullId data.WorkerFullId) string
 	return pm.GetWorkerStatePathPrefix() + workerFullId.String()
 }
 
-func (pm *PathManager) FmtExecutionPlanPath(proposalId data.ProposalId) string {
-	return pm.GetExecutionPlanPrefix() + string(proposalId)
+func (pm *PathManager) FmtMoveStatePath(proposalId data.ProposalId) string {
+	return pm.GetMoveStatePrefix() + string(proposalId)
 }
 
 func (pm *PathManager) FmtWorkerEphPath(workerFullId data.WorkerFullId) string {

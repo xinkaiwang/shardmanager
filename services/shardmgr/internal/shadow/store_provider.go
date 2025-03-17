@@ -11,7 +11,4 @@ type StoreProvider interface {
 
 	// StoreWorkerState: store worker state to etcd
 	StoreWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson)
-
-	// StoreProposalState: store Proposal state to etcd
-	StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.ExecutionPlanJson)
 }

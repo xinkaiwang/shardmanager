@@ -24,7 +24,7 @@ type WorkerState struct {
 	Assignments map[data.AssignmentId]common.Unit
 
 	NotifyReason              string
-	NotifyCh                  chan struct{} // notify when WorkerState changes
+	NotifyCh                  chan common.Unit // notify when WorkerState changes
 	WorkerInfo                smgjson.WorkerInfoJson
 	WorkerEph                 *cougarjson.WorkerEphJson
 	WorkerReportedAssignments map[data.AssignmentId]common.Unit
@@ -38,7 +38,7 @@ func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId) *WorkerSta
 		ShutdownRequesting: false,
 		// ShutdownPermited:          false,
 		Assignments:               make(map[data.AssignmentId]common.Unit),
-		NotifyCh:                  make(chan struct{}, 1),
+		NotifyCh:                  make(chan common.Unit, 1),
 		WorkerInfo:                smgjson.WorkerInfoJson{},
 		WorkerReportedAssignments: make(map[data.AssignmentId]common.Unit),
 	}
@@ -50,7 +50,7 @@ func NewWorkerStateFromJson(workerStateJson *smgjson.WorkerStateJson) *WorkerSta
 		SessionId:   workerStateJson.SessionId,
 		State:       workerStateJson.WorkerState,
 		Assignments: make(map[data.AssignmentId]common.Unit),
-		NotifyCh:    make(chan struct{}, 1),
+		NotifyCh:    make(chan common.Unit, 1),
 		WorkerInfo:  smgjson.WorkerInfoJson{},
 	}
 	return workerState
@@ -145,7 +145,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 func (ws *WorkerState) signalAll(reason string) {
 	ws.NotifyReason = reason
 	close(ws.NotifyCh)
-	ws.NotifyCh = make(chan struct{}, 1)
+	ws.NotifyCh = make(chan common.Unit, 1)
 }
 
 // onEphNodeLost: must be called in runloop
@@ -407,6 +407,9 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 				With("sessionId", ws.SessionId).
 				With("assignmentId", assignmentId).
 				Log("ToPilotNode", "assignment not found")
+			continue
+		}
+		if !assign.ShouldInPilot {
 			continue
 		}
 		// 创建PilotAssignmentJson

@@ -44,12 +44,14 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 			0,
 			workerFullId,
 		)
+		assignment1.ShouldInPilot = true
 		assignment2 := NewAssignmentState(
 			"shard-2:1",
 			"shard-2",
 			1,
 			workerFullId,
 		)
+		assignment2.ShouldInPilot = true
 		assignment1.TargetState = smgjson.ASE_Healthy
 		assignment2.TargetState = smgjson.ASE_Healthy
 		ss.AllAssignments["shard-1:0"] = assignment1

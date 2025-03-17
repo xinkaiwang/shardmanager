@@ -17,7 +17,6 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
 	setup.SetupBasicConfig(ctx)
-	// t.Logf("测试环境已配置")
 	klogging.Info(ctx).Log("TestWorkerShutdownRequestFull", "测试环境已配置")
 
 	fn := func() {
@@ -27,7 +26,6 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 
 		// Step 1: 创建 worker-1 eph
 		klogging.Info(ctx).Log("TestWorkerShutdownRequestFull", "创建 worker-1 eph")
-		// t.Logf("创建 worker-1 eph")
 		workerFullId := data.NewWorkerFullId("worker-1", "session-1", true)
 		setup.UpdateEphNode(t, workerFullId, func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 			return cougarjson.NewWorkerEphJson(string(workerFullId.WorkerId), "session-1", 1234567890, 100)
@@ -43,7 +41,6 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 
 		// Step 2: 更新worker eph节点，设置ReqShutDown=1
 		klogging.Info(ctx).Log("TestWorkerShutdownRequestFull", "更新worker eph节点，设置ReqShutDown=1")
-		// t.Logf("更新worker eph节点，设置ReqShutDown=1")
 		setup.UpdateEphNode(t, workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 			wej.ReqShutDown = 1
 			wej.LastUpdateAtMs = 1234567891

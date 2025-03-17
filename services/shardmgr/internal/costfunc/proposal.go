@@ -6,7 +6,9 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // Proposal implements OrderedListItem
@@ -32,6 +34,7 @@ func NewProposal(ctx context.Context, solverType string, gain Gain, basedOn Snap
 type Move interface {
 	GetSignature() string
 	Apply(snapshot *Snapshot)
+	GetActions(cfg config.ShardConfig) []*smgjson.ActionJson
 }
 
 func (proposal *Proposal) GetSignature() string {
@@ -56,6 +59,88 @@ func (move *SimpleMove) Apply(snapshot *Snapshot) {
 	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.DestAssignmentId, move.Dst)
 }
 
+func (move *SimpleMove) GetActions(cfg config.ShardConfig) []*smgjson.ActionJson {
+	var list []*smgjson.ActionJson
+	if cfg.MovePolicy == smgjson.MP_KillBeforeStart {
+		// step 1: remove src from routing
+		list = append(list, &smgjson.ActionJson{
+			ActionType:           smgjson.AT_RemoveFromRoutingAndSleep,
+			ShardId:              move.Replica.ShardId,
+			ReplicaIdx:           move.Replica.ReplicaIdx,
+			AssignmentId:         move.SrcAssignmentId,
+			From:                 move.Src.String(),
+			RemoveSrcFromRouting: 1,
+			SleepMs:              1000, // sleep 1s
+		})
+		// step 2: drop
+		list = append(list, &smgjson.ActionJson{
+			ActionType:   smgjson.AT_DropShard,
+			ShardId:      move.Replica.ShardId,
+			ReplicaIdx:   move.Replica.ReplicaIdx,
+			AssignmentId: move.SrcAssignmentId,
+			From:         move.Src.String(),
+		})
+		// step 3: add shard
+		list = append(list, &smgjson.ActionJson{
+			ActionType:   smgjson.AT_AddShard,
+			ShardId:      move.Replica.ShardId,
+			ReplicaIdx:   move.Replica.ReplicaIdx,
+			AssignmentId: move.DestAssignmentId,
+			To:           move.Dst.String(),
+		})
+		// step 4: add dest to routing
+		list = append(list, &smgjson.ActionJson{
+			ActionType:       smgjson.AT_AddToRouting,
+			ShardId:          move.Replica.ShardId,
+			ReplicaIdx:       move.Replica.ReplicaIdx,
+			AssignmentId:     move.DestAssignmentId,
+			To:               move.Dst.String(),
+			AddDestToRouting: 1,
+		})
+		return list
+	} else if cfg.MovePolicy == smgjson.MP_StartBeforeKill {
+		// step 1: add shard
+		list = append(list, &smgjson.ActionJson{
+			ActionType:   smgjson.AT_AddShard,
+			ShardId:      move.Replica.ShardId,
+			ReplicaIdx:   move.Replica.ReplicaIdx,
+			AssignmentId: move.DestAssignmentId,
+			To:           move.Dst.String(),
+		})
+		// step 2: add dest to routing
+		list = append(list, &smgjson.ActionJson{
+			ActionType:       smgjson.AT_AddToRouting,
+			ShardId:          move.Replica.ShardId,
+			ReplicaIdx:       move.Replica.ReplicaIdx,
+			AssignmentId:     move.DestAssignmentId,
+			To:               move.Dst.String(),
+			AddDestToRouting: 1,
+		})
+		// step 3: remove src from routing
+		list = append(list, &smgjson.ActionJson{
+			ActionType:           smgjson.AT_RemoveFromRoutingAndSleep,
+			ShardId:              move.Replica.ShardId,
+			ReplicaIdx:           move.Replica.ReplicaIdx,
+			AssignmentId:         move.SrcAssignmentId,
+			From:                 move.Src.String(),
+			RemoveSrcFromRouting: 1,
+			SleepMs:              1000, // sleep 1s
+		})
+		// step 4: drop
+		list = append(list, &smgjson.ActionJson{
+			ActionType:   smgjson.AT_DropShard,
+			ShardId:      move.Replica.ShardId,
+			ReplicaIdx:   move.Replica.ReplicaIdx,
+			AssignmentId: move.SrcAssignmentId,
+			From:         move.Src.String(),
+		})
+		return list
+	} else {
+		klogging.Fatal(context.Background()).With("policy", cfg.MovePolicy).Log("UnknownMovePolicy", "")
+		return list
+	}
+}
+
 // AssignMove implements Move
 type AssignMove struct {
 	Replica      data.ReplicaFullId
@@ -71,6 +156,18 @@ func (move *AssignMove) Apply(snapshot *Snapshot) {
 	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId, move.Worker)
 }
 
+func (move *AssignMove) GetActions(cfg config.ShardConfig) []*smgjson.ActionJson {
+	var list []*smgjson.ActionJson
+	list = append(list, &smgjson.ActionJson{
+		ActionType:   smgjson.AT_AddShard,
+		ShardId:      move.Replica.ShardId,
+		ReplicaIdx:   move.Replica.ReplicaIdx,
+		AssignmentId: move.AssignmentId,
+		To:           move.Worker.String(),
+	})
+	return list
+}
+
 // UnassignMove implements Move
 type UnassignMove struct {
 	Worker       data.WorkerFullId
@@ -84,6 +181,18 @@ func (move *UnassignMove) GetSignature() string {
 
 func (move *UnassignMove) Apply(snapshot *Snapshot) {
 	snapshot.Unassign(move.Worker, move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId)
+}
+
+func (move *UnassignMove) GetActions(cfg config.ShardConfig) []*smgjson.ActionJson {
+	var list []*smgjson.ActionJson
+	list = append(list, &smgjson.ActionJson{
+		ActionType:   smgjson.AT_DropShard,
+		ShardId:      move.Replica.ShardId,
+		ReplicaIdx:   move.Replica.ReplicaIdx,
+		AssignmentId: move.AssignmentId,
+		From:         move.Worker.String(),
+	})
+	return list
 }
 
 // SwapMove implements Move
