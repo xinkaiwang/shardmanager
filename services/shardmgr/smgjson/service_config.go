@@ -7,11 +7,12 @@ import (
 )
 
 type ServiceConfigJson struct {
-	ShardConfig  *ShardConfigJson       `json:"shard_config"`
-	WorkerConfig *WorkerConfigJson      `json:"worker_config"`
-	SystemLimit  *SystemLimitConfigJson `json:"system_limit"`
-	CostFuncCfg  *CostFuncConfigJson    `json:"cost_func_cfg"`
-	SolverConfig *SolverConfigJson      `json:"solver_config"`
+	ShardConfig            *ShardConfigJson            `json:"shard_config,omitempty"`
+	WorkerConfig           *WorkerConfigJson           `json:"worker_config,omitempty"`
+	SystemLimit            *SystemLimitConfigJson      `json:"system_limit,omitempty"`
+	CostFuncCfg            *CostFuncConfigJson         `json:"cost_func_cfg,omitempty"`
+	SolverConfig           *SolverConfigJson           `json:"solver_config,omitempty"`
+	DynamicThresholdConfig *DynamicThresholdConfigJson `json:"dynamic_threshold,omitempty"`
 }
 
 type ShardConfigJson struct {

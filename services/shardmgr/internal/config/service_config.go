@@ -19,12 +19,17 @@ func ParseServiceConfigFromJson(data string) *ServiceConfig {
 	return ServiceConfigJsonToServiceConfig(si)
 }
 
+type ServiceConfigProvider interface {
+	GetServiceConfig() *ServiceConfig
+}
+
 type ServiceConfig struct {
-	ShardConfig  ShardConfig
-	WorkerConfig WorkerConfig
-	SystemLimit  SystemLimitConfig
-	CostFuncCfg  CostfuncConfig
-	SolverConfig SolverConfig
+	ShardConfig            ShardConfig
+	WorkerConfig           WorkerConfig
+	SystemLimit            SystemLimitConfig
+	CostFuncCfg            CostfuncConfig
+	SolverConfig           SolverConfig
+	DynamicThresholdConfig DynamicThresholdConfig
 }
 
 type ShardConfig struct {
@@ -55,11 +60,12 @@ type SystemLimitConfig struct {
 
 func ServiceConfigJsonToServiceConfig(si *smgjson.ServiceConfigJson) *ServiceConfig {
 	return &ServiceConfig{
-		ShardConfig:  ShardConfigJsonToConfig(si.ShardConfig),
-		WorkerConfig: WorkerConfigJsonToConfig(si.WorkerConfig),
-		SystemLimit:  SystemLimitConfigJsonToConfig(si.SystemLimit),
-		CostFuncCfg:  CostFuncConfigJsonToConfig(si.CostFuncCfg),
-		SolverConfig: SolverConfigJsonToConfig(si.SolverConfig),
+		ShardConfig:            ShardConfigJsonToConfig(si.ShardConfig),
+		WorkerConfig:           WorkerConfigJsonToConfig(si.WorkerConfig),
+		SystemLimit:            SystemLimitConfigJsonToConfig(si.SystemLimit),
+		CostFuncCfg:            CostFuncConfigJsonToConfig(si.CostFuncCfg),
+		SolverConfig:           SolverConfigJsonToConfig(si.SolverConfig),
+		DynamicThresholdConfig: DynamicThresholdConfigJsonToConfig(si.DynamicThresholdConfig),
 	}
 }
 
@@ -127,6 +133,31 @@ func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimi
 	return cfg
 }
 
+func DynamicThresholdConfigJsonToConfig(sc *smgjson.DynamicThresholdConfigJson) DynamicThresholdConfig {
+	cfg := DynamicThresholdConfig{
+		DynamicThresholdMax: 100, // default 100
+		DynamicThresholdMin: 10,  // default 10
+		HalfDecayTimeSec:    300, // default 5 min
+		IncreasePerMove:     10,  // default 10
+	}
+	if sc == nil {
+		return cfg
+	}
+	if sc.DynamicThresholdMax != nil {
+		cfg.DynamicThresholdMax = *sc.DynamicThresholdMax
+	}
+	if sc.DynamicThresholdMin != nil {
+		cfg.DynamicThresholdMin = *sc.DynamicThresholdMin
+	}
+	if sc.HalfDecayTimeSec != nil {
+		cfg.HalfDecayTimeSec = *sc.HalfDecayTimeSec
+	}
+	if sc.IncreasePerMove != nil {
+		cfg.IncreasePerMove = *sc.IncreasePerMove
+	}
+	return cfg
+}
+
 func (cfg *ServiceConfig) ToServiceConfigJson() *smgjson.ServiceConfigJson {
 	return &smgjson.ServiceConfigJson{
 		ShardConfig: cfg.ShardConfig.ToShardConfigJson(),
@@ -151,5 +182,13 @@ func (cfg *SystemLimitConfig) ToSystemLimitConfigJson() *smgjson.SystemLimitConf
 		MaxShardsCountLimit:     &cfg.MaxShardsCountLimit,
 		MaxReplicaCountLimit:    &cfg.MaxReplicaCountLimit,
 		MaxAssignmentCountLimit: &cfg.MaxAssignmentCountLimit,
+	}
+}
+func (cfg *DynamicThresholdConfig) ToDynamicThresholdConfigJson() *smgjson.DynamicThresholdConfigJson {
+	return &smgjson.DynamicThresholdConfigJson{
+		DynamicThresholdMax: &cfg.DynamicThresholdMax,
+		DynamicThresholdMin: &cfg.DynamicThresholdMin,
+		HalfDecayTimeSec:    &cfg.HalfDecayTimeSec,
+		IncreasePerMove:     &cfg.IncreasePerMove,
 	}
 }
