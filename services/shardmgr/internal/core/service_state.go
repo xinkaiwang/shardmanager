@@ -25,8 +25,8 @@ type ServiceState struct {
 	pilotProvider   shadow.PilotProvider
 	routingProvider shadow.RoutingProvider
 	actionProvider  shadow.ActionProvider
-	ShadowState     *shadow.ShadowState
-	solverGroup     solver.SnapshotListener
+	ShadowState     shadow.InitListener
+	SolverGroup     solver.SnapshotListener
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
 	AllShards      map[data.ShardId]*ShardState
@@ -58,9 +58,10 @@ func NewServiceState(ctx context.Context, name string) *ServiceState { // name i
 		ShutdownHat:      make(map[data.WorkerFullId]common.Unit),
 	}
 	ss.PathManager = config.NewPathManager()
-	ss.ShadowState = shadow.NewShadowState(ctx, ss.PathManager)
+	shadowState := shadow.NewShadowState(ctx, ss.PathManager)
+	ss.ShadowState = shadowState
 	ss.ProposalQueue = NewProposalQueue(ss, 20)
-	ss.storeProvider = ss.ShadowState
+	ss.storeProvider = shadowState
 	ss.pilotProvider = shadow.NewPilotStore(ss.PathManager)
 	ss.routingProvider = shadow.NewDefaultRoutingProvider(ss.PathManager)
 	ss.actionProvider = shadow.NewDefaultActionProvider(ss.PathManager)

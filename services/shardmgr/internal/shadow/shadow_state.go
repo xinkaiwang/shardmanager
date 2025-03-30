@@ -10,7 +10,15 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
-// ShadowState implements StoreProvider
+type InitListener interface {
+	InitShardState(shardId data.ShardId, shardState *smgjson.ShardStateJson)
+	InitWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson)
+	InitProposalState(proposalId data.ProposalId, proposalState *smgjson.MoveStateJson)
+	InitDone()
+	StopAndWaitForExit(ctx context.Context)
+}
+
+// ShadowState implements StoreProvider/InitListener
 type ShadowState struct {
 	PathManager *config.PathManager
 	AllShards   map[data.ShardId]*smgjson.ShardStateJson
