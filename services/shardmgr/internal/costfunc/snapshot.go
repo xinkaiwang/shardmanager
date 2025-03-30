@@ -133,6 +133,7 @@ func (worker *WorkerSnap) Clone() *WorkerSnap {
 type SnapshotId string
 
 type Snapshot struct {
+	Frozen         bool // 标记当前实例是否已冻结，冻结后不允许修改
 	SnapshotId     SnapshotId
 	CostfuncCfg    config.CostfuncConfig
 	AllShards      *FastMap[data.ShardId, ShardSnap]
@@ -142,6 +143,7 @@ type Snapshot struct {
 
 func NewSnapshot(ctx context.Context, costfuncCfg config.CostfuncConfig) *Snapshot {
 	return &Snapshot{
+		Frozen:         false,
 		SnapshotId:     SnapshotId(kcommon.RandomString(ctx, 8)),
 		CostfuncCfg:    costfuncCfg,
 		AllShards:      NewFastMap[data.ShardId, ShardSnap](),
@@ -150,7 +152,12 @@ func NewSnapshot(ctx context.Context, costfuncCfg config.CostfuncConfig) *Snapsh
 	}
 }
 
+// Clone: the snapshot should be frozen before using it
 func (snap *Snapshot) Clone() *Snapshot {
+	if !snap.Frozen {
+		ke := kerror.Create("SnapshotNotFrozen", "snapshot not frozen").With("snapshotId", snap.SnapshotId)
+		panic(ke)
+	}
 	clone := &Snapshot{
 		SnapshotId:     snap.SnapshotId,
 		CostfuncCfg:    snap.CostfuncCfg,
@@ -159,6 +166,17 @@ func (snap *Snapshot) Clone() *Snapshot {
 		AllAssignments: snap.AllAssignments.Clone(),
 	}
 	return clone
+}
+
+func (snap *Snapshot) Freeze() {
+	if snap.Frozen {
+		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
+		panic(ke)
+	}
+	snap.AllShards.Freeze()
+	snap.AllWorkers.Freeze()
+	snap.AllAssignments.Freeze()
+	snap.Frozen = true
 }
 
 func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, workerFullId data.WorkerFullId) {
@@ -220,4 +238,12 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 	snap.AllShards.Set(shardId, newShardSnap)
 	// update assignmentSnap
 	snap.AllAssignments.Delete(assignmentId)
+}
+
+func (snap *Snapshot) ApplyMove(move Move) {
+	if snap.Frozen {
+		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
+		panic(ke)
+	}
+	move.Apply(snap)
 }

@@ -11,6 +11,10 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 )
 
+type SnapshotListener interface {
+	SetCurrentSnapshot(snapshot *costfunc.Snapshot)
+}
+
 // SolverGroup manages multiple SolverDrivers
 type SolverGroup struct {
 	ThreadPool *ThreadPool
@@ -27,9 +31,6 @@ func NewSolverGroup(ctx context.Context, snapshot *costfunc.Snapshot, enqueuePro
 		enqueueProposals: enqueueProposals,
 	}
 	group.storeSnapshot(snapshot)
-	// group.AddSolver(ctx, NewSoftSolver())
-	// group.AddSolver(ctx, NewAssignSolver())
-	// group.AddSolver(ctx, NewUnassignSolver())
 	return group
 }
 

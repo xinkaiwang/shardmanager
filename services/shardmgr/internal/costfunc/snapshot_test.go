@@ -1,10 +1,10 @@
 package costfunc
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -20,11 +20,9 @@ func TestShardSnap(t *testing.T) {
 }
 
 func TestReplicaSnap(t *testing.T) {
-	replica := &ReplicaSnap{
-		ShardId:     data.ShardId("shard1"),
-		ReplicaIdx:  data.ReplicaIdx(0),
-		Assignments: make(map[data.AssignmentId]common.Unit),
-	}
+	shardId := data.ShardId("shard1")
+	replicaIdx := data.ReplicaIdx(0)
+	replica := NewReplicaSnap(shardId, replicaIdx)
 
 	// 测试 GetReplicaFullId 方法
 	fullId := replica.GetReplicaFullId()
@@ -57,10 +55,7 @@ func TestWorkerSnap(t *testing.T) {
 		SessionId: data.SessionId("session1"),
 	}
 
-	worker := &WorkerSnap{
-		WorkerFullId: workerFullId,
-		Assignments:  make(map[data.ShardId]data.AssignmentId),
-	}
+	worker := NewWorkerSnap(workerFullId)
 
 	// 测试 Clone 方法
 	cloned := worker.Clone()
@@ -80,35 +75,27 @@ func TestSnapshot(t *testing.T) {
 	// 测试 Clone 功能
 	t.Run("Clone", func(t *testing.T) {
 		cfg := config.CostfuncConfig{}
-		snapshot := &Snapshot{
-			SnapshotId:     SnapshotId("snap1"),
-			CostfuncCfg:    cfg,
-			AllShards:      NewFastMap[data.ShardId, ShardSnap](),
-			AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
-			AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
-		}
+		ctx := context.Background()
+		snapshot := NewSnapshot(ctx, cfg)
+		snapshot.SnapshotId = SnapshotId("snap1")
 
 		// 添加一个 worker
 		workerFullId := data.WorkerFullId{
 			WorkerId:  data.WorkerId("worker1"),
 			SessionId: data.SessionId("session1"),
 		}
-		worker := &WorkerSnap{
-			WorkerFullId: workerFullId,
-			Assignments:  make(map[data.ShardId]data.AssignmentId),
-		}
+		worker := NewWorkerSnap(workerFullId)
 		snapshot.AllWorkers.Set(workerFullId, worker)
 
 		// 添加一个 shard 和 replica
 		shardId := data.ShardId("shard1")
 		replicaIdx := data.ReplicaIdx(0)
 		shard := NewShardSnap(shardId)
-		shard.Replicas[replicaIdx] = &ReplicaSnap{
-			ShardId:     shardId,
-			ReplicaIdx:  replicaIdx,
-			Assignments: make(map[data.AssignmentId]common.Unit),
-		}
+		shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
 		snapshot.AllShards.Set(shardId, shard)
+
+		// 在克隆前先冻结快照
+		snapshot.Freeze()
 
 		// 测试 Clone 方法
 		cloned := snapshot.Clone()
@@ -122,34 +109,23 @@ func TestSnapshot(t *testing.T) {
 	// 测试分配和取消分配功能
 	t.Run("AssignAndUnassign", func(t *testing.T) {
 		cfg := config.CostfuncConfig{}
-		snapshot := &Snapshot{
-			SnapshotId:     SnapshotId("snap1"),
-			CostfuncCfg:    cfg,
-			AllShards:      NewFastMap[data.ShardId, ShardSnap](),
-			AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
-			AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
-		}
+		ctx := context.Background()
+		snapshot := NewSnapshot(ctx, cfg)
+		snapshot.SnapshotId = SnapshotId("snap1")
 
 		// 添加一个 worker
 		workerFullId := data.WorkerFullId{
 			WorkerId:  data.WorkerId("worker1"),
 			SessionId: data.SessionId("session1"),
 		}
-		worker := &WorkerSnap{
-			WorkerFullId: workerFullId,
-			Assignments:  make(map[data.ShardId]data.AssignmentId),
-		}
+		worker := NewWorkerSnap(workerFullId)
 		snapshot.AllWorkers.Set(workerFullId, worker)
 
 		// 添加一个 shard 和 replica
 		shardId := data.ShardId("shard1")
 		replicaIdx := data.ReplicaIdx(0)
 		shard := NewShardSnap(shardId)
-		shard.Replicas[replicaIdx] = &ReplicaSnap{
-			ShardId:     shardId,
-			ReplicaIdx:  replicaIdx,
-			Assignments: make(map[data.AssignmentId]common.Unit),
-		}
+		shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
 		snapshot.AllShards.Set(shardId, shard)
 
 		// 测试 Assign 方法
@@ -173,13 +149,9 @@ func TestSnapshot(t *testing.T) {
 	// 测试链式修改
 	t.Run("ChainOfChanges", func(t *testing.T) {
 		cfg := config.CostfuncConfig{}
-		snapshot := &Snapshot{
-			SnapshotId:     SnapshotId("snap1"),
-			CostfuncCfg:    cfg,
-			AllShards:      NewFastMap[data.ShardId, ShardSnap](),
-			AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
-			AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
-		}
+		ctx := context.Background()
+		snapshot := NewSnapshot(ctx, cfg)
+		snapshot.SnapshotId = SnapshotId("snap1")
 
 		// 添加两个 worker
 		worker1 := data.WorkerFullId{
@@ -190,14 +162,11 @@ func TestSnapshot(t *testing.T) {
 			WorkerId:  data.WorkerId("worker2"),
 			SessionId: data.SessionId("session1"),
 		}
-		snapshot.AllWorkers.Set(worker1, &WorkerSnap{
-			WorkerFullId: worker1,
-			Assignments:  make(map[data.ShardId]data.AssignmentId),
-		})
-		snapshot.AllWorkers.Set(worker2, &WorkerSnap{
-			WorkerFullId: worker2,
-			Assignments:  make(map[data.ShardId]data.AssignmentId),
-		})
+		worker1Snap := NewWorkerSnap(worker1)
+		snapshot.AllWorkers.Set(worker1, worker1Snap)
+
+		worker2Snap := NewWorkerSnap(worker2)
+		snapshot.AllWorkers.Set(worker2, worker2Snap)
 
 		// 添加两个 shard，每个 shard 有两个 replica
 		shard1 := data.ShardId("shard1")
@@ -205,11 +174,7 @@ func TestSnapshot(t *testing.T) {
 		for _, shardId := range []data.ShardId{shard1, shard2} {
 			shard := NewShardSnap(shardId)
 			for replicaIdx := data.ReplicaIdx(0); replicaIdx < 2; replicaIdx++ {
-				shard.Replicas[replicaIdx] = &ReplicaSnap{
-					ShardId:     shardId,
-					ReplicaIdx:  replicaIdx,
-					Assignments: make(map[data.AssignmentId]common.Unit),
-				}
+				shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
 			}
 			snapshot.AllShards.Set(shardId, shard)
 		}
@@ -220,8 +185,9 @@ func TestSnapshot(t *testing.T) {
 		snapshot.Assign(shard1, 0, assign1, worker1)
 
 		// 验证分配状态
-		worker1Snap, _ := snapshot.AllWorkers.Get(worker1)
+		worker1Snap, _ = snapshot.AllWorkers.Get(worker1)
 		assert.Equal(t, assign1, worker1Snap.Assignments[shard1])
+
 		shard1Snap, _ := snapshot.AllShards.Get(shard1)
 		assert.Contains(t, shard1Snap.Replicas[0].Assignments, assign1)
 
@@ -230,8 +196,9 @@ func TestSnapshot(t *testing.T) {
 		snapshot.Assign(shard1, 1, assign2, worker2)
 
 		// 验证两个分配都存在
-		worker2Snap, _ := snapshot.AllWorkers.Get(worker2)
+		worker2Snap, _ = snapshot.AllWorkers.Get(worker2)
 		assert.Equal(t, assign2, worker2Snap.Assignments[shard1])
+
 		shard1Snap, _ = snapshot.AllShards.Get(shard1)
 		assert.Contains(t, shard1Snap.Replicas[1].Assignments, assign2)
 
@@ -244,12 +211,17 @@ func TestSnapshot(t *testing.T) {
 		worker1Snap, _ = snapshot.AllWorkers.Get(worker1)
 		assert.NotContains(t, worker1Snap.Assignments, shard1)
 		assert.Equal(t, assign3, worker1Snap.Assignments[shard2])
+
 		shard1Snap, _ = snapshot.AllShards.Get(shard1)
 		assert.NotContains(t, shard1Snap.Replicas[0].Assignments, assign1)
+
 		shard2Snap, _ := snapshot.AllShards.Get(shard2)
 		assert.Contains(t, shard2Snap.Replicas[0].Assignments, assign3)
 
 		// 4. 克隆快照并继续修改
+		// 在克隆前先冻结快照
+		snapshot.Freeze()
+
 		cloned := snapshot.Clone()
 		assign4 := data.AssignmentId("assign4")
 		cloned.Assign(shard2, 1, assign4, worker2)
@@ -268,14 +240,9 @@ func TestSnapshot(t *testing.T) {
 
 func TestSnapshotErrorCases(t *testing.T) {
 	cfg := config.CostfuncConfig{}
-
-	snapshot := &Snapshot{
-		SnapshotId:     SnapshotId("snap1"),
-		CostfuncCfg:    cfg,
-		AllShards:      NewFastMap[data.ShardId, ShardSnap](),
-		AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
-		AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
-	}
+	ctx := context.Background()
+	snapshot := NewSnapshot(ctx, cfg)
+	snapshot.SnapshotId = SnapshotId("snap1")
 
 	// 准备测试数据
 	shardId := data.ShardId("shard1")
@@ -301,11 +268,7 @@ func TestSnapshotErrorCases(t *testing.T) {
 	})
 
 	// 测试分配给不存在的 worker
-	shard.Replicas[replicaIdx] = &ReplicaSnap{
-		ShardId:     shardId,
-		ReplicaIdx:  replicaIdx,
-		Assignments: make(map[data.AssignmentId]common.Unit),
-	}
+	shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
 	assert.Panics(t, func() {
 		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId)
 	})

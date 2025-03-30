@@ -10,6 +10,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/solver"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
@@ -25,12 +26,14 @@ type ServiceState struct {
 	routingProvider shadow.RoutingProvider
 	actionProvider  shadow.ActionProvider
 	ShadowState     *shadow.ShadowState
+	solverGroup     solver.SnapshotListener
 
 	// Note: all the following fields are not thread-safe, one should never access them outside the runloop.
 	AllShards      map[data.ShardId]*ShardState
 	AllWorkers     map[data.WorkerFullId]*WorkerState
 	AllAssignments map[data.AssignmentId]*AssignmentState
 
+	ProposalQueue   *ProposalQueue
 	SnapshotCurrent *costfunc.Snapshot // current means current state
 	SnapshotFuture  *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
 
@@ -56,6 +59,7 @@ func NewServiceState(ctx context.Context, name string) *ServiceState { // name i
 	}
 	ss.PathManager = config.NewPathManager()
 	ss.ShadowState = shadow.NewShadowState(ctx, ss.PathManager)
+	ss.ProposalQueue = NewProposalQueue(ss, 20)
 	ss.storeProvider = ss.ShadowState
 	ss.pilotProvider = shadow.NewPilotStore(ss.PathManager)
 	ss.routingProvider = shadow.NewDefaultRoutingProvider(ss.PathManager)

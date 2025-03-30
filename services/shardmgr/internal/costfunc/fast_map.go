@@ -55,9 +55,16 @@ func NewFastMap[T1 comparable, T2 TypeT2]() *FastMap[T1, T2] {
 	}
 }
 
+func (fm *FastMap[T1, T2]) Freeze() {
+	fm.frozen = true
+}
+
 // Clone 创建 FastMap 的浅拷贝，共享底层 map
 func (fm *FastMap[T1, T2]) Clone() *FastMap[T1, T2] {
-	fm.frozen = true
+	if !fm.frozen {
+		ke := kerror.Create("FastMapNotFrozen", "FastMap not frozen")
+		panic(ke)
+	}
 	return &FastMap[T1, T2]{
 		ownDiff: false,
 		diffMap: fm.diffMap,

@@ -106,6 +106,9 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 		// 创建并配置求解器
 		solver := NewSoftSolver()
 
+		// 在调用求解器前冻结快照
+		snapshot.Freeze()
+
 		// 运行求解器
 		proposal := solver.FindProposal(ctx, snapshot)
 

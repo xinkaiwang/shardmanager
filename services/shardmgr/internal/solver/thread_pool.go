@@ -12,6 +12,11 @@ var (
 	ThreadPoolElapsedMsMetrics = kmetrics.CreateKmetric(context.Background(), "thread_pool_elapsed_ms", "desc", []string{"name", "event"})
 )
 
+type Task interface {
+	GetName() string
+	Execute()
+}
+
 type ThreadPool struct {
 	name         string
 	agentThreads []*AgentThread
@@ -69,9 +74,4 @@ func (td *AgentThread) run(ctx context.Context) {
 			ThreadPoolElapsedMsMetrics.GetTimeSequence(ctx, td.parent.name, taskName).Add(elapsedMs)
 		}
 	}
-}
-
-type Task interface {
-	GetName() string
-	Execute()
 }

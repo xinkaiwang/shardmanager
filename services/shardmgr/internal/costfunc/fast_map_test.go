@@ -108,6 +108,9 @@ func TestFastMapClone(t *testing.T) {
 	fm.Set("key1", &testValue{data: "value1"})
 	fm.Set("key2", &testValue{data: "value2"})
 
+	// 在克隆前冻结FastMap
+	fm.Freeze()
+
 	// 克隆 FastMap
 	clone := fm.Clone()
 
@@ -301,6 +304,9 @@ func TestFastMapCombined(t *testing.T) {
 	newValue4 := &testValue{data: "value4"}
 	fm.Set("key4", newValue4)
 
+	// 在克隆前冻结FastMap
+	fm.Freeze()
+
 	// 克隆 FastMap
 	clone := fm.Clone()
 
@@ -361,6 +367,9 @@ func TestFastMapDeleteWithClone(t *testing.T) {
 	// 设置一些初始值
 	fm.Set("key1", &testValue{data: "value1"})
 	fm.Set("key2", &testValue{data: "value2"})
+
+	// 在克隆前冻结FastMap
+	fm.Freeze()
 
 	// 克隆 FastMap
 	clone := fm.Clone()
