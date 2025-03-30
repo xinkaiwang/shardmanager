@@ -47,7 +47,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 	// 使用FakeTime环境运行测试
 	setup.RunWith(func() {
 		// 创建 ServiceState (shard plan为空)
-		ss := NewServiceState(ctx, "TestServiceState_DynamicShardPlanUpdate")
+		ss := AssembleSsWithShadowState(ctx, "TestServiceState_DynamicShardPlanUpdate")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
@@ -173,7 +173,7 @@ func TestServiceState_ShadowStateWrite(t *testing.T) {
 		t.Logf("初始EtcdStore写入次数: %d", initialPutCount)
 
 		// 2. 创建 ServiceState
-		ss := NewServiceState(ctx, "TestServiceState_ShadowStateWrite")
+		ss := AssembleSsWithShadowState(ctx, "TestServiceState_ShadowStateWrite")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
@@ -311,7 +311,7 @@ func TestServiceState_PreexistingShardState(t *testing.T) {
 		}
 
 		// 3. 创建 ServiceState 实例，它会加载预先存在的分片状态
-		ss := NewServiceState(ctx, "TestServiceState_PreexistingShardState")
+		ss := AssembleSsWithShadowState(ctx, "TestServiceState_PreexistingShardState")
 		setup.ServiceState = ss
 		t.Logf("ServiceState 已创建: %s", ss.Name)
 
@@ -424,7 +424,7 @@ func TestShardBasic_ConsistencyCheck(t *testing.T) {
 
 	fn := func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestShardBasic_ConsistencyCheck")
+		ss := AssembleSsWithShadowState(ctx, "TestShardBasic_ConsistencyCheck")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
@@ -506,7 +506,7 @@ func TestShardBasic_ConflictResolution(t *testing.T) {
 
 	fn := func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestShardBasic_ConflictResolution")
+		ss := AssembleSsWithShadowState(ctx, "TestShardBasic_ConflictResolution")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
@@ -644,7 +644,7 @@ func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 
 	fn := func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestShardBasic_DynamicPlanUpdate")
+		ss := AssembleSsWithShadowState(ctx, "TestShardBasic_DynamicPlanUpdate")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 

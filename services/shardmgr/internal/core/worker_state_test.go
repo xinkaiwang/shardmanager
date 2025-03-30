@@ -24,7 +24,7 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 	fakeProvider := setup.FakeEtcd
 	etcdprov.RunWithEtcdProvider(fakeProvider, func() {
 		// 创建测试用 ServiceState
-		ss := NewServiceState(ctx, "test-service")
+		ss := AssembleSsWithShadowState(ctx, "test-service")
 
 		// 创建测试用 WorkerState
 		workerId := data.WorkerId("worker-1")

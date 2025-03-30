@@ -34,7 +34,7 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 
 	fn := func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestWorkerGracePeriodExpiration")
+		ss := AssembleSsWithShadowState(ctx, "TestWorkerGracePeriodExpiration")
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		{
@@ -138,7 +138,7 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 
 	fn := func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestWorkerGracePeriodExpiration_waitUntil")
+		ss := AssembleSsWithShadowState(ctx, "TestWorkerGracePeriodExpiration_waitUntil")
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		// 创建 worker-1 eph
@@ -222,7 +222,7 @@ func TestWorkerShutdownRequest(t *testing.T) {
 
 	fn := func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestWorkerShutdownRequest")
+		ss := AssembleSsWithShadowState(ctx, "TestWorkerShutdownRequest")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
@@ -328,7 +328,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 
 	fn := func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestServiceState_WorkerEphToState")
+		ss := AssembleSsWithShadowState(ctx, "TestServiceState_WorkerEphToState")
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		// 1. 初始状态下验证ServiceState中没有工作节点

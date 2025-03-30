@@ -22,8 +22,9 @@ func (as *AssignSolver) GetType() SolverType {
 }
 func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snapshot) *costfunc.Proposal {
 	// step 1: get the cost of the current snapshot
-	costProvider := costfunc.GetCurrentCostFuncProvider()
-	baseCost := costProvider.CalCost(snapshot)
+	// costProvider := costfunc.GetCurrentCostFuncProvider()
+	// baseCost := costProvider.CalCost(snapshot)
+	baseCost := snapshot.GetCost()
 	asCfg := GetCurrentSolverConfigProvider().GetAssignSolverConfig()
 
 	var bestMove *costfunc.AssignMove
@@ -79,7 +80,8 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 		}
 		move.Apply(newSnapshot)
 		// calculate the cost of the new snapshot
-		newCost := costProvider.CalCost(newSnapshot)
+		// newCost := costProvider.CalCost(newSnapshot)
+		newCost := newSnapshot.GetCost()
 		if newCost.IsLowerThan(bestCost) {
 			bestCost = newCost
 			bestMove = move

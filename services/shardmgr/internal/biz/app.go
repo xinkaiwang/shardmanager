@@ -14,7 +14,7 @@ type App struct {
 }
 
 func NewApp(ctx context.Context) *App {
-	ss := core.NewServiceState(ctx, "app")
+	ss := core.AssembleSsWithShadowState(ctx, "app")
 	app := &App{
 		ss: ss,
 	}

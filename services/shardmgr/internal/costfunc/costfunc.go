@@ -1,24 +1,27 @@
 package costfunc
 
-import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
-
-var (
-	currentCostFuncProvider CostFuncProvider
+import (
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
-func GetCurrentCostFuncProvider() CostFuncProvider {
-	if currentCostFuncProvider == nil {
-		currentCostFuncProvider = NewCostFuncSimpleProvider()
-	}
-	return currentCostFuncProvider
-}
+// var (
+// 	currentCostFuncProvider CostFuncProvider
+// )
 
-func RunWithCostFuncProvider(provider CostFuncProvider, fn func()) {
-	oldProvider := currentCostFuncProvider
-	currentCostFuncProvider = provider
-	fn()
-	currentCostFuncProvider = oldProvider
-}
+// func GetCurrentCostFuncProvider() CostFuncProvider {
+// 	if currentCostFuncProvider == nil {
+// 		currentCostFuncProvider = NewCostFuncSimpleProvider()
+// 	}
+// 	return currentCostFuncProvider
+// }
+
+// func RunWithCostFuncProvider(provider CostFuncProvider, fn func()) {
+// 	oldProvider := currentCostFuncProvider
+// 	currentCostFuncProvider = provider
+// 	fn()
+// 	currentCostFuncProvider = oldProvider
+// }
 
 type CostFuncProvider interface {
 	CalCost(snap *Snapshot) Cost
@@ -26,10 +29,13 @@ type CostFuncProvider interface {
 
 // CostFuncSimpleProvider implements the CostFuncProvider interface
 type CostFuncSimpleProvider struct {
+	CostfuncCfg config.CostfuncConfig
 }
 
-func NewCostFuncSimpleProvider() *CostFuncSimpleProvider {
-	return &CostFuncSimpleProvider{}
+func NewCostFuncSimpleProvider(CostfuncCfg config.CostfuncConfig) *CostFuncSimpleProvider {
+	return &CostFuncSimpleProvider{
+		CostfuncCfg: CostfuncCfg,
+	}
 }
 
 // CalCost implements the CostFuncProvider interface
@@ -62,8 +68,8 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 		soft := float64(0)
 		hard := int32(0)
 		snap.AllWorkers.VisitAll(func(workerId data.WorkerFullId, worker *WorkerSnap) {
-			soft += float64(len(worker.Assignments)) / float64(snap.CostfuncCfg.ShardCountCostNorm)
-			if len(worker.Assignments) > int(snap.CostfuncCfg.WorkerMaxAssignments) {
+			soft += float64(len(worker.Assignments)) / float64(simple.CostfuncCfg.ShardCountCostNorm)
+			if len(worker.Assignments) > int(simple.CostfuncCfg.WorkerMaxAssignments) {
 				hard++
 			}
 		})

@@ -47,7 +47,7 @@ type ServiceState struct {
 	syncWorkerBatchManager *BatchManager
 }
 
-func NewServiceState(ctx context.Context, name string) *ServiceState { // name is for logging purpose only
+func NewServiceState(ctx context.Context, name string) *ServiceState {
 	ss := &ServiceState{
 		Name:             name,
 		AllShards:        make(map[data.ShardId]*ShardState),
@@ -58,17 +58,11 @@ func NewServiceState(ctx context.Context, name string) *ServiceState { // name i
 		ShutdownHat:      make(map[data.WorkerFullId]common.Unit),
 	}
 	ss.PathManager = config.NewPathManager()
-	shadowState := shadow.NewShadowState(ctx, ss.PathManager)
-	ss.ShadowState = shadowState
 	ss.ProposalQueue = NewProposalQueue(ss, 20)
-	ss.storeProvider = shadowState
 	ss.pilotProvider = shadow.NewPilotStore(ss.PathManager)
 	ss.routingProvider = shadow.NewDefaultRoutingProvider(ss.PathManager)
 	ss.actionProvider = shadow.NewDefaultActionProvider(ss.PathManager)
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
-	ss.Init(ctx)
-	// strt runloop
-	go ss.runloop.Run(ctx)
 	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.syncEphStagingToWorkerState(ctx)
 	})

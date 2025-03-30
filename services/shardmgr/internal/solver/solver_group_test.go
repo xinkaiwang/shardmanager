@@ -12,7 +12,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
@@ -142,17 +141,12 @@ func TestSolverGroup_Basic(t *testing.T) {
 	// 使用 FakeTimeProvider 运行测试
 	kcommon.RunWithTimeProvider(fakeTime, func() {
 		// 创建一个基本的快照
-		snapshot := &costfunc.Snapshot{
-			SnapshotId: costfunc.SnapshotId("test-snap"),
-			CostfuncCfg: config.CostfuncConfig{
-				ShardCountCostEnable: true,
-				ShardCountCostNorm:   2,
-				WorkerMaxAssignments: 2,
-			},
-			AllShards:      costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
-			AllWorkers:     costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
-			AllAssignments: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
+		costfuncCfg := config.CostfuncConfig{
+			ShardCountCostEnable: true,
+			ShardCountCostNorm:   2,
+			WorkerMaxAssignments: 2,
 		}
+		snapshot := costfunc.NewSnapshot(ctx, costfuncCfg)
 
 		// 跟踪收到的提案
 		var receivedProposals []*costfunc.Proposal
@@ -243,17 +237,12 @@ func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 	// 使用 FakeTimeProvider 运行测试
 	kcommon.RunWithTimeProvider(fakeTime, func() {
 		// 创建一个基本的快照
-		snapshot := &costfunc.Snapshot{
-			SnapshotId: costfunc.SnapshotId("test-snap"),
-			CostfuncCfg: config.CostfuncConfig{
-				ShardCountCostEnable: true,
-				ShardCountCostNorm:   2,
-				WorkerMaxAssignments: 2,
-			},
-			AllShards:      costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
-			AllWorkers:     costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
-			AllAssignments: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
+		costfuncCfg := config.CostfuncConfig{
+			ShardCountCostEnable: true,
+			ShardCountCostNorm:   2,
+			WorkerMaxAssignments: 2,
 		}
+		snapshot := costfunc.NewSnapshot(ctx, costfuncCfg)
 
 		// 跟踪每个 solver 类型收到的提案
 		proposalsByType := make(map[string][]*costfunc.Proposal)
@@ -356,18 +345,12 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 	// 使用 FakeTimeProvider 运行测试
 	kcommon.RunWithTimeProvider(fakeTime, func() {
 		// 创建一个基本的快照
-		snapshot := &costfunc.Snapshot{
-			SnapshotId: costfunc.SnapshotId("test-snap"),
-			CostfuncCfg: config.CostfuncConfig{
-				ShardCountCostEnable: true,
-				ShardCountCostNorm:   2,
-				WorkerMaxAssignments: 2,
-			},
-			AllShards:      costfunc.NewFastMap[data.ShardId, costfunc.ShardSnap](),
-			AllWorkers:     costfunc.NewFastMap[data.WorkerFullId, costfunc.WorkerSnap](),
-			AllAssignments: costfunc.NewFastMap[data.AssignmentId, costfunc.AssignmentSnap](),
+		costfuncCfg := config.CostfuncConfig{
+			ShardCountCostEnable: true,
+			ShardCountCostNorm:   2,
+			WorkerMaxAssignments: 2,
 		}
-
+		snapshot := costfunc.NewSnapshot(ctx, costfuncCfg)
 		// 跟踪收到的提案
 		var receivedProposals []*costfunc.Proposal
 		var proposalMu sync.Mutex

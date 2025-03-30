@@ -135,7 +135,7 @@ type SnapshotId string
 type Snapshot struct {
 	Frozen         bool // 标记当前实例是否已冻结，冻结后不允许修改
 	SnapshotId     SnapshotId
-	CostfuncCfg    config.CostfuncConfig
+	Costfunc       CostFuncProvider
 	AllShards      *FastMap[data.ShardId, ShardSnap]
 	AllWorkers     *FastMap[data.WorkerFullId, WorkerSnap]
 	AllAssignments *FastMap[data.AssignmentId, AssignmentSnap]
@@ -145,7 +145,7 @@ func NewSnapshot(ctx context.Context, costfuncCfg config.CostfuncConfig) *Snapsh
 	return &Snapshot{
 		Frozen:         false,
 		SnapshotId:     SnapshotId(kcommon.RandomString(ctx, 8)),
-		CostfuncCfg:    costfuncCfg,
+		Costfunc:       NewCostFuncSimpleProvider(costfuncCfg),
 		AllShards:      NewFastMap[data.ShardId, ShardSnap](),
 		AllWorkers:     NewFastMap[data.WorkerFullId, WorkerSnap](),
 		AllAssignments: NewFastMap[data.AssignmentId, AssignmentSnap](),
@@ -160,7 +160,7 @@ func (snap *Snapshot) Clone() *Snapshot {
 	}
 	clone := &Snapshot{
 		SnapshotId:     snap.SnapshotId,
-		CostfuncCfg:    snap.CostfuncCfg,
+		Costfunc:       snap.Costfunc,
 		AllShards:      snap.AllShards.Clone(),
 		AllWorkers:     snap.AllWorkers.Clone(),
 		AllAssignments: snap.AllAssignments.Clone(),
@@ -246,4 +246,8 @@ func (snap *Snapshot) ApplyMove(move Move) {
 		panic(ke)
 	}
 	move.Apply(snap)
+}
+
+func (snap *Snapshot) GetCost() Cost {
+	return snap.Costfunc.CalCost(snap)
 }

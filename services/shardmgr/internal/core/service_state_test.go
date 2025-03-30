@@ -46,7 +46,7 @@ func TestServiceState_Basic(t *testing.T) {
 	// 使用 RunWithEtcdProvider 运行测试
 	etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestServiceState_Basic")
+		ss := AssembleSsWithShadowState(ctx, "TestServiceState_Basic")
 
 		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
 		// defer ss.StopAndWaitForExit(ctx)
@@ -100,7 +100,7 @@ shard-3|{"move_type":"kill_before_start"}`
 	// 使用 RunWithEtcdProvider 运行测试
 	etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
 		// 创建 ServiceState
-		ss := NewServiceState(ctx, "TestServiceState_ShardManagement")
+		ss := AssembleSsWithShadowState(ctx, "TestServiceState_ShardManagement")
 
 		// 不使用 defer 调用 StopAndWaitForExit，而是在测试结束前直接调用
 		// defer ss.StopAndWaitForExit(ctx)

@@ -21,7 +21,7 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 
 	fn := func() {
 		// Step 0: 创建 ServiceState
-		ss := NewServiceState(ctx, "TestWorkerShutdownRequest")
+		ss := AssembleSsWithShadowState(ctx, "TestWorkerShutdownRequest")
 		setup.ServiceState = ss
 
 		// Step 1: 创建 worker-1 eph
