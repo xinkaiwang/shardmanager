@@ -9,7 +9,14 @@ import (
 
 func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is for logging purpose only
 	// ss
-	ss := AssembleSsWithShadowState(ctx, name)
+	ss := NewServiceState(ctx, name)
+	// shadow state
+	shadowState := shadow.NewShadowState(ctx, ss.PathManager)
+	ss.ShadowState = shadowState
+	ss.storeProvider = shadowState
+
+	// init
+	ss.Init(ctx)
 
 	// solverGroup
 	sg := solver.NewSolverGroup(ctx, ss.SnapshotFuture, ss.ProposalQueue.EnqueueProposal)
@@ -18,9 +25,11 @@ func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is 
 	sg.AddSolver(ctx, solver.NewUnassignSolver())
 	ss.SolverGroup = sg
 
+	go ss.runloop.Run(ctx)
 	return ss
 }
 
+// for testing only
 func AssembleSsWithShadowState(ctx context.Context, name string) *ServiceState { // name is for logging purpose only
 	ss := NewServiceState(ctx, name)
 	// shadow state

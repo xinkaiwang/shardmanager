@@ -36,8 +36,8 @@ type ShardConfig struct {
 	// MoveType 服务的迁移类型 (killBeforeStart, startBeforeKill, concurrent)
 	MovePolicy smgjson.MovePolicy
 	// max/min replica count per shard (can be override by per shard config)
-	MaxReplicaCount int32 // default max replica count per shard (default 10)
-	MinReplicaCount int32 // default min replica count per shard (default 1)
+	MaxReplicaCount int // default max replica count per shard (default 10)
+	MinReplicaCount int // default min replica count per shard (default 1)
 }
 
 type WorkerConfig struct {
@@ -83,10 +83,10 @@ func ShardConfigJsonToConfig(sc *smgjson.ShardConfigJson) ShardConfig {
 		cfg.MovePolicy = *sc.MoveType
 	}
 	if sc.MaxReplicaCount != nil {
-		cfg.MaxReplicaCount = *sc.MaxReplicaCount
+		cfg.MaxReplicaCount = int(*sc.MaxReplicaCount)
 	}
 	if sc.MinReplicaCount != nil {
-		cfg.MinReplicaCount = *sc.MinReplicaCount
+		cfg.MinReplicaCount = int(*sc.MinReplicaCount)
 	}
 	return cfg
 }
@@ -167,8 +167,8 @@ func (cfg *ServiceConfig) ToServiceConfigJson() *smgjson.ServiceConfigJson {
 func (cfg *ShardConfig) ToShardConfigJson() *smgjson.ShardConfigJson {
 	return &smgjson.ShardConfigJson{
 		MoveType:        &cfg.MovePolicy,
-		MaxReplicaCount: &cfg.MaxReplicaCount,
-		MinReplicaCount: &cfg.MinReplicaCount,
+		MaxReplicaCount: func() *int32 { i := int32(cfg.MaxReplicaCount); return &i }(),
+		MinReplicaCount: func() *int32 { i := int32(cfg.MinReplicaCount); return &i }(),
 	}
 }
 func (cfg *WorkerConfig) ToWorkerConfigJson() *smgjson.WorkerConfigJson {

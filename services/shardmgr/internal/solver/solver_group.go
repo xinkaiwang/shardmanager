@@ -12,7 +12,7 @@ import (
 )
 
 type SnapshotListener interface {
-	SetCurrentSnapshot(snapshot *costfunc.Snapshot)
+	OnSnapshot(snapshot *costfunc.Snapshot)
 }
 
 // SolverGroup manages multiple SolverDrivers
@@ -40,7 +40,7 @@ func (sa *SolverGroup) AddSolver(ctx context.Context, solver Solver) {
 	sa.SolverDrivers[solverName] = driver
 }
 
-func (sa *SolverGroup) SetCurrentSnapshot(snapshot *costfunc.Snapshot) {
+func (sa *SolverGroup) OnSnapshot(snapshot *costfunc.Snapshot) {
 	sa.storeSnapshot(snapshot)
 }
 

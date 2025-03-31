@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
@@ -166,20 +167,23 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 		success, debugInfo := condition()
 		if success {
 			elapsed := kcommon.GetMonoTimeMs() - startTime
-			t.Logf("条件满足，耗时 %v", elapsed)
+			// t.Logf("条件满足，耗时 %v", elapsed)
+			klogging.Debug(context.TODO()).With("尝试", i+1).With("最大尝试次数", maxWaitMs/intervalMs).With("已耗时", elapsed).With("最后状态", debugInfo).With("time", kcommon.GetWallTimeMs()).Log("WaitUntil", "条件满足")
 			elapsedMs := kcommon.GetMonoTimeMs() - startMs
 			return true, elapsedMs
 		}
 
 		elapsed := int(kcommon.GetMonoTimeMs() - startTime)
 		if elapsed >= maxDuration {
-			t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
+			// t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
+			klogging.Debug(context.TODO()).With("尝试", i+1).With("最大尝试次数", maxWaitMs/intervalMs).With("已耗时", elapsed).With("最后状态", debugInfo).With("time", kcommon.GetWallTimeMs()).Log("WaitUntil", "等待条件满足超时")
 			elapsedMs := kcommon.GetMonoTimeMs() - startMs
 			return false, elapsedMs
 		}
 
-		t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
-			i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
+		// t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
+		// 	i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
+		klogging.Debug(context.TODO()).With("尝试", i+1).With("最大尝试次数", maxWaitMs/intervalMs).With("已耗时", elapsed).With("当前状态", debugInfo).With("time", kcommon.GetWallTimeMs()).Log("WaitUntil", "等待条件满足中")
 		kcommon.SleepMs(context.Background(), intervalDuration)
 	}
 	elapsedMs := kcommon.GetMonoTimeMs() - startMs

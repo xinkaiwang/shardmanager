@@ -38,10 +38,11 @@ func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.
 			}
 			delete(needRemove, shard.ShardId)
 		} else {
-			// add new shard
-			shard := NewShardStateByPlan(shardLine)
-			ss.AllShards[shard.ShardId] = shard
-			inserted = append(inserted, shard.ShardId)
+			// add new shardState
+			shardState := NewShardStateByPlan(shardLine, ss.ServiceConfig.ShardConfig)
+			shardState.ReEvaluateReplicaCount()
+			ss.AllShards[shardState.ShardId] = shardState
+			inserted = append(inserted, shardState.ShardId)
 		}
 	}
 	// remove shard if not in shardPlan
@@ -53,6 +54,7 @@ func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.
 	// log
 	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).Log("syncShardPlan", "done")
 	ss.FlushShardState(ctx, updated, inserted, deleted)
+	ss.reCreateSnapshotBatchManager.TrySchedule(ctx)
 }
 
 type ShardPlanWatcher struct {

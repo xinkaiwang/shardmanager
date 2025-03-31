@@ -49,12 +49,12 @@ func (ss *ServiceState) LoadServiceInfo(ctx context.Context) *ServiceInfo {
 	}
 	// MaxResplicaCount/MinResplicaCount (default 10/1)
 	if siObj.MaxResplicaCount != nil {
-		si.DefaultHints.MaxReplicaCount = *siObj.MaxResplicaCount
+		si.DefaultHints.MaxReplicaCount = int(*siObj.MaxResplicaCount)
 	} else {
 		si.DefaultHints.MaxReplicaCount = 10
 	}
 	if siObj.MinResplicaCount != nil {
-		si.DefaultHints.MinReplicaCount = *siObj.MinResplicaCount
+		si.DefaultHints.MinReplicaCount = int(*siObj.MinResplicaCount)
 	} else {
 		si.DefaultHints.MinReplicaCount = 1
 	}

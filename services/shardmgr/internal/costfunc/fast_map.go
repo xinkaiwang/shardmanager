@@ -72,6 +72,10 @@ func (fm *FastMap[T1, T2]) Clone() *FastMap[T1, T2] {
 	}
 }
 
+func (fm *FastMap[T1, T2]) Count() int {
+	return len(fm.baseMap) + len(fm.diffMap)
+}
+
 // VisitAll 对映射中的每个非零值条目应用访问者函数
 func (fm *FastMap[T1, T2]) VisitAll(visitor func(T1, *T2)) {
 	// 首先访问 baseMap 中的条目

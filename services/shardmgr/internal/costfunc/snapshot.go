@@ -2,6 +2,7 @@ package costfunc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -260,4 +261,12 @@ func (snap *Snapshot) GetCost() Cost {
 		snap.cost = &cost
 	}
 	return *snap.cost
+}
+
+func (snap *Snapshot) ToShortString() string {
+	replicaCount := 0
+	snap.AllShards.VisitAll(func(shardId data.ShardId, shardSnap *ShardSnap) {
+		replicaCount += len(shardSnap.Replicas)
+	})
+	return fmt.Sprintf("SnapshotId=%s, Cost=%v, shard=%d, worker=%d, replica=%d, assign=%d", snap.SnapshotId, snap.GetCost(), snap.AllShards.Count(), snap.AllWorkers.Count(), replicaCount, snap.AllAssignments.Count())
 }

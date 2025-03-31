@@ -11,23 +11,28 @@ import (
 type ReplicaState struct {
 	ShardId    data.ShardId
 	ReplicaIdx data.ReplicaIdx
-	WorkerId   data.WorkerId
 	LameDuck   bool
 
 	Assignments map[data.AssignmentId]common.Unit
 }
 
-func NewReplicaState(shardId data.ShardId, replicaIdx data.ReplicaIdx, workerId data.WorkerId) *ReplicaState {
+func NewReplicaState(shardId data.ShardId, replicaIdx data.ReplicaIdx) *ReplicaState {
 	return &ReplicaState{
 		ShardId:     shardId,
 		ReplicaIdx:  replicaIdx,
-		WorkerId:    workerId,
 		Assignments: make(map[data.AssignmentId]common.Unit),
 	}
 }
 
 func (rs *ReplicaState) ToJson() *smgjson.ReplicaStateJson {
 	obj := smgjson.NewReplicaStateJson()
+	if rs.ReplicaIdx != 0 {
+		idx := int32(rs.ReplicaIdx)
+		obj.ReplicaIdx = &idx
+	}
+	for assignId := range rs.Assignments {
+		obj.Assignments = append(obj.Assignments, string(assignId))
+	}
 	return obj
 }
 

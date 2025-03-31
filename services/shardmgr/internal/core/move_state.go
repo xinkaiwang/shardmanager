@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -42,5 +43,18 @@ func MoveStateFromJson(msj *smgjson.MoveStateJson) *MoveState {
 		Actions:         msj.Actions,
 		CurrentAction:   msj.NextMove,
 		ActionConducted: 0,
+	}
+}
+
+func (ms *MoveState) ApplyRemainingActions(snapshot *costfunc.Snapshot) {
+	for i := ms.CurrentAction; i < len(ms.Actions); i++ {
+		action := ms.Actions[i]
+		// apply action to snapshot
+		switch action.ActionType {
+		// TODO
+		default:
+			ke := kerror.Create("UnsupportedAction", "unsupported action type="+string(action.ActionType))
+			panic(ke)
+		}
 	}
 }

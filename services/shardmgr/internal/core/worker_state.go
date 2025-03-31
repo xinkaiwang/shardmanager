@@ -8,6 +8,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
@@ -140,6 +141,16 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 	}
 
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
+}
+
+func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.PassiveMove, mode costfunc.ApplyMode) {
+	newCurrent := move.Apply(ss.SnapshotCurrent, mode).Freeze()
+	newFuture := move.Apply(ss.SnapshotFuture, mode).Freeze()
+	ss.SnapshotCurrent = newCurrent
+	ss.SnapshotFuture = newFuture
+	if ss.SolverGroup != nil {
+		ss.SolverGroup.OnSnapshot(ss.SnapshotFuture)
+	}
 }
 
 func (ws *WorkerState) signalAll(reason string) {

@@ -165,7 +165,6 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			ss.AllAssignments[action.AssignmentId] = assign
 			replicaState.Assignments[action.AssignmentId] = common.Unit{}
 			workerState.Assignments[action.AssignmentId] = common.Unit{}
-			// klogging.Info(ctx).With("shardId", shardId).Log("FlushShardState", "更新分片")
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "addShard")
 			chanWait = workerState.NotifyCh
@@ -255,7 +254,6 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			assign.ShouldInPilot = false
-			// klogging.Info(ctx).With("shardId", shardId).Log("FlushShardState", "更新分片")
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "dropShard")
 			chanWait = workerState.NotifyCh

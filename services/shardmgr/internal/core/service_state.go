@@ -31,6 +31,7 @@ type ServiceState struct {
 	AllShards      map[data.ShardId]*ShardState
 	AllWorkers     map[data.WorkerFullId]*WorkerState
 	AllAssignments map[data.AssignmentId]*AssignmentState
+	AllMoves       map[data.ProposalId]*MoveState
 
 	ProposalQueue   *ProposalQueue
 	SnapshotCurrent *costfunc.Snapshot // current means current state
@@ -43,7 +44,8 @@ type ServiceState struct {
 	ShardPlanWatcher *ShardPlanWatcher
 	WorkerEphWatcher *WorkerEphWatcher
 
-	syncWorkerBatchManager *BatchManager
+	syncWorkerBatchManager       *BatchManager // enqueue when any worker eph changed, dequeue= trigger ss.syncEphStagingToWorkerState()
+	reCreateSnapshotBatchManager *BatchManager // enqueue when any workerState/shardState add/remove/etc. dequeue=trigger snapshot recreate
 }
 
 func NewServiceState(ctx context.Context, name string) *ServiceState {
@@ -52,6 +54,7 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 		AllShards:        make(map[data.ShardId]*ShardState),
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
 		AllAssignments:   make(map[data.AssignmentId]*AssignmentState),
+		AllMoves:         make(map[data.ProposalId]*MoveState),
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
 		ShutdownHat:      make(map[data.WorkerFullId]common.Unit),
@@ -64,6 +67,9 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.syncEphStagingToWorkerState(ctx)
+	})
+	ss.reCreateSnapshotBatchManager = NewBatchManager(ss, 10, "reCreateSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
+		ss.ReCreateSnapshot(ctx)
 	})
 	return ss
 }
@@ -99,4 +105,6 @@ func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.
 	ss.pilotProvider.StorePilotNode(ctx, workerFullId, workerState.ToPilotNode(ctx, ss, reason))
 	// routing table
 	ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
+	// trigger snapshot recreate
+	ss.reCreateSnapshotBatchManager.TrySchedule(ctx)
 }
