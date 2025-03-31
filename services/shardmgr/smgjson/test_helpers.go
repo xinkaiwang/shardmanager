@@ -1,5 +1,7 @@
 package smgjson
 
+import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+
 // test_helpers.go 包含测试时常用的辅助函数
 
 // CreateTestServiceInfo 创建一个测试用的 ServiceInfoJson 对象
@@ -7,7 +9,7 @@ package smgjson
 func CreateTestServiceInfo() *ServiceInfoJson {
 	return &ServiceInfoJson{
 		ServiceName:      "test-service",
-		ServiceType:      NewServiceTypePointer(ST_SOFT_STATEFUL),
+		StatefulType:     NewServiceTypePointer(data.ST_MEMORY),
 		MoveType:         NewMovePolicyPointer(MP_StartBeforeKill),
 		MaxResplicaCount: NewInt32Pointer(10),
 		MinResplicaCount: NewInt32Pointer(1),
@@ -18,14 +20,14 @@ func CreateTestServiceInfo() *ServiceInfoJson {
 // 可以自定义各个字段的值
 func CreateTestServiceInfoWithOptions(
 	serviceName string,
-	serviceType ServiceType,
+	serviceType data.StatefulType,
 	moveType MovePolicy,
 	maxReplica int32,
 	minReplica int32,
 ) *ServiceInfoJson {
 	return &ServiceInfoJson{
 		ServiceName:      serviceName,
-		ServiceType:      NewServiceTypePointer(serviceType),
+		StatefulType:     NewServiceTypePointer(serviceType),
 		MoveType:         NewMovePolicyPointer(moveType),
 		MaxResplicaCount: NewInt32Pointer(maxReplica),
 		MinResplicaCount: NewInt32Pointer(minReplica),

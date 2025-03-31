@@ -87,7 +87,7 @@ func (ws *WorkerState) GetState() data.WorkerStateEnum {
 }
 
 func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
-	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ss.IsStateInMemory())
+	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ss.ServiceInfo.StatefulType)
 }
 
 func (ws *WorkerState) GetShutdownRequesting() bool {

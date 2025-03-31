@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -34,8 +35,8 @@ func TestServiceState_Basic(t *testing.T) {
 	// 准备初始数据
 	serviceInfoPath := "/smg/config/service_info.json"
 	serviceInfo := smgjson.CreateTestServiceInfo()
-	data, _ := json.Marshal(serviceInfo)
-	fakeEtcd.Set(ctx, serviceInfoPath, string(data))
+	jsonData, _ := json.Marshal(serviceInfo)
+	fakeEtcd.Set(ctx, serviceInfoPath, string(jsonData))
 
 	// 设置服务配置
 	serviceConfigPath := "/smg/config/service_config.json"
@@ -53,13 +54,10 @@ func TestServiceState_Basic(t *testing.T) {
 
 		// 验证基本信息是否正确加载
 		assert.Equal(t, "test-service", ss.ServiceInfo.ServiceName)
-		assert.Equal(t, smgjson.ST_SOFT_STATEFUL, ss.ServiceInfo.ServiceType)
+		assert.Equal(t, data.ST_MEMORY, ss.ServiceInfo.StatefulType)
 		assert.Equal(t, smgjson.MP_StartBeforeKill, ss.ServiceInfo.DefaultHints.MovePolicy)
 		assert.Equal(t, int32(10), ss.ServiceInfo.DefaultHints.MaxReplicaCount)
 		assert.Equal(t, int32(1), ss.ServiceInfo.DefaultHints.MinReplicaCount)
-
-		// 验证 IsStateInMemory 方法
-		assert.True(t, ss.IsStateInMemory())
 
 		// 在测试结束前调用 StopAndWaitForExit
 		ss.StopAndWaitForExit(ctx)

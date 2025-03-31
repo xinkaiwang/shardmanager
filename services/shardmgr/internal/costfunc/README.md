@@ -32,8 +32,7 @@ worker := NewWorkerSnap(workerFullId)
 snapshot.AllWorkers.Set(workerFullId, worker)
 
 // 计算快照的成本
-provider := costfunc.GetCurrentCostFuncProvider()
-cost := provider.CalCost(snapshot)
+cost := snapshot.GetCost()
 ```
 
 ### 更改
@@ -48,18 +47,18 @@ newSnapshot := snapshot.Clone() // if you want to change it, you may make update
 // apply a move
 Proposal.Move.Apply(newSnapshot)
 
-cost := costfunc.GetCurrentCostFuncProvider().CalCost(newSnapshot)
+cost := newSnapshot.GetCost()
 ```
 
 ### 计算变更收益
 
 ```go
 // 计算 old 状态成本
-oldCost := costfunc.GetCurrentCostFuncProvider().CalCost(snapshot)
+oldCost := snapshot.GetCost()
 
 newSnapshot := snapshot.Clone()
 Proposal.Move.Apply(newSnapshot)
-newCost := costfunc.GetCurrentCostFuncProvider().CalCost(newSnapshot)
+newCost := newSnapshot.GetCost()
 
 // 计算变更收益 (positive gain means good)
 gain := oldCost.Substract(newCost)

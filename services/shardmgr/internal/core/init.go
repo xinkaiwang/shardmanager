@@ -25,7 +25,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 5: load current worker eph
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
 	for _, workerEph := range currentWorkerEph {
-		workerFullId := data.NewWorkerFullId(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), ss.IsStateInMemory())
+		workerFullId := data.NewWorkerFullId(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), ss.ServiceInfo.StatefulType)
 		ss.writeWorkerEphToStaging(ctx, workerFullId, workerEph)
 	}
 	// step 6: sync workerEph to workerState
@@ -66,7 +66,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 	for _, item := range list {
 		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
 		WorkerState := NewWorkerStateFromJson(workerStateJson)
-		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), ss.IsStateInMemory())
+		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), ss.ServiceInfo.StatefulType)
 		if WorkerState.HasShutdownHat() {
 			ss.ShutdownHat[workerFullId] = common.Unit{}
 		}

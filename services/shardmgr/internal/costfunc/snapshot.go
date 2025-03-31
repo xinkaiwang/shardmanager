@@ -139,6 +139,7 @@ type Snapshot struct {
 	AllShards      *FastMap[data.ShardId, ShardSnap]
 	AllWorkers     *FastMap[data.WorkerFullId, WorkerSnap]
 	AllAssignments *FastMap[data.AssignmentId, AssignmentSnap]
+	cost           *Cost // nil means not calculated yet
 }
 
 func NewSnapshot(ctx context.Context, costfuncCfg config.CostfuncConfig) *Snapshot {
@@ -168,7 +169,7 @@ func (snap *Snapshot) Clone() *Snapshot {
 	return clone
 }
 
-func (snap *Snapshot) Freeze() {
+func (snap *Snapshot) Freeze() *Snapshot {
 	if snap.Frozen {
 		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
 		panic(ke)
@@ -177,6 +178,7 @@ func (snap *Snapshot) Freeze() {
 	snap.AllWorkers.Freeze()
 	snap.AllAssignments.Freeze()
 	snap.Frozen = true
+	return snap
 }
 
 func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, workerFullId data.WorkerFullId) {
@@ -240,14 +242,22 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 	snap.AllAssignments.Delete(assignmentId)
 }
 
-func (snap *Snapshot) ApplyMove(move Move) {
+func (snap *Snapshot) ApplyMove(move Move) *Snapshot {
 	if snap.Frozen {
 		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
 		panic(ke)
 	}
 	move.Apply(snap)
+	return snap
 }
 
 func (snap *Snapshot) GetCost() Cost {
-	return snap.Costfunc.CalCost(snap)
+	if !snap.Frozen {
+		snap.Freeze()
+	}
+	if snap.cost == nil {
+		cost := snap.Costfunc.CalCost(snap)
+		snap.cost = &cost
+	}
+	return *snap.cost
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -13,8 +14,8 @@ type ServiceInfo struct {
 	// ServiceName 是服务的名称
 	ServiceName string
 
-	// ServiceType 服务的类型 (stateless, softStateful, hardStateful)
-	ServiceType smgjson.ServiceType
+	// StatefulType 服务的类型 (stateless, ST_MEMORY, ST_HARD_DRIVE)
+	StatefulType data.StatefulType
 
 	DefaultHints config.ShardConfig
 }
@@ -35,10 +36,10 @@ func (ss *ServiceState) LoadServiceInfo(ctx context.Context) *ServiceInfo {
 	siObj := smgjson.ParseServiceInfoJson(node.Value)
 	si := NewServiceInfo(siObj.ServiceName)
 	// ServiceType (default softStateful)
-	if siObj.ServiceType != nil {
-		si.ServiceType = *siObj.ServiceType
+	if siObj.StatefulType != nil {
+		si.StatefulType = *siObj.StatefulType
 	} else {
-		si.ServiceType = smgjson.ST_SOFT_STATEFUL
+		si.StatefulType = data.ST_MEMORY
 	}
 	// MoveType (default 先启后杀)
 	if siObj.MoveType != nil {

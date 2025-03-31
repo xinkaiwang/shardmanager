@@ -1,10 +1,20 @@
 package data
 
-import "strings"
+import (
+	"strings"
+)
 
 type WorkerId string
 
 type SessionId string
+
+type StatefulType string
+
+const (
+	// ST_STATELESS     ServiceType = "stateless"     // 无状态，无需热身。迁移成本为0
+	ST_MEMORY     StatefulType = "state_in_mem" // 弱状态，状态存在于内存。热身需要数秒,若掉电后需要重新热身。
+	ST_HARD_DRIVE StatefulType = "state_in_hd"  // 强状态，状态存在于硬盘。热身需要数分钟/小时,但掉电重启后不需要重新热身
+)
 
 // WorkerFullId: sessionId is optional, it only exists when state is in memory
 type WorkerFullId struct {
@@ -14,8 +24,8 @@ type WorkerFullId struct {
 
 var WorkerFullIdZero = WorkerFullId{WorkerId: "", SessionId: ""}
 
-func NewWorkerFullId(workerId WorkerId, sessionId SessionId, stateInMemory bool) WorkerFullId {
-	if stateInMemory {
+func NewWorkerFullId(workerId WorkerId, sessionId SessionId, statefulType StatefulType) WorkerFullId {
+	if statefulType == ST_MEMORY {
 		// If state is in memory, sessionId is required
 		return WorkerFullId{WorkerId: workerId, SessionId: sessionId}
 	}
@@ -53,6 +63,6 @@ func WorkerRuntimeIdParseFromString(str string) WorkerRuntimeId {
 	return WorkerRuntimeId{WorkerId: WorkerId(parts[0]), SessionId: SessionId(parts[1])}
 }
 
-func (wrId WorkerRuntimeId) ToWorkerFullId(stateInMemory bool) WorkerFullId {
-	return NewWorkerFullId(wrId.WorkerId, wrId.SessionId, stateInMemory)
+func (wrId WorkerRuntimeId) ToWorkerFullId(statefulType StatefulType) WorkerFullId {
+	return NewWorkerFullId(wrId.WorkerId, wrId.SessionId, statefulType)
 }

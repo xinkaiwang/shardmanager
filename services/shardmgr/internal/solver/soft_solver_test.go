@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -14,6 +13,11 @@ import (
 
 // 测试用的 CostProvider
 type testCostProvider struct{}
+
+// NewTestCostProvider 返回测试用的成本函数提供者
+func NewTestCostProvider() *testCostProvider {
+	return &testCostProvider{}
+}
 
 func (tcp *testCostProvider) CalCost(snapshot *costfunc.Snapshot) costfunc.Cost {
 	// 计算每个 worker 的分片数量
@@ -58,38 +62,22 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 	snapshot := costfunc.NewSnapshot(ctx, costfuncCfg)
 
 	// 设置自定义成本函数提供者
-	snapshot.Costfunc = &testCostProvider{}
+	snapshot.Costfunc = NewTestCostProvider()
 
 	// 创建两个 worker
-	worker1 := data.WorkerFullId{
-		WorkerId:  data.WorkerId("worker1"),
-		SessionId: data.SessionId("session1"),
-	}
-	worker2 := data.WorkerFullId{
-		WorkerId:  data.WorkerId("worker2"),
-		SessionId: data.SessionId("session1"),
-	}
+	worker1 := data.NewWorkerFullId("worker1", "session1", data.ST_MEMORY)
+	worker2 := data.NewWorkerFullId("worker2", "session1", data.ST_MEMORY)
 
 	// worker1 有两个分片，worker2 没有分片，这是一个不平衡的状态
-	snapshot.AllWorkers.Set(worker1, &costfunc.WorkerSnap{
-		WorkerFullId: worker1,
-		Assignments:  make(map[data.ShardId]data.AssignmentId),
-	})
-	snapshot.AllWorkers.Set(worker2, &costfunc.WorkerSnap{
-		WorkerFullId: worker2,
-		Assignments:  make(map[data.ShardId]data.AssignmentId),
-	})
+	snapshot.AllWorkers.Set(worker1, costfunc.NewWorkerSnap(worker1))
+	snapshot.AllWorkers.Set(worker2, costfunc.NewWorkerSnap(worker2))
 
 	// 创建两个分片，每个分片一个副本
 	shard1 := data.ShardId("shard1")
 	shard2 := data.ShardId("shard2")
 	for _, shardId := range []data.ShardId{shard1, shard2} {
 		shard := costfunc.NewShardSnap(shardId)
-		shard.Replicas[0] = &costfunc.ReplicaSnap{
-			ShardId:     shardId,
-			ReplicaIdx:  0,
-			Assignments: make(map[data.AssignmentId]common.Unit),
-		}
+		shard.Replicas[0] = costfunc.NewReplicaSnap(shardId, 0)
 		snapshot.AllShards.Set(shardId, shard)
 	}
 

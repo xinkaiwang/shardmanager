@@ -13,6 +13,11 @@ type testValue struct {
 // IsValueTypeT2 实现 TypeT2 接口
 func (tv testValue) IsValueTypeT2() {}
 
+// NewTestValue 返回一个新的测试值实例
+func NewTestValue(data string) *testValue {
+	return &testValue{data: data}
+}
+
 // TestNewFastMap 测试创建新的 FastMap
 func TestNewFastMap(t *testing.T) {
 	fm := NewFastMap[string, testValue]()
@@ -36,7 +41,7 @@ func TestFastMapSetGet(t *testing.T) {
 
 	// 测试设置和获取值
 	key := "test-key"
-	value := &testValue{data: "test-data"}
+	value := NewTestValue("test-data")
 	fm.Set(key, value)
 
 	// 获取存在的键
@@ -60,7 +65,7 @@ func TestFastMapSetGet(t *testing.T) {
 	}
 
 	// 测试覆盖值
-	newValue := &testValue{data: "new-data"}
+	newValue := NewTestValue("new-data")
 	fm.Set(key, newValue)
 	got, ok = fm.Get(key)
 	if !ok {
@@ -78,7 +83,7 @@ func TestFastMapDelete(t *testing.T) {
 
 	// 设置值
 	key := "test-key"
-	value := &testValue{data: "test-data"}
+	value := NewTestValue("test-data")
 	fm.Set(key, value)
 
 	// 确认值存在
@@ -105,8 +110,8 @@ func TestFastMapClone(t *testing.T) {
 	fm := NewFastMap[string, testValue]()
 
 	// 设置一些初始值
-	fm.Set("key1", &testValue{data: "value1"})
-	fm.Set("key2", &testValue{data: "value2"})
+	fm.Set("key1", NewTestValue("value1"))
+	fm.Set("key2", NewTestValue("value2"))
 
 	// 在克隆前冻结FastMap
 	fm.Freeze()
@@ -148,7 +153,7 @@ func TestFastMapClone(t *testing.T) {
 	}
 
 	// 修改克隆，验证写时复制
-	clone.Set("key3", &testValue{data: "value3"})
+	clone.Set("key3", NewTestValue("value3"))
 
 	// 验证克隆的 diffMap 已经复制
 	diffMapPtr1 = fmt.Sprintf("%p", fm.diffMap)
@@ -180,7 +185,7 @@ func TestFastMapVisitAll(t *testing.T) {
 	}
 
 	for k, v := range testData {
-		fm.Set(k, &testValue{data: v})
+		fm.Set(k, NewTestValue(v))
 	}
 
 	// 使用 VisitAll 收集所有键值对
@@ -229,7 +234,7 @@ func TestFastMapCompact(t *testing.T) {
 	}
 
 	for k, v := range baseData {
-		fm.baseMap[k] = &testValue{data: v}
+		fm.baseMap[k] = NewTestValue(v)
 	}
 
 	// 在 diffMap 中设置一些值
@@ -239,7 +244,7 @@ func TestFastMapCompact(t *testing.T) {
 	}
 
 	for k, v := range diffData {
-		fm.Set(k, &testValue{data: v})
+		fm.Set(k, NewTestValue(v))
 	}
 
 	// 删除一个 baseMap 中的键
@@ -293,15 +298,14 @@ func TestFastMapCombined(t *testing.T) {
 	}
 
 	for k, v := range initialData {
-		value := &testValue{data: v}
-		fm.Set(k, value)
+		fm.Set(k, NewTestValue(v))
 	}
 
 	// 在克隆前修改原始 FastMap
-	newValue1 := &testValue{data: "modified1"}
+	newValue1 := NewTestValue("modified1")
 	fm.Set("key1", newValue1)
 	fm.Delete("key2")
-	newValue4 := &testValue{data: "value4"}
+	newValue4 := NewTestValue("value4")
 	fm.Set("key4", newValue4)
 
 	// 在克隆前冻结FastMap
@@ -327,7 +331,7 @@ func TestFastMapCombined(t *testing.T) {
 			t.Error("修改已冻结的 FastMap 应该会导致异常")
 		}
 	}()
-	fm.Set("key5", &testValue{data: "value5"})
+	fm.Set("key5", NewTestValue("value5"))
 
 	// 压缩克隆的 FastMap
 	compacted := clone.Compact()
@@ -351,7 +355,7 @@ func TestFastMapCombined(t *testing.T) {
 	}
 
 	// 在克隆上进行修改
-	newValue5 := &testValue{data: "value5"}
+	newValue5 := NewTestValue("value5")
 	clone.Set("key5", newValue5)
 
 	// 验证克隆可以被修改
@@ -365,8 +369,8 @@ func TestFastMapDeleteWithClone(t *testing.T) {
 	fm := NewFastMap[string, testValue]()
 
 	// 设置一些初始值
-	fm.Set("key1", &testValue{data: "value1"})
-	fm.Set("key2", &testValue{data: "value2"})
+	fm.Set("key1", NewTestValue("value1"))
+	fm.Set("key2", NewTestValue("value2"))
 
 	// 在克隆前冻结FastMap
 	fm.Freeze()
@@ -398,14 +402,14 @@ func TestFastMapVisitAllEdgeCases(t *testing.T) {
 	fm := NewFastMap[string, testValue]()
 
 	// 在 baseMap 中设置一些值，包括零值
-	fm.baseMap["base1"] = &testValue{data: "base-value1"}
-	fm.baseMap["base2"] = &testValue{data: "base-value2"}
+	fm.baseMap["base1"] = NewTestValue("base-value1")
+	fm.baseMap["base2"] = NewTestValue("base-value2")
 	var zeroValue *testValue = nil
 	fm.baseMap["base-zero"] = zeroValue // 零值
 
 	// 在 diffMap 中设置一些值，包括零值
-	fm.Set("diff1", &testValue{data: "diff-value1"})
-	fm.Set("diff2", &testValue{data: "diff-value2"})
+	fm.Set("diff1", NewTestValue("diff-value1"))
+	fm.Set("diff2", NewTestValue("diff-value2"))
 	fm.Set("diff-zero", nil) // 零值
 
 	// 使用 VisitAll 收集所有键值对
@@ -484,13 +488,13 @@ func TestFastMapGetComprehensive(t *testing.T) {
 	}
 
 	// 测试情况2: 键存在于 baseMap，值不为零值
-	fm.baseMap["base"] = &testValue{data: "base-value"}
+	fm.baseMap["base"] = NewTestValue("base-value")
 	val, ok = fm.Get("base")
 	if !ok {
 		t.Error("对于存在于 baseMap 的键，Get 返回 ok=false，期望 ok=true")
 	}
 	if val == nil || val.data != "base-value" {
-		t.Errorf("对于存在于 baseMap 的键，Get 返回 %v，期望 %v", val, &testValue{data: "base-value"})
+		t.Errorf("对于存在于 baseMap 的键，Get 返回 %v，期望值的data为'base-value'", val)
 	}
 
 	// 测试情况3: 键存在于 baseMap，值为零值
@@ -505,13 +509,13 @@ func TestFastMapGetComprehensive(t *testing.T) {
 	}
 
 	// 测试情况4: 键存在于 diffMap，值不为零值
-	fm.diffMap["diff"] = &testValue{data: "diff-value"}
+	fm.diffMap["diff"] = NewTestValue("diff-value")
 	val, ok = fm.Get("diff")
 	if !ok {
 		t.Error("对于存在于 diffMap 的键，Get 返回 ok=false，期望 ok=true")
 	}
 	if val == nil || val.data != "diff-value" {
-		t.Errorf("对于存在于 diffMap 的键，Get 返回 %v，期望 %v", val, &testValue{data: "diff-value"})
+		t.Errorf("对于存在于 diffMap 的键，Get 返回 %v，期望值的data为'diff-value'", val)
 	}
 
 	// 测试情况5: 键存在于 diffMap，值为零值（表示删除）
@@ -525,18 +529,18 @@ func TestFastMapGetComprehensive(t *testing.T) {
 	}
 
 	// 测试情况6: 键同时存在于 baseMap 和 diffMap，diffMap 中的值不为零值
-	fm.baseMap["both"] = &testValue{data: "base-both"}
-	fm.diffMap["both"] = &testValue{data: "diff-both"}
+	fm.baseMap["both"] = NewTestValue("base-both")
+	fm.diffMap["both"] = NewTestValue("diff-both")
 	val, ok = fm.Get("both")
 	if !ok {
 		t.Error("对于同时存在于 baseMap 和 diffMap 的键，Get 返回 ok=false，期望 ok=true")
 	}
 	if val == nil || val.data != "diff-both" {
-		t.Errorf("对于同时存在于 baseMap 和 diffMap 的键，Get 返回 %v，期望 %v", val, &testValue{data: "diff-both"})
+		t.Errorf("对于同时存在于 baseMap 和 diffMap 的键，Get 返回 %v，期望值的data为'diff-both'", val)
 	}
 
 	// 测试情况7: 键同时存在于 baseMap 和 diffMap，diffMap 中的值为零值（表示删除）
-	fm.baseMap["deleted"] = &testValue{data: "base-deleted"}
+	fm.baseMap["deleted"] = NewTestValue("base-deleted")
 	fm.diffMap["deleted"] = zeroValue
 	val, ok = fm.Get("deleted")
 	if ok {

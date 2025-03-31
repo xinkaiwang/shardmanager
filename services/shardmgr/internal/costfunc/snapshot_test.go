@@ -41,7 +41,7 @@ func TestAssignmentSnap(t *testing.T) {
 	replicaIdx := data.ReplicaIdx(0)
 	assignmentId := data.AssignmentId("assign1")
 
-	assignment := NewAssignmentSnap(shardId, replicaIdx, assignmentId, data.NewWorkerFullId("worker1", "session1", false))
+	assignment := NewAssignmentSnap(shardId, replicaIdx, assignmentId, data.NewWorkerFullId("worker1", "session1", data.ST_MEMORY))
 
 	// 测试 GetReplicaFullId 方法
 	fullId := assignment.GetReplicaFullId()
@@ -50,10 +50,7 @@ func TestAssignmentSnap(t *testing.T) {
 }
 
 func TestWorkerSnap(t *testing.T) {
-	workerFullId := data.WorkerFullId{
-		WorkerId:  data.WorkerId("worker1"),
-		SessionId: data.SessionId("session1"),
-	}
+	workerFullId := data.NewWorkerFullId("worker1", "session1", data.ST_MEMORY)
 
 	worker := NewWorkerSnap(workerFullId)
 
@@ -80,10 +77,7 @@ func TestSnapshot(t *testing.T) {
 		snapshot.SnapshotId = SnapshotId("snap1")
 
 		// 添加一个 worker
-		workerFullId := data.WorkerFullId{
-			WorkerId:  data.WorkerId("worker1"),
-			SessionId: data.SessionId("session1"),
-		}
+		workerFullId := data.NewWorkerFullId("worker1", "session1", data.ST_MEMORY)
 		worker := NewWorkerSnap(workerFullId)
 		snapshot.AllWorkers.Set(workerFullId, worker)
 
@@ -114,10 +108,7 @@ func TestSnapshot(t *testing.T) {
 		snapshot.SnapshotId = SnapshotId("snap1")
 
 		// 添加一个 worker
-		workerFullId := data.WorkerFullId{
-			WorkerId:  data.WorkerId("worker1"),
-			SessionId: data.SessionId("session1"),
-		}
+		workerFullId := data.NewWorkerFullId("worker1", "session1", data.ST_MEMORY)
 		worker := NewWorkerSnap(workerFullId)
 		snapshot.AllWorkers.Set(workerFullId, worker)
 
@@ -154,14 +145,8 @@ func TestSnapshot(t *testing.T) {
 		snapshot.SnapshotId = SnapshotId("snap1")
 
 		// 添加两个 worker
-		worker1 := data.WorkerFullId{
-			WorkerId:  data.WorkerId("worker1"),
-			SessionId: data.SessionId("session1"),
-		}
-		worker2 := data.WorkerFullId{
-			WorkerId:  data.WorkerId("worker2"),
-			SessionId: data.SessionId("session1"),
-		}
+		worker1 := data.NewWorkerFullId("worker1", "session1", data.ST_MEMORY)
+		worker2 := data.NewWorkerFullId("worker2", "session1", data.ST_MEMORY)
 		worker1Snap := NewWorkerSnap(worker1)
 		snapshot.AllWorkers.Set(worker1, worker1Snap)
 
@@ -248,10 +233,7 @@ func TestSnapshotErrorCases(t *testing.T) {
 	shardId := data.ShardId("shard1")
 	replicaIdx := data.ReplicaIdx(0)
 	assignmentId := data.AssignmentId("assign1")
-	workerFullId := data.WorkerFullId{
-		WorkerId:  data.WorkerId("worker1"),
-		SessionId: data.SessionId("session1"),
-	}
+	workerFullId := data.NewWorkerFullId("worker1", "session1", data.ST_MEMORY)
 
 	// 测试分配不存在的 shard
 	assert.Panics(t, func() {

@@ -1,10 +1,12 @@
 package smgjson
 
+import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+
 // 指针辅助函数集合
 // 这些函数用于简化创建指向特定类型的指针的过程
 
 // NewShardStateJsonPointer 创建一个指向给定 ShardStateJson 的指针
-func NewServiceTypePointer(st ServiceType) *ServiceType {
+func NewServiceTypePointer(st data.StatefulType) *data.StatefulType {
 	return &st
 }
 

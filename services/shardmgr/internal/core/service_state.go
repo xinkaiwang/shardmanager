@@ -11,7 +11,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/solver"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // ServiceState implements the CriticalResource interface
@@ -67,11 +66,6 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 		ss.syncEphStagingToWorkerState(ctx)
 	})
 	return ss
-}
-
-func (ss *ServiceState) IsStateInMemory() bool {
-	// SOFT_STATEFUL = state is in memory = state lost after restarts
-	return ss.ServiceInfo.ServiceType == smgjson.ST_SOFT_STATEFUL
 }
 
 func (ss *ServiceState) PostEvent(event krunloop.IEvent[*ServiceState]) {

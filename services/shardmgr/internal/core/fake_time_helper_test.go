@@ -138,7 +138,7 @@ func safeAccessWorkerById(ss *ServiceState, workerFullId data.WorkerFullId, fn f
 // 返回workerFullId和ephPath
 func ftCreateAndSetWorkerEph(t *testing.T, ss *ServiceState, setup *FakeTimeTestSetup, workerId string, sessionId string, addrPort string) (data.WorkerFullId, string) {
 	// 创建workerId对象
-	workerFullId := data.NewWorkerFullId(data.WorkerId(workerId), data.SessionId(sessionId), ss.IsStateInMemory())
+	workerFullId := data.NewWorkerFullId(data.WorkerId(workerId), data.SessionId(sessionId), ss.ServiceInfo.StatefulType)
 
 	// 创建worker eph对象
 	workerEph := cougarjson.NewWorkerEphJson(workerId, sessionId, 1234567890000, 60)

@@ -35,7 +35,7 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 		updateReason := "测试更新"
 
 		// 创建 WorkerFullId
-		workerFullId := data.NewWorkerFullId(workerId, sessionId, true)
+		workerFullId := data.NewWorkerFullId(workerId, sessionId, data.ST_MEMORY)
 
 		// 创建并添加分配任务到 ServiceState
 		assignment1 := NewAssignmentState(
