@@ -50,6 +50,16 @@ type SimpleMove struct {
 	Dst              data.WorkerFullId
 }
 
+func NewSimpleMove(replica data.ReplicaFullId, srcAssignmentId data.AssignmentId, destAssignmentId data.AssignmentId, src data.WorkerFullId, dst data.WorkerFullId) *SimpleMove {
+	return &SimpleMove{
+		Replica:          replica,
+		SrcAssignmentId:  srcAssignmentId,
+		DestAssignmentId: destAssignmentId,
+		Src:              src,
+		Dst:              dst,
+	}
+}
+
 func (move *SimpleMove) GetSignature() string {
 	return move.Replica.String() + "/" + move.Src.String() + "/" + move.Dst.String()
 }
@@ -148,6 +158,14 @@ type AssignMove struct {
 	Worker       data.WorkerFullId
 }
 
+func NewAssignMove(replica data.ReplicaFullId, assignmentId data.AssignmentId, worker data.WorkerFullId) *AssignMove {
+	return &AssignMove{
+		Replica:      replica,
+		AssignmentId: assignmentId,
+		Worker:       worker,
+	}
+}
+
 func (move *AssignMove) GetSignature() string {
 	return move.Replica.String() + "/" + move.Worker.String()
 }
@@ -173,6 +191,14 @@ type UnassignMove struct {
 	Worker       data.WorkerFullId
 	Replica      data.ReplicaFullId
 	AssignmentId data.AssignmentId
+}
+
+func NewUnassignMove(worker data.WorkerFullId, replica data.ReplicaFullId, assignmentId data.AssignmentId) *UnassignMove {
+	return &UnassignMove{
+		Worker:       worker,
+		Replica:      replica,
+		AssignmentId: assignmentId,
+	}
 }
 
 func (move *UnassignMove) GetSignature() string {

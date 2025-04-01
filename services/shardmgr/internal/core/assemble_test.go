@@ -74,6 +74,15 @@ func TestAssembleFakeSolver(t *testing.T) {
 		}
 
 		// Step 4: simulate a solver move
+		{
+			shardId := data.ShardId("shard-a")
+			replicaFullId := data.NewReplicaFullId(shardId, 0)
+			move := costfunc.NewAssignMove(replicaFullId, data.AssignmentId("as1"), workerFullId)
+			proposal := costfunc.NewProposal(ctx, "TestAssembleFakeSolver", costfunc.Gain{HardScore: 1}, snapshotListener.snapshot.SnapshotId)
+			proposal.Move = move
+			ss.ProposalQueue.EnqueueProposal(proposal)
+		}
+
 		// assert.Equal(t, true, false, "")
 	}
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试

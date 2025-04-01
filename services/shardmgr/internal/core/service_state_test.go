@@ -56,8 +56,8 @@ func TestServiceState_Basic(t *testing.T) {
 		assert.Equal(t, "test-service", ss.ServiceInfo.ServiceName)
 		assert.Equal(t, data.ST_MEMORY, ss.ServiceInfo.StatefulType)
 		assert.Equal(t, smgjson.MP_StartBeforeKill, ss.ServiceInfo.DefaultHints.MovePolicy)
-		assert.Equal(t, int32(10), ss.ServiceInfo.DefaultHints.MaxReplicaCount)
-		assert.Equal(t, int32(1), ss.ServiceInfo.DefaultHints.MinReplicaCount)
+		assert.Equal(t, 10, ss.ServiceInfo.DefaultHints.MaxReplicaCount)
+		assert.Equal(t, 1, ss.ServiceInfo.DefaultHints.MinReplicaCount)
 
 		// 在测试结束前调用 StopAndWaitForExit
 		ss.StopAndWaitForExit(ctx)

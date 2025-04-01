@@ -13,6 +13,13 @@ type ReplicaFullId struct {
 	ReplicaIdx ReplicaIdx
 }
 
+func NewReplicaFullId(shardId ShardId, replicaIdx ReplicaIdx) ReplicaFullId {
+	return ReplicaFullId{
+		ShardId:    shardId,
+		ReplicaIdx: replicaIdx,
+	}
+}
+
 func (replicaFullId ReplicaFullId) String() string {
 	return string(replicaFullId.ShardId) + ":" + strconv.Itoa(int(replicaFullId.ReplicaIdx))
 }
