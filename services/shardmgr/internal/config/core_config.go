@@ -1,8 +1,6 @@
 package config
 
-type DynamicThresholdConfigProvider interface {
-	GetDynamicThresholdConfig() DynamicThresholdConfig
-}
+type DynamicThresholdConfigProvider func() DynamicThresholdConfig
 
 type DynamicThresholdConfig struct {
 	DynamicThresholdMax int32

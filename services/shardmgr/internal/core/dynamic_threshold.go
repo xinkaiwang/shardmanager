@@ -14,7 +14,7 @@ type DynamicThreshold struct {
 }
 
 func NewDynamicThreshold(cfgProvider config.DynamicThresholdConfigProvider) *DynamicThreshold {
-	cfg := cfgProvider.GetDynamicThresholdConfig()
+	cfg := cfgProvider()
 	return &DynamicThreshold{
 		configProvider: cfgProvider,
 		currentTimeMs:  kcommon.GetWallTimeMs(),
@@ -30,7 +30,7 @@ func (dt *DynamicThreshold) GetCurrentThreshold(currentTimeMs int64) float64 {
 	if currentTimeMs == dt.currentTimeMs {
 		return dt.threshold
 	}
-	cfg := dt.configProvider.GetDynamicThresholdConfig()
+	cfg := dt.configProvider()
 	if dt.threshold > float64(cfg.DynamicThresholdMax) {
 		dt.threshold = float64(cfg.DynamicThresholdMax)
 	}
@@ -47,7 +47,7 @@ func (dt *DynamicThreshold) GetCurrentThreshold(currentTimeMs int64) float64 {
 }
 
 func (dt *DynamicThreshold) UpdateThreshold(currentTimeMs int64, moveCount int32) {
-	cfg := dt.configProvider.GetDynamicThresholdConfig()
+	cfg := dt.configProvider()
 	if moveCount <= 0 {
 		return
 	}

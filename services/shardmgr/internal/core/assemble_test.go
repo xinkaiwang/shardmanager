@@ -80,7 +80,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 			move := costfunc.NewAssignMove(replicaFullId, data.AssignmentId("as1"), workerFullId)
 			proposal := costfunc.NewProposal(ctx, "TestAssembleFakeSolver", costfunc.Gain{HardScore: 1}, snapshotListener.snapshot.SnapshotId)
 			proposal.Move = move
-			ss.ProposalQueue.EnqueueProposal(proposal)
+			ss.ProposalQueue.Push(proposal)
 		}
 
 		// assert.Equal(t, true, false, "")

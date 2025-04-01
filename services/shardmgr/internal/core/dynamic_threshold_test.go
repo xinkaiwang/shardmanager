@@ -32,27 +32,27 @@ func newTestConfig() *testDynamicThresholdConfigProvider {
 func TestDynamicThresholdInitialValue(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 验证初始阈值是最小值
-	assert.Equal(t, float64(configProvider.config.DynamicThresholdMin), dt.threshold)
+	assert.Equal(t, float64(configProvider.GetDynamicThresholdConfig().DynamicThresholdMin), dt.threshold)
 }
 
 func TestDynamicThresholdGetCurrentWithSameTime(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 使用相同的时间获取阈值，应该返回相同的值
 	currentTime := dt.currentTimeMs
 	threshold := dt.GetCurrentThreshold(currentTime)
-	assert.Equal(t, float64(configProvider.config.DynamicThresholdMin), threshold)
+	assert.Equal(t, float64(configProvider.GetDynamicThresholdConfig().DynamicThresholdMin), threshold)
 }
 
 func TestDynamicThresholdGetCurrentWithEarlierTime(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 使用早于当前时间的时间获取阈值，应该返回相同的值且不更新内部状态
 	currentTime := dt.currentTimeMs - 1000
@@ -65,7 +65,7 @@ func TestDynamicThresholdGetCurrentWithEarlierTime(t *testing.T) {
 func TestDynamicThresholdDecay(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 首先更新阈值，使其高于最小值
 	dt.UpdateThreshold(dt.currentTimeMs, 10) // 增加10次移动，每次5，总共增加50
@@ -84,7 +84,7 @@ func TestDynamicThresholdDecay(t *testing.T) {
 func TestDynamicThresholdDecayMultipleHalfLives(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 首先更新阈值，使其达到最大值
 	maxMoves := int32(math.Ceil(float64(configProvider.config.DynamicThresholdMax-configProvider.config.DynamicThresholdMin) / float64(configProvider.config.IncreasePerMove)))
@@ -109,7 +109,7 @@ func TestDynamicThresholdFullCycle(t *testing.T) {
 
 	// 使用伪造的时间提供者执行测试
 	kcommon.RunWithTimeProvider(fakeTime, func() {
-		dt := NewDynamicThreshold(configProvider)
+		dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 		assert.Equal(t, fakeTime.WallTime, dt.currentTimeMs)
 
 		// 1. 增加阈值
@@ -134,7 +134,7 @@ func TestDynamicThresholdFullCycle(t *testing.T) {
 func TestDynamicThresholdMaxThreshold(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 使用一个非常大的移动次数更新阈值
 	dt.UpdateThreshold(dt.currentTimeMs, 1000)
@@ -146,7 +146,7 @@ func TestDynamicThresholdMaxThreshold(t *testing.T) {
 func TestDynamicThresholdUpdateWithZeroMoves(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	initialThreshold := dt.threshold
 
@@ -160,7 +160,7 @@ func TestDynamicThresholdUpdateWithZeroMoves(t *testing.T) {
 func TestDynamicThresholdWithChangingConfig(t *testing.T) {
 	// 创建一个带有测试配置的DynamicThreshold
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 更新阈值使其接近最大值
 	dt.UpdateThreshold(dt.currentTimeMs, 18) // 10 + 18*5 = 100
@@ -177,7 +177,7 @@ func TestDynamicThresholdWithChangingConfig(t *testing.T) {
 // 性能测试
 func BenchmarkDynamicThresholdGetCurrent(b *testing.B) {
 	configProvider := newTestConfig()
-	dt := NewDynamicThreshold(configProvider)
+	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 	currentTime := kcommon.GetWallTimeMs()
 
 	b.ResetTimer()
@@ -258,7 +258,7 @@ func TestDynamicThresholdSimulateRealUsage(t *testing.T) {
 	fakeTime := kcommon.NewFakeTimeProvider(1000000) // 设置一个初始时间
 
 	kcommon.RunWithTimeProvider(fakeTime, func() {
-		dt := NewDynamicThreshold(configProvider)
+		dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 		currentTimeMs := fakeTime.WallTime
 
 		// 验证初始阈值

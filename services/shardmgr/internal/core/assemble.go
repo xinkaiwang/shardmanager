@@ -19,7 +19,7 @@ func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is 
 	ss.Init(ctx)
 
 	// solverGroup
-	sg := solver.NewSolverGroup(ctx, ss.SnapshotFuture, ss.ProposalQueue.EnqueueProposal)
+	sg := solver.NewSolverGroup(ctx, ss.SnapshotFuture, ss.ProposalQueue.Push)
 	sg.AddSolver(ctx, solver.NewSoftSolver())
 	sg.AddSolver(ctx, solver.NewAssignSolver())
 	sg.AddSolver(ctx, solver.NewUnassignSolver())

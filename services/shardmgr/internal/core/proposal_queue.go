@@ -20,7 +20,7 @@ func NewProposalQueue(ss *ServiceState, maxQueueSize int) *ProposalQueue {
 	}
 }
 
-func (pq *ProposalQueue) EnqueueProposal(p *costfunc.Proposal) common.EnqueueResult {
+func (pq *ProposalQueue) Push(p *costfunc.Proposal) common.EnqueueResult {
 	isLast := pq.insertProposalWithOrder(p)
 	if len(pq.list) <= pq.maxQueueSize {
 		return common.ER_Enqueued

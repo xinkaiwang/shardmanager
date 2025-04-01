@@ -33,9 +33,11 @@ type ServiceState struct {
 	AllAssignments map[data.AssignmentId]*AssignmentState
 	AllMoves       map[data.ProposalId]*MoveState
 
-	ProposalQueue   *ProposalQueue
-	SnapshotCurrent *costfunc.Snapshot // current means current state
-	SnapshotFuture  *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
+	DynamicThreshold *DynamicThreshold
+	ProposalQueue    *ProposalQueue
+	AcceptedCount    int                // mostly for testing/visibilty purpose
+	SnapshotCurrent  *costfunc.Snapshot // current means current state
+	SnapshotFuture   *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
 
 	EphDirty         map[data.WorkerFullId]common.Unit
 	EphWorkerStaging map[data.WorkerFullId]*cougarjson.WorkerEphJson

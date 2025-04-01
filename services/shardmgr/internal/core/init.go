@@ -7,6 +7,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
@@ -17,6 +18,10 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 1: load ServiceInfo
 	ss.ServiceInfo = ss.LoadServiceInfo(ctx)     // from /smg/config/service_info.json
 	ss.ServiceConfig = ss.LoadServiceConfig(ctx) // from /smg/config/service_config.json
+	ss.DynamicThreshold = NewDynamicThreshold(func() config.DynamicThresholdConfig {
+		return ss.ServiceConfig.DynamicThresholdConfig
+	})
+
 	// step 2: load all shard state
 	ss.LoadAllShardState(ctx) // (from /smg/shard_state/ to ss.AllShards)
 	// setp 3: load all worker state
