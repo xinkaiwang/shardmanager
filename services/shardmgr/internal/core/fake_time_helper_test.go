@@ -72,6 +72,36 @@ func (setup *FakeTimeTestSetup) RunWith(fn func()) {
 	})
 }
 
+func (setup *FakeTimeTestSetup) GetPilotNode(workerFullId data.WorkerFullId) *cougarjson.PilotNodeJson {
+	path := setup.ServiceState.PathManager.FmtPilotPath(workerFullId)
+	item := setup.FakeStore.GetByKey(path)
+	if item == "" {
+		return nil
+	}
+	pilotNode := cougarjson.ParsePilotNodeJson(item)
+	return pilotNode
+}
+
+func (setup *FakeTimeTestSetup) GetEphNode(workerFullId data.WorkerFullId) *cougarjson.WorkerEphJson {
+	path := setup.ServiceState.PathManager.FmtWorkerEphPath(workerFullId)
+	item := setup.FakeEtcd.Get(setup.ctx, path)
+	if item.Value == "" {
+		return nil
+	}
+	ephNode := cougarjson.WorkerEphJsonFromJson(item.Value)
+	return ephNode
+}
+
+func (setup *FakeTimeTestSetup) GetRoutingEntry(workerFullId data.WorkerFullId) *unicornjson.WorkerEntryJson {
+	path := setup.ServiceState.PathManager.FmtRoutingPath(workerFullId)
+	item := setup.FakeStore.GetByKey(path)
+	if item == "" {
+		return nil
+	}
+	entry := unicornjson.WorkerEntryJsonFromJson(item)
+	return entry
+}
+
 /******************************* safeAccessServiceState *******************************/
 // 安全地访问 ServiceState 内部状态（同步方式）
 func safeAccessServiceState(ss *ServiceState, fn func(*ServiceState)) {
@@ -204,6 +234,23 @@ func WaitUntilWorkerState(t *testing.T, ss *ServiceState, workerFullId data.Work
 			result = fn(worker)
 		})
 		return result, ""
+	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+func WaitUntilWorkerFullState(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, fn func(pilot *WorkerState, assigns map[data.AssignmentId]*AssignmentState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		var result bool
+		var reason string
+		safeAccessServiceState(ss, func(ss *ServiceState) {
+			worker := ss.AllWorkers[workerFullId]
+			dict := map[data.AssignmentId]*AssignmentState{}
+			for assignId := range worker.Assignments {
+				dict[assignId] = ss.AllAssignments[assignId]
+			}
+			result, reason = fn(worker, dict)
+		})
+		return result, reason
 	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
 }

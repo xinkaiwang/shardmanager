@@ -30,7 +30,7 @@ func TestWorkerEphJsonMarshal(t *testing.T) {
 				worker.Properties["region"] = "us-west"
 				worker.Properties["type"] = "compute"
 				worker.Assignments = append(worker.Assignments,
-					NewAssignmentJson("shard-1", 1, "asg-1", CAS_Active),
+					NewAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
 				)
 				worker.LastUpdateAtMs = now + 1000
 				worker.LastUpdateReason = "periodic update"
@@ -97,7 +97,7 @@ func TestWorkerEphJsonUnmarshal(t *testing.T) {
 				worker.Properties["region"] = "us-west"
 				worker.Properties["type"] = "compute"
 				worker.Assignments = append(worker.Assignments,
-					NewAssignmentJson("shard-1", 1, "asg-1", CAS_Active),
+					NewAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
 				)
 				worker.LastUpdateAtMs = now + 1000
 				worker.LastUpdateReason = "periodic update"
@@ -245,7 +245,7 @@ func TestWorkerEphJsonRoundTrip(t *testing.T) {
 		worker.Properties["region"] = "us-west"
 		worker.Properties["type"] = "compute"
 		worker.Assignments = append(worker.Assignments,
-			NewAssignmentJson("shard-1", 1, "asg-1", CAS_Active),
+			NewAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
 		)
 		worker.LastUpdateAtMs = now + 1000
 		worker.LastUpdateReason = "periodic update"
@@ -371,28 +371,28 @@ func TestNewAssignmentJson(t *testing.T) {
 			shardId:      "shard-1",
 			replicaIdx:   1,
 			assignmentId: "asg-1",
-			state:        CAS_Active,
+			state:        CAS_Ready,
 		},
 		{
 			name:         "Pending Assignment",
 			shardId:      "shard-2",
 			replicaIdx:   0,
 			assignmentId: "asg-2",
-			state:        CAS_Pending,
+			state:        CAS_Adding,
 		},
 		{
 			name:         "Failed Assignment",
 			shardId:      "shard-3",
 			replicaIdx:   2,
 			assignmentId: "asg-3",
-			state:        CAS_Failed,
+			state:        CAS_Dropping,
 		},
 		{
 			name:         "Completed Assignment",
 			shardId:      "shard-4",
 			replicaIdx:   3,
 			assignmentId: "asg-4",
-			state:        CAS_Completed,
+			state:        CAS_Dropped,
 		},
 	}
 

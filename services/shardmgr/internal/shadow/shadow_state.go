@@ -78,8 +78,8 @@ func (shadow *ShadowState) StoreWorkerState(workerFullId data.WorkerFullId, work
 	shadow.runloop.PostEvent(eve)
 }
 
-// StoreProposalState: StoreProvider interface methods
-func (shadow *ShadowState) StoreProposalState(proposalId data.ProposalId, proposalState *smgjson.MoveStateJson) {
+// StoreMoveState: StoreProvider interface methods
+func (shadow *ShadowState) StoreMoveState(proposalId data.ProposalId, proposalState *smgjson.MoveStateJson) {
 	eve := &ExecutionPlanJsonEvent{
 		ProposalId: proposalId,
 		ExtPlan:    proposalState,

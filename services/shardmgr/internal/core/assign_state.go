@@ -1,8 +1,8 @@
 package core
 
 import (
+	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 type AssignmentState struct {
@@ -10,8 +10,8 @@ type AssignmentState struct {
 	ShardId               data.ShardId
 	ReplicaIdx            data.ReplicaIdx
 	WorkerFullId          data.WorkerFullId
-	CurrentConfirmedState smgjson.AssignmentStateEnum
-	TargetState           smgjson.AssignmentStateEnum
+	CurrentConfirmedState cougarjson.CougarAssignmentState
+	TargetState           cougarjson.CougarAssignmentState
 	ShouldInPilot         bool
 	ShouldInRoutingTable  bool
 }
@@ -22,7 +22,7 @@ func NewAssignmentState(assignmentId data.AssignmentId, shardId data.ShardId, re
 		ShardId:               shardId,
 		ReplicaIdx:            replicaIdx,
 		WorkerFullId:          workerFullId,
-		CurrentConfirmedState: smgjson.ASE_Unknown,
-		TargetState:           smgjson.ASE_Unknown,
+		CurrentConfirmedState: cougarjson.CAS_Unknown,
+		TargetState:           cougarjson.CAS_Unknown,
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 )
@@ -28,6 +29,10 @@ func (te *AcceptEvent) Process(ctx context.Context, ss *ServiceState) {
 }
 
 func (ss *ServiceState) TryAccept(ctx context.Context) {
+	var accpeted []*costfunc.Proposal
+	var totalImpact costfunc.Gain
+	now := kcommon.GetWallTimeMs()
+	oldThreashold := ss.DynamicThreshold.GetCurrentThreshold(now)
 	for {
 		if ss.ProposalQueue.IsEmpty() {
 			break
@@ -51,16 +56,36 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 			continue
 		}
 		// check 2: is this proposal's gain high enough (hard score)?
-		if proposal.Gain.HardScore > 0 {
+		gain := proposal.GetEfficiency()
+		if gain.HardScore > 0 {
 			ss.DoAcceptProposal(ctx, proposal)
+			accpeted = append(accpeted, proposal)
+			totalImpact = totalImpact.Add(proposal.Gain)
+			ss.DynamicThreshold.UpdateThreshold(now, proposal.ProposalSize)
 			continue
 		}
 		// check 3: is this proposal's gain high enough (soft score)?
-		// threshold :=
+		threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
+		if gain.SoftScore > threshold {
+			ss.DoAcceptProposal(ctx, proposal)
+			accpeted = append(accpeted, proposal)
+			totalImpact = totalImpact.Add(proposal.Gain)
+			ss.DynamicThreshold.UpdateThreshold(now, proposal.ProposalSize)
+			continue
+		} else {
+			// top proposal is not good enough, so we need to wait for a while
+			break
+		}
 	}
+	ss.AcceptedCount += len(accpeted)
+	newThreshold := ss.DynamicThreshold.GetCurrentThreshold(now)
+	klogging.Info(ctx).With("accpetedCount", len(accpeted)).With("queueRemain", ss.ProposalQueue.Size()).With("oldThreshold", oldThreashold).With("newThreadshold", newThreshold).With("impact", totalImpact).Log("AcceptEvent", "接受提案")
 }
 
 func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc.Proposal) {
-	// TODO
-	ss.AcceptedCount++
+	moveState := NewMoveStateFromProposal(ss, proposal)
+	minion := NewActionMinion(ss, moveState)
+	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson())
+	ss.AllMoves[proposal.ProposalId] = minion
+	go minion.Run(ctx, ss)
 }

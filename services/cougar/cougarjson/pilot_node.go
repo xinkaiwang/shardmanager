@@ -50,34 +50,19 @@ func ParsePilotNodeJson(stringJson string) *PilotNodeJson {
 		panic(ke)
 	}
 
-	// 验证任务状态
-	for _, assignment := range obj.Assignments {
-		if !isValidPilotAssignmentState(assignment.State) {
-			ke := kerror.Create("UnmarshalError", "invalid assignment state").
-				With("state", string(assignment.State))
-			panic(ke)
-		}
-	}
-
 	return &obj
 }
 
 type PilotAssignmentJson struct {
-	ShardId          string               `json:"shd"`
-	ReplicaIdx       int                  `json:"idx,omitempty"`
-	AsginmentId      string               `json:"asg"`
-	CustomProperties map[string]string    `json:"custom_properties,omitempty"`
-	State            PilotAssignmentState `json:"sts"`
+	ShardId          string                `json:"shd"`
+	ReplicaIdx       int                   `json:"idx,omitempty"`
+	AsginmentId      string                `json:"asg"`
+	CustomProperties map[string]string     `json:"custom_properties,omitempty"`
+	State            CougarAssignmentState `json:"sts"`
 }
 
 // NewPilotAssignmentJson 创建一个新的 PilotAssignmentJson 实例
-func NewPilotAssignmentJson(shardId string, replicaIdx int, assignmentId string, state PilotAssignmentState) *PilotAssignmentJson {
-	if !isValidPilotAssignmentState(state) {
-		ke := kerror.Create("InvalidState", "invalid assignment state").
-			With("state", string(state))
-		panic(ke)
-	}
-
+func NewPilotAssignmentJson(shardId string, replicaIdx int, assignmentId string, state CougarAssignmentState) *PilotAssignmentJson {
 	return &PilotAssignmentJson{
 		ShardId:          shardId,
 		ReplicaIdx:       replicaIdx,
@@ -130,22 +115,22 @@ func (obj *PilotAssignmentJson) EqualsTo(other *PilotAssignmentJson) bool {
 	return true
 }
 
-// Define a custom type for State
-type PilotAssignmentState string
+// // Define a custom type for State
+// type PilotAssignmentState string
 
-// Define constants for each possible state
-const (
-	PAS_Unknown   PilotAssignmentState = "unknown"
-	PAS_Active    PilotAssignmentState = "active"
-	PAS_Completed PilotAssignmentState = "completed" // means this assignment needs to be removed.
-)
+// // Define constants for each possible state
+// const (
+// 	PAS_Unknown   PilotAssignmentState = "unknown"
+// 	PAS_Active    PilotAssignmentState = "active"
+// 	PAS_Completed PilotAssignmentState = "completed" // means this assignment needs to be removed.
+// )
 
-// isValidPilotAssignmentState 检查任务状态是否有效
-func isValidPilotAssignmentState(state PilotAssignmentState) bool {
-	switch state {
-	case PAS_Unknown, PAS_Active, PAS_Completed:
-		return true
-	default:
-		return false
-	}
-}
+// // isValidPilotAssignmentState 检查任务状态是否有效
+// func isValidPilotAssignmentState(state PilotAssignmentState) bool {
+// 	switch state {
+// 	case PAS_Unknown, PAS_Active, PAS_Completed:
+// 		return true
+// 	default:
+// 		return false
+// 	}
+// }

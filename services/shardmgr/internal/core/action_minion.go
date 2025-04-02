@@ -6,6 +6,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -23,7 +24,7 @@ func NewActionMinion(ss *ServiceState, moveState *MoveState) *ActionMinion {
 	}
 }
 
-func (ss *ServiceState) ActionMinionRun(ctx context.Context, am *ActionMinion) {
+func (am *ActionMinion) Run(ctx context.Context, ss *ServiceState) {
 	startMs := kcommon.GetWallTimeMs()
 	ke := kcommon.TryCatchRun(ctx, func() {
 		am.run(ctx)
@@ -63,7 +64,7 @@ func (am *ActionMinion) run(ctx context.Context) {
 func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int) {
 	action := am.moveState.Actions[stepIdx]
 	if am.moveState.ActionConducted == 0 {
-		workerFullId := data.WorkerFullIdParseFromString(action.From)
+		workerFullId := action.From
 		// step 1: remove from routing table
 		succ := true
 		var ke *kerror.Kerror
@@ -99,7 +100,7 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 	action := am.moveState.Actions[stepIdx]
 	if am.moveState.ActionConducted == 0 {
-		workerFullId := data.WorkerFullIdParseFromString(action.To)
+		workerFullId := action.To
 		// step 1: add to routing table
 		succ := true
 		var ke *kerror.Kerror
@@ -134,7 +135,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 	if am.moveState.ActionConducted == 0 {
 		succ := true
 		var ke *kerror.Kerror
-		workerFullId := data.WorkerFullIdParseFromString(action.To)
+		workerFullId := action.To
 		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
 			shardId := data.ShardId(action.ShardId)
 			shardState, ok := ss.AllShards[shardId]
@@ -162,6 +163,8 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			assign := NewAssignmentState(action.AssignmentId, shardId, action.ReplicaIdx, workerFullId)
+			assign.TargetState = cougarjson.CAS_Ready
+			assign.ShouldInPilot = true
 			ss.AllAssignments[action.AssignmentId] = assign
 			replicaState.Assignments[action.AssignmentId] = common.Unit{}
 			workerState.Assignments[action.AssignmentId] = common.Unit{}
@@ -189,7 +192,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 		succ := true
 		var ke *kerror.Kerror
 		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
-			workerState, ok := ss.AllWorkers[data.WorkerFullIdParseFromString(action.To)]
+			workerState, ok := ss.AllWorkers[action.To]
 			if !ok {
 				succ = false
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", action.To)
@@ -201,7 +204,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
 				return
 			}
-			if assign.CurrentConfirmedState == smgjson.ASE_Healthy {
+			if assign.CurrentConfirmedState == cougarjson.CAS_Ready {
 				completed = true
 				return
 			}
@@ -221,7 +224,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 	if am.moveState.ActionConducted == 0 {
 		succ := true
 		var ke *kerror.Kerror
-		workerFullId := data.WorkerFullIdParseFromString(action.From)
+		workerFullId := action.From
 		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
 			shardId := data.ShardId(action.ShardId)
 			shardState, ok := ss.AllShards[shardId]
@@ -278,7 +281,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 		succ := true
 		var ke *kerror.Kerror
 		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
-			workerState, ok := ss.AllWorkers[data.WorkerFullIdParseFromString(action.From)]
+			workerState, ok := ss.AllWorkers[action.From]
 			if !ok {
 				succ = false
 				ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", action.From)
@@ -290,7 +293,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
 				return
 			}
-			if assign.CurrentConfirmedState == smgjson.ASE_Dropped {
+			if assign.CurrentConfirmedState == cougarjson.CAS_Dropped {
 				completed = true
 				return
 			}

@@ -16,7 +16,7 @@ func (te *Housekeep5sEvent) GetName() string {
 
 func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
 	// ss.checkWorkerTombStone(ctx)
-	kcommon.ScheduleRun(1000, func() {
+	kcommon.ScheduleRun(5*1000, func() { // 5s
 		ss.PostEvent(NewHousekeep5sEvent())
 	})
 }

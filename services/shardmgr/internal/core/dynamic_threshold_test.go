@@ -87,7 +87,7 @@ func TestDynamicThresholdDecayMultipleHalfLives(t *testing.T) {
 	dt := NewDynamicThreshold(configProvider.GetDynamicThresholdConfig)
 
 	// 首先更新阈值，使其达到最大值
-	maxMoves := int32(math.Ceil(float64(configProvider.config.DynamicThresholdMax-configProvider.config.DynamicThresholdMin) / float64(configProvider.config.IncreasePerMove)))
+	maxMoves := int(math.Ceil(float64(configProvider.config.DynamicThresholdMax-configProvider.config.DynamicThresholdMin) / float64(configProvider.config.IncreasePerMove)))
 	dt.UpdateThreshold(dt.currentTimeMs, maxMoves+10) // 确保达到最大值
 	initialThreshold := dt.threshold
 	assert.Equal(t, float64(configProvider.config.DynamicThresholdMax), initialThreshold)
@@ -196,7 +196,7 @@ func TestDynamicThresholdSimulateRealUsage(t *testing.T) {
 	type testStep struct {
 		description   string  // 操作描述
 		timePassMs    int64   // 经过的时间（毫秒）
-		moves         int32   // 移动次数
+		moves         int     // 移动次数
 		expectedValue float64 // 预期阈值
 		explanation   string  // 阈值计算说明
 	}
@@ -278,7 +278,7 @@ func TestDynamicThresholdSimulateRealUsage(t *testing.T) {
 
 			// 应用操作
 			if step.moves > 0 {
-				dt.UpdateThreshold(currentTimeMs, step.moves)
+				dt.UpdateThreshold(currentTimeMs, int(step.moves))
 			} else {
 				dt.GetCurrentThreshold(currentTimeMs) // 更新内部时间和阈值
 			}

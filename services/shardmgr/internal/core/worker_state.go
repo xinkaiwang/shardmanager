@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -208,6 +209,11 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 // onEphNodeUpdate: must be called in runloop
 func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson) {
 	dirty := NewDirtyFlag()
+	dict := ws.collectCurrentAssignments(ss)
+	updateCount := ws.applyNewEph(ctx, ss, workerEph, dict)
+	if updateCount > 0 {
+		dirty.AddDirtyFlag("asign" + strconv.Itoa(updateCount))
+	}
 	switch ws.State {
 	case data.WS_Online_healthy:
 		fallthrough
@@ -238,6 +244,49 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
 		ws.signalAll(reason)
 	}
+}
+
+func (ws *WorkerState) collectCurrentAssignments(ss *ServiceState) map[data.AssignmentId]*AssignmentState {
+	dict := make(map[data.AssignmentId]*AssignmentState)
+	for assignmentId := range ws.Assignments {
+		assignState, ok := ss.AllAssignments[assignmentId]
+		if !ok {
+			klogging.Fatal(context.Background()).With("workerId", ws.WorkerId).
+				With("assignmentId", assignmentId).
+				Log("collectCurrentAssignments", "assignment not found")
+			continue
+		}
+		dict[assignmentId] = assignState
+	}
+	return dict
+}
+
+func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson, dict map[data.AssignmentId]*AssignmentState) int {
+	updateCount := 0
+	for _, assignmentJson := range workerEph.Assignments {
+		dirty := false
+		assignmentId := data.AssignmentId(assignmentJson.AsginmentId)
+		assignState, ok := dict[assignmentId]
+		if !ok {
+			continue
+		}
+		delete(dict, assignmentId)
+		if assignState.CurrentConfirmedState != assignmentJson.State {
+			assignState.CurrentConfirmedState = assignmentJson.State
+			dirty = true
+		}
+		if dirty {
+			updateCount++
+		}
+	}
+	// all remaining assignments are dropped from eph
+	for _, assignState := range dict {
+		if assignState.CurrentConfirmedState != cougarjson.CAS_Dropped {
+			assignState.CurrentConfirmedState = cougarjson.CAS_Dropped
+			updateCount++
+		}
+	}
+	return updateCount
 }
 
 func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {
@@ -428,7 +477,7 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 			string(assign.ShardId),
 			int(assign.ReplicaIdx),
 			string(assignmentId),
-			ws.Ase2PilotState(assign.TargetState),
+			assign.TargetState,
 		)
 
 		// 添加到PilotNode
@@ -438,18 +487,18 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 	return pilotNode
 }
 
-func (ws *WorkerState) Ase2PilotState(targetState smgjson.AssignmentStateEnum) cougarjson.PilotAssignmentState {
-	switch targetState {
-	case smgjson.ASE_Unknown:
-		return cougarjson.PAS_Unknown
-	case smgjson.ASE_Healthy:
-		return cougarjson.PAS_Active
-	case smgjson.ASE_Dropped:
-		return cougarjson.PAS_Completed
-	default:
-		return cougarjson.PAS_Active
-	}
-}
+// func (ws *WorkerState) Ase2PilotState(targetState smgjson.AssignmentStateEnum) cougarjson.PilotAssignmentState {
+// 	switch targetState {
+// 	case smgjson.ASE_Unknown:
+// 		return cougarjson.PAS_Unknown
+// 	case smgjson.ASE_Healthy:
+// 		return cougarjson.PAS_Active
+// 	case smgjson.ASE_Dropped:
+// 		return cougarjson.PAS_Completed
+// 	default:
+// 		return cougarjson.PAS_Active
+// 	}
+// }
 
 func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, updateReason string) *unicornjson.WorkerEntryJson {
 	// 创建WorkerEntryJson对象

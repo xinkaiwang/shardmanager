@@ -9,7 +9,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 func TestWorkerState_ToPilotNode(t *testing.T) {
@@ -52,8 +51,8 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 			workerFullId,
 		)
 		assignment2.ShouldInPilot = true
-		assignment1.TargetState = smgjson.ASE_Healthy
-		assignment2.TargetState = smgjson.ASE_Healthy
+		assignment1.TargetState = cougarjson.CAS_Ready
+		assignment2.TargetState = cougarjson.CAS_Ready
 		ss.AllAssignments["shard-1:0"] = assignment1
 		ss.AllAssignments["shard-2:1"] = assignment2
 
@@ -92,8 +91,8 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 
 		// 验证任务状态
 		for _, assignment := range pilotNode.Assignments {
-			if assignment.State != cougarjson.PAS_Active {
-				t.Errorf("正常状态下任务状态不匹配：期望 %s，得到 %s", cougarjson.PAS_Active, assignment.State)
+			if assignment.State != cougarjson.CAS_Ready {
+				t.Errorf("正常状态下任务状态不匹配：期望 %s，得到 %s", cougarjson.CAS_Ready, assignment.State)
 			}
 
 			// 验证ShardId和ReplicaIdx提取是否正确
@@ -111,15 +110,15 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 		// 测试2：请求关闭状态
 		workerState.ShutdownRequesting = true
 		// 更新任务状态为 ASE_Dropped
-		ss.AllAssignments["shard-1:0"].TargetState = smgjson.ASE_Dropped
-		ss.AllAssignments["shard-2:1"].TargetState = smgjson.ASE_Dropped
+		ss.AllAssignments["shard-1:0"].TargetState = cougarjson.CAS_Dropped
+		ss.AllAssignments["shard-2:1"].TargetState = cougarjson.CAS_Dropped
 
 		pilotNode = workerState.ToPilotNode(ctx, ss, updateReason)
 
 		// 验证任务状态
 		for _, assignment := range pilotNode.Assignments {
-			if assignment.State != cougarjson.PAS_Completed {
-				t.Errorf("请求关闭状态下任务状态不匹配：期望 %s，得到 %s", cougarjson.PAS_Completed, assignment.State)
+			if assignment.State != cougarjson.CAS_Dropped {
+				t.Errorf("请求关闭状态下任务状态不匹配：期望 %s，得到 %s", cougarjson.CAS_Dropped, assignment.State)
 			}
 		}
 
@@ -131,8 +130,8 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 
 		// 验证任务状态
 		for _, assignment := range pilotNode.Assignments {
-			if assignment.State != cougarjson.PAS_Completed {
-				t.Errorf("允许关闭状态下任务状态不匹配：期望 %s，得到 %s", cougarjson.PAS_Completed, assignment.State)
+			if assignment.State != cougarjson.CAS_Dropped {
+				t.Errorf("允许关闭状态下任务状态不匹配：期望 %s，得到 %s", cougarjson.CAS_Dropped, assignment.State)
 			}
 		}
 	})

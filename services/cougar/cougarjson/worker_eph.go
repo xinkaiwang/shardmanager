@@ -72,10 +72,11 @@ type CougarAssignmentState string
 
 // Define constants for each possible state
 const (
-	CAS_Pending   CougarAssignmentState = "pending"
-	CAS_Active    CougarAssignmentState = "active"
-	CAS_Failed    CougarAssignmentState = "failed"
-	CAS_Completed CougarAssignmentState = "completed"
+	CAS_Unknown  CougarAssignmentState = "unkonwn"
+	CAS_Adding   CougarAssignmentState = "adding"
+	CAS_Ready    CougarAssignmentState = "ready"
+	CAS_Dropping CougarAssignmentState = "dropping"
+	CAS_Dropped  CougarAssignmentState = "dropped"
 )
 
 // Update the ReplicaJson struct to use the custom State type

@@ -8,18 +8,18 @@ import (
 )
 
 type MoveState struct {
-	ProposalId      data.ProposalId       `json:"proposal_id"`
-	Signature       string                `json:"signature"`
-	Actions         []*smgjson.ActionJson `json:"actions"`
-	CurrentAction   int                   `json:"current_action"`   // CurrentAction is the index of the current action
-	ActionConducted int8                  `json:"action_conducted"` // true means current action is already sent out (or conducted)
+	ProposalId      data.ProposalId    `json:"proposal_id"`
+	Signature       string             `json:"signature"`
+	Actions         []*costfunc.Action `json:"actions"`
+	CurrentAction   int                `json:"current_action"`   // CurrentAction is the index of the current action
+	ActionConducted int8               `json:"action_conducted"` // true means current action is already sent out (or conducted)
 }
 
 func NewMoveStateFromProposal(ss *ServiceState, proposal *costfunc.Proposal) *MoveState {
 	moveState := &MoveState{
 		ProposalId:      proposal.ProposalId,
 		Signature:       proposal.GetSignature(),
-		Actions:         make([]*smgjson.ActionJson, 0),
+		Actions:         make([]*costfunc.Action, 0),
 		CurrentAction:   0,
 		ActionConducted: 0,
 	}
@@ -28,33 +28,62 @@ func NewMoveStateFromProposal(ss *ServiceState, proposal *costfunc.Proposal) *Mo
 }
 
 func (ms *MoveState) ToMoveStateJson() *smgjson.MoveStateJson {
-	return &smgjson.MoveStateJson{
+	moveStateJson := &smgjson.MoveStateJson{
 		ProposalId: ms.ProposalId,
 		Signature:  ms.Signature,
-		Actions:    ms.Actions,
 		NextMove:   ms.CurrentAction,
 	}
+	for _, action := range ms.Actions {
+		moveStateJson.Actions = append(moveStateJson.Actions, action.ToJson())
+	}
+	return moveStateJson
 }
 
 func MoveStateFromJson(msj *smgjson.MoveStateJson) *MoveState {
-	return &MoveState{
+	moveState := &MoveState{
 		ProposalId:      msj.ProposalId,
 		Signature:       msj.Signature,
-		Actions:         msj.Actions,
 		CurrentAction:   msj.NextMove,
 		ActionConducted: 0,
 	}
+	for _, action := range msj.Actions {
+		moveState.Actions = append(moveState.Actions, costfunc.ActionFromJson(action))
+	}
+	return moveState
 }
 
-func (ms *MoveState) ApplyRemainingActions(snapshot *costfunc.Snapshot) {
+func (ms *MoveState) ApplyRemainingActions(snapshot *costfunc.Snapshot, mode costfunc.ApplyMode) {
+	var action *costfunc.Action
 	for i := ms.CurrentAction; i < len(ms.Actions); i++ {
-		action := ms.Actions[i]
+		action = ms.Actions[i]
 		// apply action to snapshot
 		switch action.ActionType {
-		// TODO
+		case smgjson.AT_AddShard:
+			ms.applyAddShardToSnapshot(snapshot, action, mode)
+		case smgjson.AT_DropShard:
+			ms.applyDropShardToSnapshot(snapshot, action, mode)
+		case smgjson.AT_RemoveFromRoutingAndSleep, smgjson.AT_AddToRouting: // nothing to do
+			continue
 		default:
 			ke := kerror.Create("UnsupportedAction", "unsupported action type="+string(action.ActionType))
 			panic(ke)
 		}
 	}
+}
+
+func (ms *MoveState) applyAddShardToSnapshot(snapshot *costfunc.Snapshot, action *costfunc.Action, mode costfunc.ApplyMode) {
+	// _, ok := snapshot.AllWorkers.Get(action.To)
+	// if ok {
+	// 	if mode == costfunc.AM_Strict {
+	// 		ke := kerror.Create("ShardAlreadyExists", "shard already exists in snapshot")
+	// 		panic(ke)
+	// 	}
+	// 	return // already exists
+	// }
+}
+
+func (ms *MoveState) applyDropShardToSnapshot(snapshot *costfunc.Snapshot, action *costfunc.Action, mode costfunc.ApplyMode) {
+	// TODO
+	ke := kerror.Create("UnsupportedAction", "unsupported action type="+string(action.ActionType))
+	panic(ke)
 }

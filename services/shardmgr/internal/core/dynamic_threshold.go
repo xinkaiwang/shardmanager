@@ -46,7 +46,7 @@ func (dt *DynamicThreshold) GetCurrentThreshold(currentTimeMs int64) float64 {
 	return dt.threshold
 }
 
-func (dt *DynamicThreshold) UpdateThreshold(currentTimeMs int64, moveCount int32) {
+func (dt *DynamicThreshold) UpdateThreshold(currentTimeMs int64, moveCount int) {
 	cfg := dt.configProvider()
 	if moveCount <= 0 {
 		return

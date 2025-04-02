@@ -45,13 +45,15 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 7: start listening to worker eph changes
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
 
-	// step 8: start housekeeping
+	// step 8: start housekeeping threads
 	ss.PostEvent(NewHousekeep1sEvent())
+	ss.PostEvent(NewHousekeep5sEvent())
+	ss.PostEvent(NewAcceptEvent())
 
 	// step 9: current snapshot and future snapshot
 	ss.ReCreateSnapshot(ctx)
 
-	// step 10: start runloop
+	// step 10: start
 	// Note: The runloop is now initialized in AssembleSsXxxx
 }
 
@@ -102,8 +104,8 @@ func (ss *ServiceState) ReCreateSnapshot(ctx context.Context) {
 	ss.SnapshotCurrent = ss.CreateSnapshotFromCurrentState(ctx)
 	ss.SnapshotFuture = ss.SnapshotCurrent.Clone()
 	// apply all panding moves
-	for _, moveState := range ss.AllMoves {
-		moveState.ApplyRemainingActions(ss.SnapshotFuture)
+	for _, minion := range ss.AllMoves {
+		minion.moveState.ApplyRemainingActions(ss.SnapshotFuture, costfunc.AM_Relaxed)
 	}
 	ss.SnapshotFuture.Freeze()
 	if ss.SolverGroup != nil {

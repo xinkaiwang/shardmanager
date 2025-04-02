@@ -12,5 +12,7 @@ type StoreProvider interface {
 	// StoreWorkerState: store worker state to etcd
 	StoreWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson)
 
+	StoreMoveState(proposalId data.ProposalId, moveState *smgjson.MoveStateJson)
+
 	Visit(visitor func(shadowState *ShadowState))
 }

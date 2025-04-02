@@ -41,7 +41,7 @@ func (pq *ProposalQueue) Push(p *costfunc.Proposal) common.EnqueueResult {
 func (pq *ProposalQueue) insertProposalWithOrder(p *costfunc.Proposal) bool {
 	// insert proposal to the queue, ordering based on the gain, highest gain first
 	for i := 0; i < len(pq.list); i++ {
-		if p.Gain.IsGreaterThan(pq.list[i].Gain) {
+		if p.GetEfficiency().IsGreaterThan(pq.list[i].GetEfficiency()) {
 			pq.list = append(pq.list[:i], append([]*costfunc.Proposal{p}, pq.list[i:]...)...)
 			return false
 		}
@@ -52,6 +52,10 @@ func (pq *ProposalQueue) insertProposalWithOrder(p *costfunc.Proposal) bool {
 
 func (pq *ProposalQueue) IsEmpty() bool {
 	return len(pq.list) == 0
+}
+
+func (pq *ProposalQueue) Size() int {
+	return len(pq.list)
 }
 
 func (pq *ProposalQueue) Pop() *costfunc.Proposal {

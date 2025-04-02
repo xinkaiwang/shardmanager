@@ -26,8 +26,8 @@ func TestPilotNodeJsonMarshal(t *testing.T) {
 						"initial setup",
 					)
 					node.Assignments = append(node.Assignments,
-						NewPilotAssignmentJson("shard-1", 1, "asg-1", PAS_Active),
-						NewPilotAssignmentJson("shard-2", 0, "asg-2", PAS_Completed),
+						NewPilotAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
+						NewPilotAssignmentJson("shard-2", 0, "asg-2", CAS_Dropped),
 					)
 					return node
 				}(),
@@ -77,8 +77,8 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 						"initial setup",
 					)
 					node.Assignments = append(node.Assignments,
-						NewPilotAssignmentJson("shard-1", 1, "asg-1", PAS_Active),
-						NewPilotAssignmentJson("shard-2", 0, "asg-2", PAS_Completed),
+						NewPilotAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
+						NewPilotAssignmentJson("shard-2", 0, "asg-2", CAS_Dropped),
 					)
 					return node
 				}(),
@@ -107,8 +107,8 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 						"",
 					)
 					node.Assignments = append(node.Assignments,
-						NewPilotAssignmentJson("shard-1", 0, "asg-1", PAS_Active),
-						NewPilotAssignmentJson("shard-2", 0, "asg-2", PAS_Completed),
+						NewPilotAssignmentJson("shard-1", 0, "asg-1", CAS_Ready),
+						NewPilotAssignmentJson("shard-2", 0, "asg-2", CAS_Dropped),
 					)
 					return node
 				}(),
@@ -241,21 +241,21 @@ func TestNewPilotAssignmentJson(t *testing.T) {
 		shardId      string
 		replicaIdx   int
 		assignmentId string
-		state        PilotAssignmentState
+		state        CougarAssignmentState
 	}{
 		{
 			name:         "Active Assignment",
 			shardId:      "shard-1",
 			replicaIdx:   1,
 			assignmentId: "asg-1",
-			state:        PAS_Active,
+			state:        CAS_Ready,
 		},
 		{
 			name:         "Completed Assignment",
 			shardId:      "shard-2",
 			replicaIdx:   0,
 			assignmentId: "asg-2",
-			state:        PAS_Completed,
+			state:        CAS_Dropped,
 		},
 	}
 
@@ -293,8 +293,8 @@ func TestPilotNodeJsonRoundTrip(t *testing.T) {
 			"round trip test",
 		)
 		node.Assignments = append(node.Assignments,
-			NewPilotAssignmentJson("shard-1", 1, "asg-1", PAS_Active),
-			NewPilotAssignmentJson("shard-2", 0, "asg-2", PAS_Completed),
+			NewPilotAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
+			NewPilotAssignmentJson("shard-2", 0, "asg-2", CAS_Dropped),
 		)
 		return node
 	}()

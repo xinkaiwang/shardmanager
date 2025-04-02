@@ -31,7 +31,7 @@ type ServiceState struct {
 	AllShards      map[data.ShardId]*ShardState
 	AllWorkers     map[data.WorkerFullId]*WorkerState
 	AllAssignments map[data.AssignmentId]*AssignmentState
-	AllMoves       map[data.ProposalId]*MoveState
+	AllMoves       map[data.ProposalId]*ActionMinion // in-flight moves
 
 	DynamicThreshold *DynamicThreshold
 	ProposalQueue    *ProposalQueue
@@ -56,7 +56,7 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 		AllShards:        make(map[data.ShardId]*ShardState),
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
 		AllAssignments:   make(map[data.AssignmentId]*AssignmentState),
-		AllMoves:         make(map[data.ProposalId]*MoveState),
+		AllMoves:         make(map[data.ProposalId]*ActionMinion),
 		EphDirty:         make(map[data.WorkerFullId]common.Unit),
 		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
 		ShutdownHat:      make(map[data.WorkerFullId]common.Unit),
