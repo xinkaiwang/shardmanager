@@ -37,45 +37,45 @@ import (
 func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 	ctx := context.Background()
 	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
-	t.Logf("设置测试环境...")
+	klogging.Info(ctx).Log("DynamicShardPlanUpdate", "设置测试环境...")
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
 	setup.SetupBasicConfig(ctx)
-	t.Logf("测试环境已配置")
+	klogging.Info(ctx).Log("DynamicShardPlanUpdate", "测试环境已配置")
 
 	// 使用FakeTime环境运行测试
 	setup.RunWith(func() {
 		// 创建 ServiceState (shard plan为空)
 		ss := AssembleSsWithShadowState(ctx, "TestServiceState_DynamicShardPlanUpdate")
 		setup.ServiceState = ss
-		t.Logf("ServiceState已创建: %s", ss.Name)
+		klogging.Info(ctx).With("serviceName", ss.Name).Log("DynamicShardPlanUpdate", "ServiceState已创建")
 
 		// 初始阶段：验证服务状态的初始状态 - 应该没有分片
-		t.Logf("验证初始状态...")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "验证初始状态...")
 		{
 			var initialCount int
 			safeAccessServiceState(ss, func(ss *ServiceState) {
 				initialCount = len(ss.AllShards)
 			})
-			t.Logf("初始状态：%d个分片", initialCount)
+			klogging.Info(ctx).With("initialCount", initialCount).Log("DynamicShardPlanUpdate", "初始状态")
 		}
 
 		// 第一次更新：添加三个分片 (shard-a, shard-b, shard-c)
-		t.Logf("第一次更新：添加三个分片 (shard-a, shard-b, shard-c)")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "第一次更新：添加三个分片 (shard-a, shard-b, shard-c)")
 		firstShardPlan := []string{"shard-a", "shard-b", "shard-c"}
 		setShardPlan(t, setup.FakeEtcd, ctx, firstShardPlan)
 
 		// 等待ServiceState加载分片状态
-		t.Logf("等待ServiceState加载分片状态...")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "等待ServiceState加载分片状态...")
 		{
 			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
-			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
+			klogging.Info(ctx).With("elapsedMs", elapsedMs).Log("DynamicShardPlanUpdate", "分片加载完成")
 		}
 
 		// 验证第一次更新后的分片状态
-		t.Logf("验证第一次更新后的分片状态...")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "验证第一次更新后的分片状态...")
 		expectedStates1 := map[data.ShardId]ExpectedShardState{
 			"shard-a": {LameDuck: false},
 			"shard-b": {LameDuck: false},
@@ -85,27 +85,27 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		assert.Empty(t, errors1, "第一次更新后分片状态验证失败: %v", errors1)
 
 		// 确保状态已持久化
-		t.Logf("确保第一次更新的状态已持久化...")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "确保第一次更新的状态已持久化...")
 		setup.FakeTime.VirtualTimeForward(ctx, 500) // 前进500ms，确保持久化完成
 		errors1storage := verifyAllShardsInStorage(t, setup, expectedStates1)
 		assert.Empty(t, errors1storage, "第一次更新后分片状态持久化验证失败: %v", errors1storage)
 
 		// 第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c
-		t.Logf("第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c")
 		secondShardPlan := []string{"shard-a", "shard-d"}
 		setShardPlan(t, setup.FakeEtcd, ctx, secondShardPlan)
 
 		// 等待ServiceState更新分片状态（保留原有分片并标记删除）
 		// 预期会有4个分片：shard-a（保留）, shard-b（标记删除）, shard-c（标记删除）, shard-d（新增）
-		t.Logf("等待ServiceState更新分片状态...")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "等待ServiceState更新分片状态...")
 		{
 			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 4, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前更新所有分片, 耗时=%dms", elapsedMs)
-			t.Logf("分片更新完成, 耗时=%dms", elapsedMs)
+			klogging.Info(ctx).With("elapsedMs", elapsedMs).Log("DynamicShardPlanUpdate", "分片更新完成")
 		}
 
 		// 验证第二次更新后的分片状态
-		t.Logf("验证第二次更新后的分片状态...")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "验证第二次更新后的分片状态...")
 		expectedStates2 := map[data.ShardId]ExpectedShardState{
 			"shard-a": {LameDuck: false}, // 保留的分片
 			"shard-b": {LameDuck: true},  // 被移除的分片，标记为lameDuck
@@ -116,18 +116,22 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		assert.Empty(t, errors2, "第二次更新后分片状态验证失败: %v", errors2)
 
 		// 确保状态已持久化
-		t.Logf("确保第二次更新的状态已持久化...")
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "确保第二次更新的状态已持久化...")
 		setup.FakeTime.VirtualTimeForward(ctx, 500) // 前进500ms，确保持久化完成
 		errors2storage := verifyAllShardsInStorage(t, setup, expectedStates2)
 		assert.Empty(t, errors2storage, "第二次更新后分片状态持久化验证失败: %v", errors2storage)
 
 		// 输出最终状态以供参考
 		safeAccessServiceState(ss, func(ss *ServiceState) {
-			t.Logf("最终状态：共有%d个分片", len(ss.AllShards))
+			klogging.Info(ctx).With("shardCount", len(ss.AllShards)).Log("DynamicShardPlanUpdate", "最终状态")
 			for shardId, shard := range ss.AllShards {
-				t.Logf("  - 分片 %s: lameDuck=%v", shardId, shard.LameDuck)
+				klogging.Info(ctx).With("shardId", shardId).With("lameDuck", shard.LameDuck).Log("DynamicShardPlanUpdate", "分片状态")
 			}
 		})
+
+		// 停止ServiceState
+		ss.StopAndWaitForExit(ctx)
+		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "测试完成，ServiceState已停止")
 	})
 }
 

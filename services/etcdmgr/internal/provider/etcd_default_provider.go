@@ -138,6 +138,7 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, startKey string, maxCo
 // 错误处理：
 // - 如果发生网络错误或其他 etcd 错误，将返回 EtcdPutError
 func (pvd *etcdDefaultProvider) Set(ctx context.Context, key, value string) {
+	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("etcdDefaultProvider", "setting key in etcd")
 	_, err := pvd.client.Put(ctx, key, value)
 	if err != nil {
 		panic(kerror.Create("EtcdPutError", "failed to set key in etcd").

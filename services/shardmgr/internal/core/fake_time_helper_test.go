@@ -308,12 +308,14 @@ func WaitUntilRoutingState(t *testing.T, setup *FakeTimeTestSetup, workerFullId 
 // verifyAllShards 验证所有分片的状态
 func verifyAllShardState(t *testing.T, ss *ServiceState, expectedStates map[data.ShardId]ExpectedShardState) []string {
 	var allPassed []string
+	ctx := context.Background()
+
 	// 创建事件来安全访问 ServiceState
 	safeAccessServiceState(ss, func(ss *ServiceState) {
 		// 首先输出当前所有分片状态，方便调试
-		t.Logf("当前存在 %d 个分片, 需要验证 %d 个", len(ss.AllShards), len(expectedStates))
+		klogging.Info(ctx).With("totalShards", len(ss.AllShards)).With("expectedShards", len(expectedStates)).Log("VerifyShardState", "当前分片状态")
 		for shardId, shard := range ss.AllShards {
-			t.Logf("    - 分片 %s 状态: lameDuck=%v", shardId, shard.LameDuck)
+			klogging.Info(ctx).With("shardId", shardId).With("lameDuck", shard.LameDuck).Log("VerifyShardState", "分片状态")
 		}
 
 		// 验证每个期望的分片
@@ -332,7 +334,7 @@ func verifyAllShardState(t *testing.T, ss *ServiceState, expectedStates map[data
 				continue // 继续检查其他分片
 			}
 
-			t.Logf("分片 %s 状态验证通过: lameDuck=%v", shardId, shard.LameDuck)
+			klogging.Info(ctx).With("shardId", shardId).With("lameDuck", shard.LameDuck).Log("VerifyShardState", "分片状态验证通过")
 		}
 	})
 
