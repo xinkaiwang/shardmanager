@@ -96,3 +96,12 @@ func startsWithPrefix(s, prefix string) bool {
 	}
 	return s[:len(prefix)] == prefix
 }
+
+func (store *FakeEtcdStore) PrintAll(ctx context.Context) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	klogging.Info(ctx).Log("FakeEtcdStore.PrintAll", "打印所有键值对")
+	for k, v := range store.data {
+		klogging.Info(ctx).With("key", k).With("value", v).Log("FakeEtcdStore.PrintAll", "存储的键值")
+	}
+}

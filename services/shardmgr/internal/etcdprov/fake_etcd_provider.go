@@ -299,3 +299,12 @@ func (f *FakeEtcdProvider) DebugDump() string {
 	}
 	return result.String()
 }
+
+func (f *FakeEtcdProvider) PrintAll(ctx context.Context) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	klogging.Info(ctx).With("data", f.DebugDump()).Log("FakeEtcdProvider.PrintAll", "打印所有键值对")
+	for k, v := range f.data {
+		klogging.Info(ctx).With("key", k).With("value", v.Value).Log("FakeEtcdProviderPrintAllData", "存储的键值")
+	}
+}

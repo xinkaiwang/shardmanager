@@ -151,6 +151,7 @@ func (pvd *etcdDefaultProvider) Set(ctx context.Context, key, value string) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
+	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("etcdDefaultProvider", "setting key in etcd")
 	_, err := pvd.client.Put(timeoutCtx, key, value)
 	if err != nil {
 		panic(kerror.Create("EtcdPutError", "failed to set key in etcd").

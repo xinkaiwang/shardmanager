@@ -9,6 +9,8 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
@@ -22,15 +24,33 @@ func resetGlobalState(_ *testing.T) {
 	etcdprov.ResetEtcdProvider()
 }
 
+/******************************* SnapshotListener *******************************/
+// FakeSnapshotListener implements solver.SnapshotListener
+type FakeSnapshotListener struct {
+	CallCount int
+	snapshot  *costfunc.Snapshot
+}
+
+func NewFakeSnapshotListener() *FakeSnapshotListener {
+	return &FakeSnapshotListener{}
+}
+func (l *FakeSnapshotListener) OnSnapshot(snapshot *costfunc.Snapshot) {
+	l.CallCount++
+	l.snapshot = snapshot
+}
+
 /******************************* FakeTimeTestSetup *******************************/
 
 // FakeTimeTestSetup 包含服务状态测试所需的基本设置
 type FakeTimeTestSetup struct {
-	ctx          context.Context
-	ServiceState *ServiceState
-	FakeEtcd     *etcdprov.FakeEtcdProvider
-	FakeStore    *shadow.FakeEtcdStore
-	FakeTime     *kcommon.FakeTimeProvider
+	ctx                  context.Context
+	ServiceState         *ServiceState
+	FakeEtcd             *etcdprov.FakeEtcdProvider
+	FakeStore            *shadow.FakeEtcdStore
+	FakeTime             *kcommon.FakeTimeProvider
+	FakeSnapshotListener *FakeSnapshotListener
+	PathManager          *config.PathManager
+	StatefulType         data.StatefulType
 }
 
 // NewFakeTimeTestSetup 创建基本的测试环境
@@ -42,10 +62,13 @@ func NewFakeTimeTestSetup(t *testing.T) *FakeTimeTestSetup {
 	fakeTime := kcommon.NewFakeTimeProvider(1234500000000)
 
 	setup := &FakeTimeTestSetup{
-		ctx:       context.Background(),
-		FakeEtcd:  fakeEtcd,
-		FakeStore: fakeStore,
-		FakeTime:  fakeTime,
+		ctx:                  context.Background(),
+		FakeEtcd:             fakeEtcd,
+		FakeStore:            fakeStore,
+		FakeTime:             fakeTime,
+		FakeSnapshotListener: NewFakeSnapshotListener(),
+		PathManager:          config.NewPathManager(),
+		StatefulType:         data.ST_MEMORY,
 	}
 
 	return setup
@@ -54,7 +77,7 @@ func NewFakeTimeTestSetup(t *testing.T) *FakeTimeTestSetup {
 // SetupBasicConfig 设置基本配置
 func (setup *FakeTimeTestSetup) SetupBasicConfig(ctx context.Context, options ...smgjson.ServiceConfigOption) {
 	// 准备服务信息
-	serviceInfo := smgjson.CreateTestServiceInfo()
+	serviceInfo := smgjson.CreateTestServiceInfo(setup.StatefulType)
 	setup.FakeEtcd.Set(ctx, "/smg/config/service_info.json", serviceInfo.ToJson())
 
 	// 准备服务配置
@@ -100,6 +123,11 @@ func (setup *FakeTimeTestSetup) GetRoutingEntry(workerFullId data.WorkerFullId) 
 	}
 	entry := unicornjson.WorkerEntryJsonFromJson(item)
 	return entry
+}
+
+func (setup *FakeTimeTestSetup) PrintAll(ctx context.Context) {
+	setup.FakeStore.PrintAll(ctx)
+	setup.FakeEtcd.PrintAll(ctx)
 }
 
 /******************************* safeAccessServiceState *******************************/
@@ -163,13 +191,13 @@ func safeAccessWorkerById(ss *ServiceState, workerFullId data.WorkerFullId, fn f
 	<-completed
 }
 
-/******************************* ftCreateAndSetWorkerEph *******************************/
+/******************************* CreateAndSetWorkerEph *******************************/
 
-// ftCreateAndSetWorkerEph 创建worker eph节点并设置到etcd
+// CreateAndSetWorkerEph 创建worker eph节点并设置到etcd
 // 返回workerFullId和ephPath
-func ftCreateAndSetWorkerEph(t *testing.T, ss *ServiceState, setup *FakeTimeTestSetup, workerId string, sessionId string, addrPort string) (data.WorkerFullId, string) {
+func (setup *FakeTimeTestSetup) CreateAndSetWorkerEph(t *testing.T, workerId string, sessionId string, addrPort string) (data.WorkerFullId, string) {
 	// 创建workerId对象
-	workerFullId := data.NewWorkerFullId(data.WorkerId(workerId), data.SessionId(sessionId), ss.ServiceInfo.StatefulType)
+	workerFullId := data.NewWorkerFullId(data.WorkerId(workerId), data.SessionId(sessionId), setup.StatefulType)
 
 	// 创建worker eph对象
 	workerEph := cougarjson.NewWorkerEphJson(workerId, sessionId, 1234567890000, 60)
@@ -177,7 +205,7 @@ func ftCreateAndSetWorkerEph(t *testing.T, ss *ServiceState, setup *FakeTimeTest
 	workerEphJson := workerEph.ToJson()
 
 	// 设置到etcd
-	ephPath := ss.PathManager.FmtWorkerEphPath(workerFullId)
+	ephPath := setup.PathManager.FmtWorkerEphPath(workerFullId)
 	t.Logf("设置worker eph节点到etcd路径: %s", ephPath)
 	setup.FakeEtcd.Set(setup.ctx, ephPath, workerEphJson)
 
@@ -279,15 +307,15 @@ func WaitUntilWorkerStatePersisted(t *testing.T, setup *FakeTimeTestSetup, worke
 	return ret, elapsedMs
 }
 
-func (setup *FakeTimeTestSetup) WaitUntilPilotNode(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *cougarjson.PilotNodeJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilPilotNode(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *cougarjson.PilotNodeJson) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		path := setup.ServiceState.PathManager.FmtPilotPath(workerFullId)
 		item := setup.FakeStore.GetByKey(path)
 		if item == "" {
-			return fn(nil), ""
+			return fn(nil)
 		}
 		pilot := cougarjson.ParsePilotNodeJson(item)
-		return fn(pilot), ""
+		return fn(pilot)
 	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
 }
@@ -301,6 +329,13 @@ func WaitUntilRoutingState(t *testing.T, setup *FakeTimeTestSetup, workerFullId 
 		}
 		entry := unicornjson.WorkerEntryJsonFromJson(item)
 		return fn(entry), ""
+	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+func (setup *FakeTimeTestSetup) WaitUntilSnapshot(t *testing.T, fn func(snapshot *costfunc.Snapshot) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		return fn(setup.FakeSnapshotListener.snapshot)
 	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
 }

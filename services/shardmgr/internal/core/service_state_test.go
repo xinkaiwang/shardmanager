@@ -34,7 +34,7 @@ func TestServiceState_Basic(t *testing.T) {
 
 	// 准备初始数据
 	serviceInfoPath := "/smg/config/service_info.json"
-	serviceInfo := smgjson.CreateTestServiceInfo()
+	serviceInfo := smgjson.CreateTestServiceInfo(data.ST_MEMORY)
 	jsonData, _ := json.Marshal(serviceInfo)
 	fakeEtcd.Set(ctx, serviceInfoPath, string(jsonData))
 
@@ -74,7 +74,7 @@ func TestServiceState_ShardManagement(t *testing.T) {
 
 	// 准备初始数据
 	serviceInfoPath := "/smg/config/service_info.json"
-	serviceInfo := smgjson.CreateTestServiceInfo()
+	serviceInfo := smgjson.CreateTestServiceInfo(data.ST_MEMORY)
 	serviceInfoData, _ := json.Marshal(serviceInfo)
 	fakeEtcd.Set(ctx, serviceInfoPath, string(serviceInfoData))
 

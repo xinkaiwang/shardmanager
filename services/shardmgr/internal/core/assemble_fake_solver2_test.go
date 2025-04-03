@@ -6,42 +6,48 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
-// implements solver.SnapshotListener
-type MySnapshotListener struct {
-	snapshot    *costfunc.Snapshot
-	updateCount int
-}
-
-func (l *MySnapshotListener) OnSnapshot(snapshot *costfunc.Snapshot) {
-	l.snapshot = snapshot
-	l.updateCount++
-}
-
-func TestAssembleFakeSolver(t *testing.T) {
+/*
+Step 1: 创建 shardPlan -> write into (fake) etcd
+Step 2: 创建 worker-1 eph -> write to (fake) etcd
+Step 3: 创建 ServiceState
+Step 4: 等待 ServiceState 加载分片状态
+Step 5: 等待 worker state 创建
+Step 6: simulate a solver move -> Enqueue proposal
+Step 7: 等待 accept (接受提案)
+Step 8: 等待 worker pilot node 更新
+Step 9: simulate worker eph -> write into (fake) etcd
+Step 10: 等待 worker eph sync to worker state
+Step 11: done
+*/
+func TestAssembleFakeSolver2(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
+	// klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
 	setup.SetupBasicConfig(ctx)
 	t.Logf("测试环境已配置")
 
-	snapshotListener := &MySnapshotListener{}
 	fn := func() {
-		// Step 1: 创建 ServiceState
+		// Step 1: 创建 worker-1 eph
+		workerFullId, _ := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
+
+		// Step 2: 创建 shardPlan and set into etcd
+		// 添加三个分片 (shard-a, shard-b, shard-c)
+		setup.FakeTime.VirtualTimeForward(ctx, 10)
+		firstShardPlan := []string{"shard-a", "shard-b", "shard-c"}
+		setShardPlan(t, setup.FakeEtcd, ctx, firstShardPlan)
+
+		// Step 3: 创建 ServiceState
 		ss := AssembleSsWithShadowState(ctx, "TestAssembleFakeSolver")
-		ss.SolverGroup = snapshotListener
+		ss.SolverGroup = setup.FakeSnapshotListener
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
-
-		// Step 2: 创建 worker-1 eph
-		workerFullId, _ := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
 
 		{
 			// 等待worker state创建
@@ -49,30 +55,24 @@ func TestAssembleFakeSolver(t *testing.T) {
 			assert.Equal(t, true, waitSucc, "worker state 已创建 elapsedMs=%d", elapsedMs)
 		}
 
-		// Step 3: 创建 shardPlan and set into etcd
-		// 添加三个分片 (shard-a, shard-b, shard-c)
-		setup.FakeTime.VirtualTimeForward(ctx, 10)
-		firstShardPlan := []string{"shard-a", "shard-b", "shard-c"}
-		setShardPlan(t, setup.FakeEtcd, ctx, firstShardPlan)
-
 		// 等待ServiceState加载分片状态
 		{
 			// 等待快照更新
-			waitSucc, elapsedMs := WaitUntil(t, func() (bool, string) {
-				if snapshotListener.snapshot == nil {
+			waitSucc, elapsedMs := setup.WaitUntilSnapshot(t, func(snapshot *costfunc.Snapshot) (bool, string) {
+				if snapshot == nil {
 					return false, "快照未创建"
 				}
-				if snapshotListener.snapshot.GetCost().HardScore == 3 {
+				if snapshot.GetCost().HardScore == 3 {
 					return true, ""
 				}
-				return false, "快照更新数目未达预期"
+				return false, "快照更新未达预期"
 			}, 1000, 10)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 		}
 		{
 			// assert.Equal(t, 3, snapshotListener.updateCount, "快照更新次数应该为3") // 1:first create (empty), 2: worker added, 3: shards added
-			assert.NotNil(t, snapshotListener.snapshot, "快照应该不为nil")
-			cost := snapshotListener.snapshot.GetCost()
+			assert.NotNil(t, setup.FakeSnapshotListener.snapshot, "快照应该不为nil")
+			cost := setup.FakeSnapshotListener.snapshot.GetCost()
 			assert.Equal(t, costfunc.Cost{HardScore: 3}, cost, "快照的成本应该为0")
 		}
 
@@ -81,7 +81,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 			shardId := data.ShardId("shard-a")
 			replicaFullId := data.NewReplicaFullId(shardId, 0)
 			move := costfunc.NewAssignMove(replicaFullId, data.AssignmentId("as1"), workerFullId)
-			proposal := costfunc.NewProposal(ctx, "TestAssembleFakeSolver", costfunc.Gain{HardScore: 1}, snapshotListener.snapshot.SnapshotId)
+			proposal := costfunc.NewProposal(ctx, "TestAssembleFakeSolver", costfunc.Gain{HardScore: 1}, setup.FakeSnapshotListener.snapshot.SnapshotId)
 			proposal.Move = move
 			ss.ProposalQueue.Push(proposal)
 		}
@@ -94,7 +94,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 					return true, ""
 				}
 				return false, "accept数目未达预期"
-			}, 1000, 10)
+			}, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前接受提案, 耗时=%dms", elapsedMs)
 		}
 		{
@@ -135,7 +135,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 		}
 
 		{
-			// 等待 worker eph
+			// 等待 worker eph sync to worker state
 			waitSucc, elapsedMs := WaitUntilWorkerFullState(t, ss, workerFullId, func(ws *WorkerState, dict map[data.AssignmentId]*AssignmentState) (bool, string) {
 				if ws == nil {
 					return false, "worker state 不存在"
@@ -152,10 +152,13 @@ func TestAssembleFakeSolver(t *testing.T) {
 				return false, "assignment 数目未达预期"
 			}, 1000, 10)
 			assert.True(t, waitSucc, "应该能在超时前 update worker eph, 耗时=%dms", elapsedMs)
-
 		}
 
-		// assert.Equal(t, true, false, "")
+		// stop
+		ss.StopAndWaitForExit(ctx)
+		setup.PrintAll(ctx)
+
+		assert.Equal(t, true, false, "") // 强制查看测试输出
 	}
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)

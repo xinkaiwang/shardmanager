@@ -6,10 +6,10 @@ import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 
 // CreateTestServiceInfo 创建一个测试用的 ServiceInfoJson 对象
 // 使用默认值，适合大多数测试场景
-func CreateTestServiceInfo() *ServiceInfoJson {
+func CreateTestServiceInfo(statefulType data.StatefulType) *ServiceInfoJson {
 	return &ServiceInfoJson{
 		ServiceName:      "test-service",
-		StatefulType:     NewServiceTypePointer(data.ST_MEMORY),
+		StatefulType:     NewServiceTypePointer(statefulType),
 		MoveType:         NewMovePolicyPointer(MP_StartBeforeKill),
 		MaxResplicaCount: NewInt32Pointer(10),
 		MinResplicaCount: NewInt32Pointer(1),

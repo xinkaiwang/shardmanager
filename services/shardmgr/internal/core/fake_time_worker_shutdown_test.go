@@ -65,8 +65,8 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 		}
 		{
 			// 等待 pilot 状态
-			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) bool {
-				return pnj != nil && pnj.ShutdownPermited == 1
+			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
+				return pnj != nil && pnj.ShutdownPermited == 1, ""
 			}, 10*1000, 1000)
 			assert.Equal(t, true, waitSucc, "pilot node ShutdownPermited已设置为1 elapsedMs=%d", elapsedMs)
 		}

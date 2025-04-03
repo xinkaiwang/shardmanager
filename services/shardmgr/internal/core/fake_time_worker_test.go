@@ -47,7 +47,7 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		}
 
 		// 创建 worker-1 eph
-		workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
+		workerFullId, ephPath := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 		workerStatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
 
 		{
@@ -142,7 +142,7 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		// 创建 worker-1 eph
-		workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
+		workerFullId, ephPath := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 		workerStatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
 
 		{
@@ -227,7 +227,7 @@ func TestWorkerShutdownRequest(t *testing.T) {
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		// 创建 worker-1 eph
-		workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
+		workerFullId, ephPath := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 		workerStatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
 
 		{
@@ -246,8 +246,8 @@ func TestWorkerShutdownRequest(t *testing.T) {
 		}
 		{
 			// 等待 pilot 创建，状态变为WS_Online_healthy
-			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pilot *cougarjson.PilotNodeJson) bool {
-				return pilot != nil && pilot.WorkerId == string(workerFullId.WorkerId)
+			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pilot *cougarjson.PilotNodeJson) (bool, string) {
+				return pilot != nil && pilot.WorkerId == string(workerFullId.WorkerId), ""
 			}, 1000, 10)
 			assert.Equal(t, true, waitSucc, "pilot 已创建 elapsedMs=%d", elapsedMs)
 		}
@@ -340,7 +340,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 
 		// 2. 在etcd中创建第一个工作节点临时数据
 		t.Logf("创建第一个worker eph节点")
-		workerFullId1, ephPath1 := ftCreateAndSetWorkerEph(t, ss, setup, "worker-1", "session-1", "localhost:8080")
+		workerFullId1, ephPath1 := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 		workerStatePath1 := ss.PathManager.FmtWorkerStatePath(workerFullId1)
 		t.Logf("worker-1 eph节点路径: %s", ephPath1)
 
@@ -358,7 +358,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 
 		// 4. 在etcd中创建第二个工作节点临时数据
 		t.Logf("创建第二个worker eph节点")
-		workerFullId2, ephPath2 := ftCreateAndSetWorkerEph(t, ss, setup, "worker-2", "session-2", "localhost:8081")
+		workerFullId2, ephPath2 := setup.CreateAndSetWorkerEph(t, "worker-2", "session-2", "localhost:8081")
 		workerStatePath2 := ss.PathManager.FmtWorkerStatePath(workerFullId2)
 		t.Logf("worker-2 eph节点路径: %s", ephPath2)
 
