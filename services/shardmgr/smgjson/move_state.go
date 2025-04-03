@@ -9,10 +9,11 @@ import (
 
 // <etcd>/smg/move/{proposal_id}
 type MoveStateJson struct {
-	ProposalId data.ProposalId `json:"proposal_id"`
-	Signature  string          `json:"signature"`
-	Actions    []*ActionJson   `json:"moves"`
-	NextMove   int             `json:"next_move"` // NextMove 是下一个要执行的 move 的索引
+	ProposalId      data.ProposalId `json:"proposal_id"`
+	Signature       string          `json:"signature"`
+	Actions         []*ActionJson   `json:"moves"`
+	ActionConducted int8            `json:"action_conducted"` // ActionConducted 是当前动作是否已经执行过，0表示未执行，1表示已执行
+	NextMove        int             `json:"next_move"`        // NextMove 是下一个要执行的 move 的索引
 }
 
 type ActionJson struct {

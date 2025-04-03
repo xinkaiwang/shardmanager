@@ -56,14 +56,14 @@ func (am *ActionMinion) run(ctx context.Context) {
 			panic(kerror.Create("UnknownActionType", "unknown action type").With("actionType", action.ActionType))
 		}
 		am.moveState.CurrentAction++
-		am.moveState.ActionConducted = 0
+		am.moveState.ActionConducted = true
 	}
 }
 
 // in case anything goes wrong, we will panic
 func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int) {
 	action := am.moveState.Actions[stepIdx]
-	if am.moveState.ActionConducted == 0 {
+	if !am.moveState.ActionConducted {
 		workerFullId := action.From
 		// step 1: remove from routing table
 		succ := true
@@ -87,7 +87,7 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 		if !succ {
 			panic(ke)
 		}
-		am.moveState.ActionConducted = 1
+		am.moveState.ActionConducted = true
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
 
@@ -99,7 +99,7 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 
 func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 	action := am.moveState.Actions[stepIdx]
-	if am.moveState.ActionConducted == 0 {
+	if !am.moveState.ActionConducted {
 		workerFullId := action.To
 		// step 1: add to routing table
 		succ := true
@@ -123,7 +123,7 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 		if !succ {
 			panic(ke)
 		}
-		am.moveState.ActionConducted = 1
+		am.moveState.ActionConducted = true
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
 }
@@ -132,33 +132,28 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 	var signalBox *SignalBox
 	action := am.moveState.Actions[stepIdx]
 	// step 1: create shard
-	if am.moveState.ActionConducted == 0 {
-		succ := true
+	if !am.moveState.ActionConducted {
 		var ke *kerror.Kerror
 		workerFullId := action.To
-		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			shardId := data.ShardId(action.ShardId)
 			shardState, ok := ss.AllShards[shardId]
 			if !ok {
-				succ = false
 				ke = kerror.Create("ShardNotFound", "shard not found").With("shardId", shardId)
 				return
 			}
 			replicaState, ok := shardState.Replicas[action.ReplicaIdx]
 			if !ok {
-				succ = false
 				ke = kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", action.ReplicaIdx)
 				return
 			}
 			_, ok = ss.AllAssignments[action.AssignmentId]
 			if ok {
-				succ = false
 				ke = kerror.Create("AssignmentAlreadyExist", "assignment already exist").With("assignmentId", action.AssignmentId)
 				return
 			}
 			workerState, ok := ss.AllWorkers[workerFullId]
 			if !ok {
-				succ = false
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
 				return
 			}
@@ -171,49 +166,71 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "addShard")
 			signalBox = workerState.SignalBox
-		}))
-		if !succ {
+		})
+		if ke != nil {
 			panic(ke)
 		}
-		am.moveState.ActionConducted = 1
+		am.moveState.ActionConducted = true
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
-	// step 2: wail until this assignment is completed (based on feedback from ephemeral node)
-	completed := false
-	for !completed {
+	// step 2: wail until this assignment is stop (based on feedback from ephemeral node)
+	klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).Log("actionAddShard", "wait for assignment to be ready")
+	stop := false
+	for !stop {
+		loopId := kcommon.RandomString(ctx, 8)
 		if signalBox != nil {
 			select {
-			case <-signalBox.NotifyCh:
-				klogging.Info(ctx).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).Log("actionAddShard", "wake up")
 			case <-ctx.Done():
 				panic(kerror.Create("ContextCanceled", "context canceled"))
+			case <-signalBox.NotifyCh:
+				klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).With("notifyId", signalBox.NofityId).With("loopId", loopId).Log("actionAddShard", "wake up")
 			}
 		}
-		succ := true
+		requirementMeet := false
 		var ke *kerror.Kerror
-		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+		var reason string
+		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			workerState, ok := ss.AllWorkers[action.To]
 			if !ok {
-				succ = false
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", action.To)
 				return
 			}
-			assign, ok := ss.AllAssignments[action.AssignmentId]
-			if !ok {
-				succ = false
-				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
-				return
-			}
-			if assign.CurrentConfirmedState == cougarjson.CAS_Ready {
-				completed = true
+			if !workerState.IsGoodMoveTarget() {
+				ke = kerror.Create("DestWorkerNotGood", "worker not suitable as target").With("workerFullId", action.To).With("state", workerState.State)
 				return
 			}
 			signalBox = workerState.SignalBox
-		}))
-		if !succ {
+			assign, ok := ss.AllAssignments[action.AssignmentId]
+			if !ok {
+				reason = "assignment not found"
+				return
+			}
+			if assign.CurrentConfirmedState == cougarjson.CAS_Ready {
+				requirementMeet = true
+				return
+			}
+			reason = "assignment not in ready state"
+		})
+
+		if ke != nil {
 			panic(ke)
 		}
+		if requirementMeet {
+			// success
+			stop = true
+		}
+		klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("loopId", loopId).With("reason", reason).With("reqMeet", requirementMeet).With("stop", stop).Log("actionAddShard", "loop end")
+	}
+}
 
+func (workerState *WorkerState) IsGoodMoveTarget() bool {
+	switch workerState.State {
+	case data.WS_Online_healthy, data.WS_Online_shutdown_req:
+		return true
+	case data.WS_Offline_graceful_period, data.WS_Offline_draining_candidate:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -221,11 +238,11 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 	var signalBox *SignalBox
 	action := am.moveState.Actions[stepIdx]
 	// step 1: drop shard
-	if am.moveState.ActionConducted == 0 {
+	if !am.moveState.ActionConducted {
 		succ := true
 		var ke *kerror.Kerror
 		workerFullId := action.From
-		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			shardId := data.ShardId(action.ShardId)
 			shardState, ok := ss.AllShards[shardId]
 			if !ok {
@@ -260,11 +277,11 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "dropShard")
 			signalBox = workerState.SignalBox
-		}))
+		})
 		if !succ {
 			panic(ke)
 		}
-		am.moveState.ActionConducted = 1
+		am.moveState.ActionConducted = true
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
 	}
 	// step 2: wail until drop assignment is completed (based on feedback from ephemeral node)
@@ -272,15 +289,15 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 	for !completed {
 		if signalBox != nil {
 			select {
-			case <-signalBox.NotifyCh:
-				klogging.Info(ctx).With("worker", action.From).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).Log("actionDropShard", "wake up")
 			case <-ctx.Done():
 				panic(kerror.Create("ContextCanceled", "context canceled"))
+			case <-signalBox.NotifyCh:
+				klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.From).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).With("notifyId", signalBox.NofityId).Log("actionDropShard", "wake up")
 			}
 		}
 		succ := true
 		var ke *kerror.Kerror
-		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			workerState, ok := ss.AllWorkers[action.From]
 			if !ok {
 				succ = false
@@ -298,7 +315,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			signalBox = workerState.SignalBox
-		}))
+		})
 		if !succ {
 			panic(ke)
 		}

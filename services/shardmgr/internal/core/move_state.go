@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -12,7 +13,7 @@ type MoveState struct {
 	Signature       string             `json:"signature"`
 	Actions         []*costfunc.Action `json:"actions"`
 	CurrentAction   int                `json:"current_action"`   // CurrentAction is the index of the current action
-	ActionConducted int8               `json:"action_conducted"` // true means current action is already sent out (or conducted)
+	ActionConducted bool               `json:"action_conducted"` // true means current action is already sent out (or conducted)
 }
 
 func NewMoveStateFromProposal(ss *ServiceState, proposal *costfunc.Proposal) *MoveState {
@@ -21,7 +22,7 @@ func NewMoveStateFromProposal(ss *ServiceState, proposal *costfunc.Proposal) *Mo
 		Signature:       proposal.GetSignature(),
 		Actions:         make([]*costfunc.Action, 0),
 		CurrentAction:   0,
-		ActionConducted: 0,
+		ActionConducted: false,
 	}
 	moveState.Actions = proposal.Move.GetActions(ss.ServiceConfig.ShardConfig)
 	return moveState
@@ -44,7 +45,7 @@ func MoveStateFromJson(msj *smgjson.MoveStateJson) *MoveState {
 		ProposalId:      msj.ProposalId,
 		Signature:       msj.Signature,
 		CurrentAction:   msj.NextMove,
-		ActionConducted: 0,
+		ActionConducted: common.BoolFromInt8(msj.ActionConducted),
 	}
 	for _, action := range msj.Actions {
 		moveState.Actions = append(moveState.Actions, costfunc.ActionFromJson(action))

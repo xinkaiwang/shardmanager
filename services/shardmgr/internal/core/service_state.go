@@ -80,6 +80,16 @@ func (ss *ServiceState) PostEvent(event krunloop.IEvent[*ServiceState]) {
 	ss.runloop.PostEvent(event)
 }
 
+func (ss *ServiceState) PostActionAndWait(fn func(ss *ServiceState)) {
+	ch := make(chan struct{})
+	eve := NewActionEvent(func(ss *ServiceState) {
+		fn(ss)
+		close(ch)
+	})
+	ss.runloop.PostEvent(eve)
+	<-ch
+}
+
 // IsResource implements the CriticalResource interface
 func (ss *ServiceState) IsResource() {}
 

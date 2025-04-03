@@ -16,12 +16,15 @@ import (
 )
 
 type SignalBox struct {
-	NotifyCh     chan common.Unit // notify when WorkerState changes
+	BoxId        string
 	NotifyReason string
+	NofityId     string
+	NotifyCh     chan common.Unit // notify when WorkerState changes
 }
 
 func NewSignalBox() *SignalBox {
 	return &SignalBox{
+		BoxId:        kcommon.RandomString(context.Background(), 8),
 		NotifyCh:     make(chan common.Unit, 1),
 		NotifyReason: "",
 	}
@@ -165,11 +168,13 @@ func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.Pass
 	}
 }
 
-func (ws *WorkerState) signalAll(reason string) {
+func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
 	currentBox := ws.SignalBox
-	currentBox.NotifyReason = reason
-	close(currentBox.NotifyCh)
 	ws.SignalBox = NewSignalBox()
+	currentBox.NotifyReason = reason
+	currentBox.NofityId = kcommon.RandomString(ctx, 8)
+	close(currentBox.NotifyCh)
+	klogging.Info(ctx).With("workerId", ws.WorkerId).With("boxId", currentBox.BoxId).With("reason", reason).With("notifyId", currentBox.NofityId).Log("signalAll", "worker state changed")
 }
 
 // onEphNodeLost: must be called in runloop
@@ -214,7 +219,7 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 	if dirty.IsDirty() {
 		reason := dirty.String()
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
-		ws.signalAll(reason)
+		ws.signalAll(ctx, reason)
 	}
 }
 
@@ -254,7 +259,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	if dirty.IsDirty() {
 		reason := dirty.String()
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
-		ws.signalAll(reason)
+		ws.signalAll(ctx, reason)
 	}
 }
 
