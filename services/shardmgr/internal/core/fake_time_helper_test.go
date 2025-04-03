@@ -248,16 +248,16 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 	return false, elapsedMs
 }
 
-func WaitUntilWorkerStateEnum(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum, maxWaitMs int, intervalMs int) (bool, int64) {
-	return WaitUntilWorkerState(t, ss, workerFullId, func(ws *WorkerState) bool {
+func (setup *FakeTimeTestSetup) WaitUntilWorkerStateEnum(t *testing.T, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum, maxWaitMs int, intervalMs int) (bool, int64) {
+	return setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) bool {
 		return ws != nil && ws.State == expectedState
 	}, maxWaitMs, intervalMs)
 }
 
-func WaitUntilWorkerState(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, fn func(pilot *WorkerState) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilWorkerState(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *WorkerState) bool, maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
-		safeAccessServiceState(ss, func(ss *ServiceState) {
+		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
 			worker := ss.AllWorkers[workerFullId]
 			result = fn(worker)
 		})
@@ -266,11 +266,11 @@ func WaitUntilWorkerState(t *testing.T, ss *ServiceState, workerFullId data.Work
 	return ret, elapsedMs
 }
 
-func WaitUntilWorkerFullState(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId, fn func(pilot *WorkerState, assigns map[data.AssignmentId]*AssignmentState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilWorkerFullState(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *WorkerState, assigns map[data.AssignmentId]*AssignmentState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
 		var reason string
-		safeAccessServiceState(ss, func(ss *ServiceState) {
+		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
 			worker := ss.AllWorkers[workerFullId]
 			dict := map[data.AssignmentId]*AssignmentState{}
 			for assignId := range worker.Assignments {
@@ -283,10 +283,10 @@ func WaitUntilWorkerFullState(t *testing.T, ss *ServiceState, workerFullId data.
 	return ret, elapsedMs
 }
 
-func WaitUntilShardCount(t *testing.T, ss *ServiceState, expectedShardCount int, maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilShardCount(t *testing.T, expectedShardCount int, maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var count int
-		safeAccessServiceState(ss, func(ss *ServiceState) {
+		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
 			count = len(ss.AllShards)
 		})
 		return count == expectedShardCount, strconv.Itoa(count)
@@ -294,7 +294,7 @@ func WaitUntilShardCount(t *testing.T, ss *ServiceState, expectedShardCount int,
 	return ret, elapsedMs
 }
 
-func WaitUntilWorkerStatePersisted(t *testing.T, setup *FakeTimeTestSetup, workerFullId data.WorkerFullId, fn func(wsj *smgjson.WorkerStateJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilWorkerStatePersisted(t *testing.T, workerFullId data.WorkerFullId, fn func(wsj *smgjson.WorkerStateJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		path := setup.ServiceState.PathManager.FmtWorkerStatePath(workerFullId)
 		item := setup.FakeStore.GetByKey(path)
@@ -320,7 +320,7 @@ func (setup *FakeTimeTestSetup) WaitUntilPilotNode(t *testing.T, workerFullId da
 	return ret, elapsedMs
 }
 
-func WaitUntilRoutingState(t *testing.T, setup *FakeTimeTestSetup, workerFullId data.WorkerFullId, fn func(entry *unicornjson.WorkerEntryJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilRoutingState(t *testing.T, workerFullId data.WorkerFullId, fn func(entry *unicornjson.WorkerEntryJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		path := setup.ServiceState.PathManager.FmtRoutingPath(workerFullId)
 		item := setup.FakeStore.GetByKey(path)

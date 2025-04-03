@@ -51,7 +51,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 
 		{
 			// 等待worker state创建
-			waitSucc, elapsedMs := WaitUntilWorkerStateEnum(t, ss, workerFullId, data.WS_Online_healthy, 1000, 10)
+			waitSucc, elapsedMs := setup.WaitUntilWorkerStateEnum(t, workerFullId, data.WS_Online_healthy, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker state 已创建 elapsedMs=%d", elapsedMs)
 		}
 
@@ -136,7 +136,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 
 		{
 			// 等待 worker eph sync to worker state
-			waitSucc, elapsedMs := WaitUntilWorkerFullState(t, ss, workerFullId, func(ws *WorkerState, dict map[data.AssignmentId]*AssignmentState) (bool, string) {
+			waitSucc, elapsedMs := setup.WaitUntilWorkerFullState(t, workerFullId, func(ws *WorkerState, dict map[data.AssignmentId]*AssignmentState) (bool, string) {
 				if ws == nil {
 					return false, "worker state 不存在"
 				}
@@ -158,7 +158,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 		ss.StopAndWaitForExit(ctx)
 		setup.PrintAll(ctx)
 
-		assert.Equal(t, true, false, "") // 强制查看测试输出
+		// assert.Equal(t, true, false, "") // 强制查看测试输出
 	}
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)

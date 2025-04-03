@@ -69,7 +69,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		// 等待ServiceState加载分片状态
 		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "等待ServiceState加载分片状态...")
 		{
-			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 3, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 			klogging.Info(ctx).With("elapsedMs", elapsedMs).Log("DynamicShardPlanUpdate", "分片加载完成")
 		}
@@ -99,7 +99,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		// 预期会有4个分片：shard-a（保留）, shard-b（标记删除）, shard-c（标记删除）, shard-d（新增）
 		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "等待ServiceState更新分片状态...")
 		{
-			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 4, 1000, 100)
+			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 4, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前更新所有分片, 耗时=%dms", elapsedMs)
 			klogging.Info(ctx).With("elapsedMs", elapsedMs).Log("DynamicShardPlanUpdate", "分片更新完成")
 		}
@@ -184,7 +184,7 @@ func TestServiceState_ShadowStateWrite(t *testing.T) {
 		// 3. 等待ServiceState加载分片状态
 		t.Logf("等待ServiceState加载分片状态...")
 		{
-			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 3, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
 		}
@@ -320,7 +320,7 @@ func TestServiceState_PreexistingShardState(t *testing.T) {
 		t.Logf("ServiceState 已创建: %s", ss.Name)
 
 		// 4. 等待 ServiceState 加载和处理分片状态
-		waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 5, 1000, 100)
+		waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 5, 1000, 100)
 		assert.True(t, waitSucc, "应该能在超时前加载所有预先存在的分片状态, 耗时=%dms", elapsedMs)
 		t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
 
@@ -365,7 +365,7 @@ func TestServiceState_PreexistingShardState(t *testing.T) {
 
 		// 8. 等待更新后的状态生效
 		// 分片总数应该是 6: shard-1, shard-2(lameDuck), shard-3, shard-4(lameDuck), shard-5(不再lameDuck), shard-6(新增)
-		waitSucc, elapsedMs = WaitUntilShardCount(t, ss, 6, 1000, 100)
+		waitSucc, elapsedMs = setup.WaitUntilShardCount(t, 6, 1000, 100)
 		assert.True(t, waitSucc, "应该能在超时前更新分片状态, 耗时=%dms", elapsedMs)
 		t.Logf("分片状态更新完成, 耗时=%dms", elapsedMs)
 
@@ -441,7 +441,7 @@ func TestShardBasic_ConsistencyCheck(t *testing.T) {
 		t.Logf("等待ServiceState加载分片状态...")
 		// 验证所有分片状态都正确加载
 		{
-			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 3, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
 		}
@@ -549,7 +549,7 @@ func TestShardBasic_ConflictResolution(t *testing.T) {
 		// 3. 等待ServiceState加载分片状态
 		t.Logf("等待ServiceState加载分片状态...")
 		{
-			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 3, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
 		}
@@ -660,7 +660,7 @@ func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 		// 2. 等待ServiceState加载分片状态
 		t.Logf("等待ServiceState加载初始分片状态...")
 		{
-			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 3, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
 		}
@@ -673,7 +673,7 @@ func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 
 		// 3. 等待ServiceState shard-4状态更新
 		{
-			waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 4, 1000, 100)
+			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 4, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 			t.Logf("分片加载完成, 耗时=%dms", elapsedMs)
 		}

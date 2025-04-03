@@ -33,7 +33,7 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 
 		{
 			// 等待worker state创建，状态变为WS_Online_healthy
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, func(ws *WorkerState) bool {
+			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) bool {
 				return ws != nil && ws.WorkerId == workerFullId.WorkerId && ws.ShutdownRequesting == false
 			}, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker state 已创建 elapsedMs=%d", elapsedMs)
@@ -50,7 +50,7 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 
 		// 等待worker状态变为WS_Online_shutdown_req
 		{
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, func(ws *WorkerState) bool {
+			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) bool {
 				return ws != nil && ws.WorkerId == workerFullId.WorkerId && ws.ShutdownRequesting == true
 			}, 1000, 10)
 			assert.Equal(t, true, waitSucc, "worker state ShutdownRequesting已设置为true elapsedMs=%d", elapsedMs)
@@ -58,7 +58,7 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 
 		{
 			// 等待worker状态
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, func(ws *WorkerState) bool {
+			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) bool {
 				return ws.State == data.WS_Online_shutdown_permit
 			}, 10*1000, 1000)
 			assert.Equal(t, true, waitSucc, "worker state 状态已设置为 WS_Online_shutdown_permit elapsedMs=%d", elapsedMs)
@@ -66,7 +66,7 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 		{
 			// 等待 pilot 状态
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
-				return pnj != nil && pnj.ShutdownPermited == 1, ""
+				return pnj != nil && pnj.ShutdownPermited == 1, "pilot"
 			}, 10*1000, 1000)
 			assert.Equal(t, true, waitSucc, "pilot node ShutdownPermited已设置为1 elapsedMs=%d", elapsedMs)
 		}
@@ -79,7 +79,7 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 
 		{
 			// 等待worker状态
-			waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, func(ws *WorkerState) bool {
+			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) bool {
 				return ws == nil // worker state 已删除
 			}, 60*1000, 1000)
 			assert.Equal(t, true, waitSucc, "worker state 状态已设置为 WS_Online_shutdown_permit elapsedMs=%d", elapsedMs)

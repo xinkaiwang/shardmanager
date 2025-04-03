@@ -15,6 +15,18 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
 )
 
+type SignalBox struct {
+	NotifyCh     chan common.Unit // notify when WorkerState changes
+	NotifyReason string
+}
+
+func NewSignalBox() *SignalBox {
+	return &SignalBox{
+		NotifyCh:     make(chan common.Unit, 1),
+		NotifyReason: "",
+	}
+}
+
 type WorkerState struct {
 	WorkerId           data.WorkerId
 	SessionId          data.SessionId
@@ -26,9 +38,8 @@ type WorkerState struct {
 	Assignments map[data.AssignmentId]common.Unit
 
 	NotifyReason              string
-	NotifyCh                  chan common.Unit // notify when WorkerState changes
+	SignalBox                 *SignalBox
 	WorkerInfo                smgjson.WorkerInfoJson
-	WorkerEph                 *cougarjson.WorkerEphJson
 	WorkerReportedAssignments map[data.AssignmentId]common.Unit
 }
 
@@ -40,7 +51,7 @@ func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId) *WorkerSta
 		ShutdownRequesting: false,
 		// ShutdownPermited:          false,
 		Assignments:               make(map[data.AssignmentId]common.Unit),
-		NotifyCh:                  make(chan common.Unit, 1),
+		SignalBox:                 NewSignalBox(),
 		WorkerInfo:                smgjson.WorkerInfoJson{},
 		WorkerReportedAssignments: make(map[data.AssignmentId]common.Unit),
 	}
@@ -52,7 +63,7 @@ func NewWorkerStateFromJson(workerStateJson *smgjson.WorkerStateJson) *WorkerSta
 		SessionId:   workerStateJson.SessionId,
 		State:       workerStateJson.WorkerState,
 		Assignments: make(map[data.AssignmentId]common.Unit),
-		NotifyCh:    make(chan common.Unit, 1),
+		SignalBox:   NewSignalBox(),
 		WorkerInfo:  smgjson.WorkerInfoJson{},
 	}
 	return workerState
@@ -155,9 +166,10 @@ func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.Pass
 }
 
 func (ws *WorkerState) signalAll(reason string) {
-	ws.NotifyReason = reason
-	close(ws.NotifyCh)
-	ws.NotifyCh = make(chan common.Unit, 1)
+	currentBox := ws.SignalBox
+	currentBox.NotifyReason = reason
+	close(currentBox.NotifyCh)
+	ws.SignalBox = NewSignalBox()
 }
 
 // onEphNodeLost: must be called in runloop

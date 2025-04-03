@@ -129,7 +129,7 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 }
 
 func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
-	var chanWait chan common.Unit
+	var signalBox *SignalBox
 	action := am.moveState.Actions[stepIdx]
 	// step 1: create shard
 	if am.moveState.ActionConducted == 0 {
@@ -170,7 +170,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			workerState.Assignments[action.AssignmentId] = common.Unit{}
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "addShard")
-			chanWait = workerState.NotifyCh
+			signalBox = workerState.SignalBox
 		}))
 		if !succ {
 			panic(ke)
@@ -181,10 +181,10 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 	// step 2: wail until this assignment is completed (based on feedback from ephemeral node)
 	completed := false
 	for !completed {
-		if chanWait != nil {
+		if signalBox != nil {
 			select {
-			case <-chanWait:
-				klogging.Info(ctx).With("worker", action.To).Log("ActionMinion", "wake up")
+			case <-signalBox.NotifyCh:
+				klogging.Info(ctx).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).Log("actionAddShard", "wake up")
 			case <-ctx.Done():
 				panic(kerror.Create("ContextCanceled", "context canceled"))
 			}
@@ -208,7 +208,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				completed = true
 				return
 			}
-			chanWait = workerState.NotifyCh
+			signalBox = workerState.SignalBox
 		}))
 		if !succ {
 			panic(ke)
@@ -218,7 +218,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 }
 
 func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
-	var chanWait chan common.Unit
+	var signalBox *SignalBox
 	action := am.moveState.Actions[stepIdx]
 	// step 1: drop shard
 	if am.moveState.ActionConducted == 0 {
@@ -259,7 +259,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			assign.ShouldInPilot = false
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "dropShard")
-			chanWait = workerState.NotifyCh
+			signalBox = workerState.SignalBox
 		}))
 		if !succ {
 			panic(ke)
@@ -270,10 +270,10 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 	// step 2: wail until drop assignment is completed (based on feedback from ephemeral node)
 	completed := false
 	for !completed {
-		if chanWait != nil {
+		if signalBox != nil {
 			select {
-			case <-chanWait:
-				klogging.Info(ctx).With("worker", action.From).Log("ActionMinion", "wake up")
+			case <-signalBox.NotifyCh:
+				klogging.Info(ctx).With("worker", action.From).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).Log("actionDropShard", "wake up")
 			case <-ctx.Done():
 				panic(kerror.Create("ContextCanceled", "context canceled"))
 			}
@@ -297,7 +297,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				completed = true
 				return
 			}
-			chanWait = workerState.NotifyCh
+			signalBox = workerState.SignalBox
 		}))
 		if !succ {
 			panic(ke)
