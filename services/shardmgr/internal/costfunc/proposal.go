@@ -43,11 +43,13 @@ type Action struct {
 	RemoveSrcFromRouting bool
 	AddDestToRouting     bool
 	SleepMs              int
+	ActionStage          smgjson.ActionStage
 }
 
 func NewAction(actionType smgjson.ActionType) *Action {
 	return &Action{
-		ActionType: actionType,
+		ActionType:  actionType,
+		ActionStage: smgjson.AS_NotStarted,
 	}
 }
 
@@ -62,6 +64,7 @@ func (action *Action) ToJson() *smgjson.ActionJson {
 		RemoveSrcFromRouting: 0,
 		AddDestToRouting:     0,
 		SleepMs:              action.SleepMs,
+		Stage:                action.ActionStage,
 	}
 	return actionJson
 }
@@ -77,6 +80,7 @@ func ActionFromJson(actionJson *smgjson.ActionJson) *Action {
 		RemoveSrcFromRouting: common.BoolFromInt8(actionJson.RemoveSrcFromRouting),
 		AddDestToRouting:     common.BoolFromInt8(actionJson.AddDestToRouting),
 		SleepMs:              actionJson.SleepMs,
+		ActionStage:          actionJson.Stage,
 	}
 	return action
 }

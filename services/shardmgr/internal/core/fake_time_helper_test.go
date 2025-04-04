@@ -320,15 +320,15 @@ func (setup *FakeTimeTestSetup) WaitUntilPilotNode(t *testing.T, workerFullId da
 	return ret, elapsedMs
 }
 
-func (setup *FakeTimeTestSetup) WaitUntilRoutingState(t *testing.T, workerFullId data.WorkerFullId, fn func(entry *unicornjson.WorkerEntryJson) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilRoutingState(t *testing.T, workerFullId data.WorkerFullId, fn func(entry *unicornjson.WorkerEntryJson) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		path := setup.ServiceState.PathManager.FmtRoutingPath(workerFullId)
 		item := setup.FakeStore.GetByKey(path)
 		if item == "" {
-			return fn(nil), ""
+			return fn(nil)
 		}
 		entry := unicornjson.WorkerEntryJsonFromJson(item)
-		return fn(entry), ""
+		return fn(entry)
 	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
 }

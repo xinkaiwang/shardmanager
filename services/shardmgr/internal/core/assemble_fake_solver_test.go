@@ -9,6 +9,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
 )
 
 // implements solver.SnapshotListener
@@ -164,12 +165,29 @@ func TestAssembleFakeSolver(t *testing.T) {
 			}, 1000, 10)
 			assert.True(t, waitSucc, "应该能在超时前 update worker eph, 耗时=%dms", elapsedMs)
 		}
+		{
+			// 等待 routing state
+			waitSucc, elapsedMs := setup.WaitUntilRoutingState(t, workerFullId, func(rj *unicornjson.WorkerEntryJson) (bool, string) {
+				if rj == nil {
+					return false, "routing state 不存在"
+				}
+				if len(rj.Assignments) == 1 {
+					for _, assign := range rj.Assignments {
+						if assign.AsginmentId == "as1" {
+							return true, ""
+						}
+					}
+				}
+				return false, "assignment 数目未达预期"
+			}, 1000, 10)
+			assert.True(t, waitSucc, "应该能在超时前 update routing state, 耗时=%dms", elapsedMs)
+		}
 
 		// stop
 		ss.StopAndWaitForExit(ctx)
 		setup.PrintAll(ctx)
 
-		// assert.Equal(t, true, false, "") // 强制查看测试输出
+		assert.Equal(t, true, false, "") // 强制查看测试输出
 	}
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)

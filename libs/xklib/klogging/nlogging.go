@@ -3,6 +3,7 @@ package klogging
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -177,8 +178,23 @@ func (entry *LogEntry) With(k string, v interface{}) *LogEntry {
 	return entry
 }
 
+// this is to avoid fake nil pointer problem
+func IsNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+		return reflect.ValueOf(i).IsNil()
+	}
+	return false
+}
+
 func (entry *LogEntry) WithError(err error) *LogEntry {
 	if !entry.ShouldLog {
+		return entry
+	}
+	if IsNil(err) {
 		return entry
 	}
 	if ke, ok := err.(*kerror.Kerror); ok {

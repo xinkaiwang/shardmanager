@@ -31,18 +31,18 @@ func (am *ActionMinion) Run(ctx context.Context, ss *ServiceState) {
 	})
 	elapseMs := kcommon.GetWallTimeMs() - startMs
 	if ke != nil {
-		klogging.Error(ctx).WithError(ke).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion", "Run")
+		klogging.Error(ctx).WithError(ke).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion.Run", "Error")
 	} else {
-		klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion", "Run")
+		klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion.Run", "done")
 	}
 	ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, nil)
 }
 
 func (am *ActionMinion) run(ctx context.Context) {
-	klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).Log("ActionMinion", "Run")
+	klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("actionCount", len(am.moveState.Actions)).Log("ActionMinion", "Started")
 	for am.moveState.CurrentAction < len(am.moveState.Actions) {
 		action := am.moveState.Actions[am.moveState.CurrentAction]
-		klogging.Info(ctx).With("action", action).Log("ActionMinion", "Run")
+		klogging.Info(ctx).With("action", action).Log("ActionMinion", "RunAction")
 		switch action.ActionType {
 		case smgjson.AT_RemoveFromRoutingAndSleep:
 			am.actionRemoveFromRouting(ctx, am.moveState.CurrentAction)
@@ -56,19 +56,18 @@ func (am *ActionMinion) run(ctx context.Context) {
 			panic(kerror.Create("UnknownActionType", "unknown action type").With("actionType", action.ActionType))
 		}
 		am.moveState.CurrentAction++
-		am.moveState.ActionConducted = true
 	}
 }
 
 // in case anything goes wrong, we will panic
 func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int) {
 	action := am.moveState.Actions[stepIdx]
-	if !am.moveState.ActionConducted {
+	if action.ActionStage == smgjson.AS_NotStarted {
 		workerFullId := action.From
 		// step 1: remove from routing table
 		succ := true
 		var ke *kerror.Kerror
-		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			ws, ok := am.ss.AllWorkers[workerFullId]
 			if !ok {
 				succ = false
@@ -83,56 +82,69 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 			}
 			assign.ShouldInRoutingTable = false
 			ss.FlushWorkerState(ctx, workerFullId, ws, "removeFromRouting")
-		}))
+		})
 		if !succ {
 			panic(ke)
 		}
-		am.moveState.ActionConducted = true
-		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
+		action.ActionStage = smgjson.AS_Conducted
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("removeFromRouting"))
 	}
 
 	// step 2: sleep
 	if action.SleepMs > 0 {
 		kcommon.SleepMs(ctx, action.SleepMs)
 	}
+	action.ActionStage = smgjson.AS_Completed
 }
 
 func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
+	status := AS_Unknown
+	var ke *kerror.Kerror
 	action := am.moveState.Actions[stepIdx]
-	if !am.moveState.ActionConducted {
+	if action.ActionStage == smgjson.AS_NotStarted {
 		workerFullId := action.To
 		// step 1: add to routing table
-		succ := true
-		var ke *kerror.Kerror
-		am.ss.PostEvent(NewActionEvent(func(ss *ServiceState) {
+		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			ws, ok := am.ss.AllWorkers[workerFullId]
 			if !ok {
-				succ = false
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
+				status = AS_Failed
 				return
 			}
 			assign, ok := ss.AllAssignments[action.AssignmentId]
 			if !ok {
-				succ = false
 				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
+				status = AS_Failed
 				return
 			}
 			assign.ShouldInRoutingTable = true
 			ss.FlushWorkerState(ctx, workerFullId, ws, "addToRouting")
-		}))
-		if !succ {
-			panic(ke)
-		}
-		am.moveState.ActionConducted = true
-		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
+			status = AS_Completed
+		})
+		action.ActionStage = smgjson.AS_Completed
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("addToRouting"))
+	}
+	klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).With("stage", action.ActionStage).Log("actionAddToRouting", "add to routing table")
+	if status == AS_Failed {
+		panic(ke)
 	}
 }
 
+type ActionStatus string
+
+const (
+	AS_Unknown   ActionStatus = "Unknown"
+	AS_Wait      ActionStatus = "Wait"
+	AS_Completed ActionStatus = "Completed"
+	AS_Failed    ActionStatus = "Failed"
+)
+
 func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
+	status := AS_Unknown
 	var signalBox *SignalBox
 	action := am.moveState.Actions[stepIdx]
 	// step 1: create shard
-	if !am.moveState.ActionConducted {
+	if action.ActionStage == smgjson.AS_NotStarted {
 		var ke *kerror.Kerror
 		workerFullId := action.To
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
@@ -140,21 +152,25 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			shardState, ok := ss.AllShards[shardId]
 			if !ok {
 				ke = kerror.Create("ShardNotFound", "shard not found").With("shardId", shardId)
+				status = AS_Failed
 				return
 			}
 			replicaState, ok := shardState.Replicas[action.ReplicaIdx]
 			if !ok {
 				ke = kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", action.ReplicaIdx)
+				status = AS_Failed
 				return
 			}
 			_, ok = ss.AllAssignments[action.AssignmentId]
 			if ok {
 				ke = kerror.Create("AssignmentAlreadyExist", "assignment already exist").With("assignmentId", action.AssignmentId)
+				status = AS_Failed
 				return
 			}
 			workerState, ok := ss.AllWorkers[workerFullId]
 			if !ok {
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
+				status = AS_Failed
 				return
 			}
 			assign := NewAssignmentState(action.AssignmentId, shardId, action.ReplicaIdx, workerFullId)
@@ -166,37 +182,40 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "addShard")
 			signalBox = workerState.SignalBox
+			status = AS_Wait
+			klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).Log("actionAddShard", "add shard to worker")
 		})
-		if ke != nil {
+		if status == AS_Failed {
 			panic(ke)
 		}
-		am.moveState.ActionConducted = true
-		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
+		action.ActionStage = smgjson.AS_Conducted
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("addShard"))
 	}
 	// step 2: wail until this assignment is stop (based on feedback from ephemeral node)
-	klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).Log("actionAddShard", "wait for assignment to be ready")
-	stop := false
-	for !stop {
+	klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).Log("actionAddShard", "wait for assignment to be ready")
+	var ke *kerror.Kerror
+	for status == AS_Wait {
 		loopId := kcommon.RandomString(ctx, 8)
 		if signalBox != nil {
 			select {
 			case <-ctx.Done():
+				status = AS_Failed
 				panic(kerror.Create("ContextCanceled", "context canceled"))
 			case <-signalBox.NotifyCh:
 				klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).With("notifyId", signalBox.NofityId).With("loopId", loopId).Log("actionAddShard", "wake up")
 			}
 		}
-		requirementMeet := false
-		var ke *kerror.Kerror
 		var reason string
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			workerState, ok := ss.AllWorkers[action.To]
 			if !ok {
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", action.To)
+				status = AS_Failed
 				return
 			}
 			if !workerState.IsGoodMoveTarget() {
 				ke = kerror.Create("DestWorkerNotGood", "worker not suitable as target").With("workerFullId", action.To).With("state", workerState.State)
+				status = AS_Failed
 				return
 			}
 			signalBox = workerState.SignalBox
@@ -206,21 +225,19 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			if assign.CurrentConfirmedState == cougarjson.CAS_Ready {
-				requirementMeet = true
+				status = AS_Completed
 				return
 			}
 			reason = "assignment not in ready state"
 		})
 
-		if ke != nil {
-			panic(ke)
-		}
-		if requirementMeet {
-			// success
-			stop = true
-		}
-		klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("loopId", loopId).With("reason", reason).With("reqMeet", requirementMeet).With("stop", stop).Log("actionAddShard", "loop end")
+		klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("loopId", loopId).With("reason", reason).With("status", status).WithError(ke).Log("actionAddShard", "loop end")
 	}
+	if status == AS_Failed {
+		panic(ke)
+	}
+	action.ActionStage = smgjson.AS_Completed
+	am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("addShardDone"))
 }
 
 func (workerState *WorkerState) IsGoodMoveTarget() bool {
@@ -238,7 +255,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 	var signalBox *SignalBox
 	action := am.moveState.Actions[stepIdx]
 	// step 1: drop shard
-	if !am.moveState.ActionConducted {
+	if action.ActionStage == smgjson.AS_NotStarted {
 		succ := true
 		var ke *kerror.Kerror
 		workerFullId := action.From
@@ -281,8 +298,8 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 		if !succ {
 			panic(ke)
 		}
-		am.moveState.ActionConducted = true
-		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson())
+		action.ActionStage = smgjson.AS_Conducted
+		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("dropShard"))
 	}
 	// step 2: wail until drop assignment is completed (based on feedback from ephemeral node)
 	completed := false
@@ -320,6 +337,8 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			panic(ke)
 		}
 	}
+	action.ActionStage = smgjson.AS_Completed
+	am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("dropShardDone"))
 }
 
 // ActionEvent implements IEvent

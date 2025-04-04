@@ -9,11 +9,11 @@ import (
 
 // <etcd>/smg/move/{proposal_id}
 type MoveStateJson struct {
-	ProposalId      data.ProposalId `json:"proposal_id"`
-	Signature       string          `json:"signature"`
-	Actions         []*ActionJson   `json:"moves"`
-	ActionConducted int8            `json:"action_conducted"` // ActionConducted 是当前动作是否已经执行过，0表示未执行，1表示已执行
-	NextMove        int             `json:"next_move"`        // NextMove 是下一个要执行的 move 的索引
+	ProposalId   data.ProposalId `json:"proposal_id"`
+	Signature    string          `json:"signature"`
+	Actions      []*ActionJson   `json:"moves"`
+	NextMove     int             `json:"next_move"`     // NextMove 是下一个要执行的 move 的索引
+	UpdateReason string          `json:"update_reason"` // UpdateReason 更新原因
 }
 
 type ActionJson struct {
@@ -26,7 +26,16 @@ type ActionJson struct {
 	RemoveSrcFromRouting int8              `json:"remove_src_from_routing,omitempty"`
 	AddDestToRouting     int8              `json:"add_dest_to_routing,omitempty"`
 	SleepMs              int               `json:"sleep_ms,omitempty"`
+	Stage                ActionStage       `json:"stage,omitempty"` //
 }
+
+type ActionStage string
+
+const (
+	AS_NotStarted ActionStage = ""
+	AS_Conducted  ActionStage = "conducted"
+	AS_Completed  ActionStage = "completed"
+)
 
 func MoveStateJsonParse(data []byte) *MoveStateJson {
 	var state MoveStateJson
@@ -45,6 +54,11 @@ func (obj *MoveStateJson) ToJson() string {
 		panic(ke)
 	}
 	return string(bytes)
+}
+
+func (obj *MoveStateJson) WithUpdateReason(reason string) *MoveStateJson {
+	obj.UpdateReason = reason
+	return obj
 }
 
 type ActionType string

@@ -254,8 +254,8 @@ func TestWorkerShutdownRequest(t *testing.T) {
 		}
 		{
 			// 等待 routing 创建
-			waitSucc, elapsedMs := setup.WaitUntilRoutingState(t, workerFullId, func(entry *unicornjson.WorkerEntryJson) bool {
-				return entry != nil && entry.WorkerId == string(workerFullId.WorkerId)
+			waitSucc, elapsedMs := setup.WaitUntilRoutingState(t, workerFullId, func(entry *unicornjson.WorkerEntryJson) (bool, string) {
+				return entry != nil && entry.WorkerId == string(workerFullId.WorkerId), ""
 			}, 1000, 10)
 			assert.Equal(t, true, waitSucc, "routing 已创建 elapsedMs=%d", elapsedMs)
 		}

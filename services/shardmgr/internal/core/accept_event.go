@@ -85,7 +85,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc.Proposal) {
 	moveState := NewMoveStateFromProposal(ss, proposal)
 	minion := NewActionMinion(ss, moveState)
-	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson())
+	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson("accepted"))
 	ss.AllMoves[proposal.ProposalId] = minion
 	go minion.Run(ctx, ss)
 }
