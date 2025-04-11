@@ -9,7 +9,8 @@ import (
 )
 
 var (
-	etcdTimeoutMs = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 5000)
+	etcdTimeoutMs      = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 5*1000)
+	etcdLeaseTimeoutMs = kcommon.GetEnvInt("ETCD_LEASE_TIMEOUT_MS", 15*1000)
 )
 
 type EtcdSessionState string
@@ -32,12 +33,15 @@ type EtcdSession interface {
 	DeleteNode(key string)
 	SetStateListener(listener EtcdStateListener)
 	GetCurrentState() EtcdSessionState
+	WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan EtcdKvItem
+	// Close 关闭会话，停止租约续约并释放资源
+	Close()
 }
 
 type EtcdProvider interface {
-	CreateEtcdSession() EtcdSession
-	// WatchPrefix
-	WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan EtcdKvItem
+	// CreateEtcdSession 创建一个新的 EtcdSession。
+	// 调用者负责在不再需要时调用 Session 的 Close 方法。
+	CreateEtcdSession(ctx context.Context) EtcdSession
 }
 
 type EtcdKvItem struct {
@@ -62,7 +66,7 @@ func getEndpointsFromEnv() []string {
 // getDialTimeoutFromEnv 从环境变量获取连接超时配置
 // 返回：
 // - 如果设置了 ETCD_DIAL_TIMEOUT 环境变量且为有效整数，返回该值
-// - 否则返回默认值 5（秒）
+// - 否则返回默认值 5000（毫秒）
 func getDialTimeoutMsFromEnv() int {
 	return kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 5000)
 }
