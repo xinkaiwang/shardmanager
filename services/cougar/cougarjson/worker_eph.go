@@ -79,6 +79,22 @@ const (
 	CAS_Dropped  CougarAssignmentState = "dropped"
 )
 
+func ParseCougarAssignmentStateFromString(state string) CougarAssignmentState {
+	switch state {
+	case "adding":
+		return CAS_Adding
+	case "ready":
+		return CAS_Ready
+	case "dropping":
+		return CAS_Dropping
+	case "dropped":
+		return CAS_Dropped
+	default:
+		ke := kerror.Create("InvalidAssignmentState", "invalid assignment state").With("state", state)
+		panic(ke)
+	}
+}
+
 // Update the ReplicaJson struct to use the custom State type
 type AssignmentJson struct {
 	ShardId     string                `json:"shd"`

@@ -187,7 +187,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 		ss.StopAndWaitForExit(ctx)
 		setup.PrintAll(ctx)
 
-		assert.Equal(t, true, false, "") // 强制查看测试输出
+		// assert.Equal(t, true, false, "") // 强制查看测试输出
 	}
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)

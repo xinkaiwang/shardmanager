@@ -252,58 +252,58 @@ func (workerState *WorkerState) IsGoodMoveTarget() bool {
 }
 
 func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
+	status := AS_Unknown
 	var signalBox *SignalBox
+	var ke *kerror.Kerror
 	action := am.moveState.Actions[stepIdx]
 	// step 1: drop shard
 	if action.ActionStage == smgjson.AS_NotStarted {
-		succ := true
-		var ke *kerror.Kerror
 		workerFullId := action.From
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			shardId := data.ShardId(action.ShardId)
 			shardState, ok := ss.AllShards[shardId]
 			if !ok {
-				succ = false
 				ke = kerror.Create("ShardNotFound", "shard not found").With("shardId", shardId)
+				status = AS_Failed
 				return
 			}
 			replicaState, ok := shardState.Replicas[action.ReplicaIdx]
 			if !ok {
-				succ = false
 				ke = kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", action.ReplicaIdx)
+				status = AS_Failed
 				return
 			}
 			if _, ok := replicaState.Assignments[action.AssignmentId]; !ok {
-				succ = false
 				ke = kerror.Create("AssignmentNotFound", "assignment not found in replica").With("assignmentId", action.AssignmentId)
+				status = AS_Failed
 				return
 			}
 			assign, ok := ss.AllAssignments[action.AssignmentId]
 			if !ok {
-				succ = false
 				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
+				status = AS_Failed
 				return
 			}
 			workerState, ok := ss.AllWorkers[workerFullId]
 			if !ok {
-				succ = false
 				ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
+				status = AS_Failed
 				return
 			}
 			assign.ShouldInPilot = false
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, "dropShard")
 			signalBox = workerState.SignalBox
+			status = AS_Wait
 		})
-		if !succ {
+		if status == AS_Failed {
 			panic(ke)
 		}
 		action.ActionStage = smgjson.AS_Conducted
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("dropShard"))
 	}
 	// step 2: wail until drop assignment is completed (based on feedback from ephemeral node)
-	completed := false
-	for !completed {
+	for status == AS_Wait {
 		if signalBox != nil {
 			select {
 			case <-ctx.Done():
@@ -312,30 +312,26 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.From).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).With("notifyId", signalBox.NofityId).Log("actionDropShard", "wake up")
 			}
 		}
-		succ := true
-		var ke *kerror.Kerror
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
 			workerState, ok := ss.AllWorkers[action.From]
 			if !ok {
-				succ = false
-				ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", action.From)
+				status = AS_Completed
 				return
 			}
 			assign, ok := ss.AllAssignments[action.AssignmentId]
 			if !ok {
-				succ = false
-				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
+				status = AS_Completed
 				return
 			}
 			if assign.CurrentConfirmedState == cougarjson.CAS_Dropped {
-				completed = true
+				status = AS_Completed
 				return
 			}
 			signalBox = workerState.SignalBox
 		})
-		if !succ {
-			panic(ke)
-		}
+	}
+	if status == AS_Failed {
+		panic(ke)
 	}
 	action.ActionStage = smgjson.AS_Completed
 	am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("dropShardDone"))

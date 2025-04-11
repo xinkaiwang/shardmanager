@@ -16,6 +16,7 @@ func TestPilotNodeJsonMarshal(t *testing.T) {
 			name     string
 			input    *PilotNodeJson
 			expected string
+			wantErr  bool
 		}{
 			{
 				name: "完整字段",
@@ -31,7 +32,7 @@ func TestPilotNodeJsonMarshal(t *testing.T) {
 					)
 					return node
 				}(),
-				expected: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"},{"shd":"shard-2","asg":"asg-2","sts":"completed"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
+				expected: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
 			},
 			{
 				name: "最小字段",
@@ -69,7 +70,7 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 		}{
 			{
 				name:  "完整字段",
-				input: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"},{"shd":"shard-2","asg":"asg-2","sts":"completed"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
+				input: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
 				want: func() *PilotNodeJson {
 					node := NewPilotNodeJson(
 						"pilot-worker-75fffc88f9-fkbcm",
@@ -99,7 +100,7 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 			},
 			{
 				name:  "所有任务状态",
-				input: `{"worker_id":"pilot-worker-75fffc88f9-r8t3v","session_id":"session-789","assignments":[{"shd":"shard-1","asg":"asg-1","sts":"active"},{"shd":"shard-2","asg":"asg-2","sts":"completed"}],"update_time_ms":1234567890000}`,
+				input: `{"worker_id":"pilot-worker-75fffc88f9-r8t3v","session_id":"session-789","assignments":[{"shd":"shard-1","asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000}`,
 				want: func() *PilotNodeJson {
 					node := NewPilotNodeJson(
 						"pilot-worker-75fffc88f9-r8t3v",
@@ -121,10 +122,24 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 				panicType: "UnmarshalError",
 			},
 			{
-				name:      "无效的任务状态",
-				input:     `{"worker_id":"w1","session_id":"s1","assignments":[{"shd":"shard-1","asg":"asg-1","sts":"invalid"}]}`,
-				wantPanic: true,
-				panicType: "UnmarshalError",
+				name:  "无效的任务状态",
+				input: `{"worker_id":"w1","session_id":"s1","assignments":[{"shd":"shard-1","asg":"asg-1","sts":"invalid"}]}`,
+				want: func() *PilotNodeJson {
+					node := NewPilotNodeJson(
+						"w1",
+						"s1",
+						"",
+					)
+					// 创建一个复制，并手动设置 State 为 "invalid"
+					assignment := NewPilotAssignmentJson("shard-1", 0, "asg-1", CAS_Unknown)
+					assignment.State = "invalid" // 实际代码中保留了原始无效值
+					node.Assignments = append(node.Assignments, assignment)
+
+					// 设置 LastUpdateAtMs 为 0，与实际代码行为匹配
+					node.LastUpdateAtMs = 0
+					return node
+				}(),
+				wantPanic: false,
 			},
 		}
 

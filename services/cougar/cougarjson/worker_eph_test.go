@@ -5,72 +5,76 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
 func TestWorkerEphJsonMarshal(t *testing.T) {
-	now := int64(1234567890000)
+	// 使用 FakeTimeProvider 控制时间
+	fakeTime := kcommon.NewFakeTimeProvider(1234567890000)
 
-	tests := []struct {
-		name     string
-		input    *WorkerEphJson
-		expected string
-		wantErr  bool
-	}{
-		{
-			name: "完整字段",
-			input: func() *WorkerEphJson {
-				worker := NewWorkerEphJson(
-					"cougar-worker-75fffc88f9-fkbcm",
-					"session-123",
-					now,
-					10,
-				)
-				worker.AddressPort = "10.0.0.32:8080"
-				worker.Properties["region"] = "us-west"
-				worker.Properties["type"] = "compute"
-				worker.Assignments = append(worker.Assignments,
-					NewAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
-				)
-				worker.LastUpdateAtMs = now + 1000
-				worker.LastUpdateReason = "periodic update"
-				return worker
-			}(),
-			expected: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","session_id":"session-123","addr_port":"10.0.0.32:8080","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
-			wantErr:  false,
-		},
-		{
-			name: "最小字段",
-			input: NewWorkerEphJson(
-				"cougar-worker-75fffc88f9-xj9n2",
-				"session-456",
-				now,
-				20,
-			),
-			expected: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","session_id":"session-456","start_time_ms":1234567890000,"capacity":20}`,
-			wantErr:  false,
-		},
-		{
-			name: "空可选字段",
-			input: NewWorkerEphJson(
-				"cougar-worker-75fffc88f9-p4m7k",
-				"session-789",
-				now,
-				30,
-			),
-			expected: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","session_id":"session-789","start_time_ms":1234567890000,"capacity":30}`,
-			wantErr:  false,
-		},
-	}
+	kcommon.RunWithTimeProvider(fakeTime, func() {
+		tests := []struct {
+			name     string
+			input    *WorkerEphJson
+			expected string
+			wantErr  bool
+		}{
+			{
+				name: "完整字段",
+				input: func() *WorkerEphJson {
+					worker := NewWorkerEphJson(
+						"cougar-worker-75fffc88f9-fkbcm",
+						"session-123",
+						1234567890000,
+						10,
+					)
+					worker.AddressPort = "10.0.0.32:8080"
+					worker.Properties["region"] = "us-west"
+					worker.Properties["type"] = "compute"
+					worker.Assignments = append(worker.Assignments,
+						NewAssignmentJson("shard-1", 1, "asg-1", CAS_Ready),
+					)
+					worker.LastUpdateAtMs = 1234567891000
+					worker.LastUpdateReason = "periodic update"
+					return worker
+				}(),
+				expected: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","session_id":"session-123","addr_port":"10.0.0.32:8080","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
+				wantErr:  false,
+			},
+			{
+				name: "最小字段",
+				input: NewWorkerEphJson(
+					"cougar-worker-75fffc88f9-xj9n2",
+					"session-456",
+					1234567890000,
+					20,
+				),
+				expected: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","session_id":"session-456","start_time_ms":1234567890000,"capacity":20}`,
+				wantErr:  false,
+			},
+			{
+				name: "空可选字段",
+				input: NewWorkerEphJson(
+					"cougar-worker-75fffc88f9-p4m7k",
+					"session-789",
+					1234567890000,
+					30,
+				),
+				expected: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","session_id":"session-789","start_time_ms":1234567890000,"capacity":30}`,
+				wantErr:  false,
+			},
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.input.ToJson()
-			if got != tt.expected {
-				t.Errorf("ToJson() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := tt.input.ToJson()
+				if got != tt.expected {
+					t.Errorf("ToJson() = %v, want %v", got, tt.expected)
+				}
+			})
+		}
+	})
 }
 
 func TestWorkerEphJsonUnmarshal(t *testing.T) {
@@ -85,7 +89,7 @@ func TestWorkerEphJsonUnmarshal(t *testing.T) {
 	}{
 		{
 			name:  "完整字段",
-			input: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","session_id":"session-123","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"active"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
+			input: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","session_id":"session-123","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
 			want: func() *WorkerEphJson {
 				worker := NewWorkerEphJson(
 					"cougar-worker-75fffc88f9-fkbcm",
