@@ -36,7 +36,7 @@ type WorkerEphJson struct {
 
 	ReqShutDown int8 `json:"req_shutdown,omitempty"` // if true, worker should drain and shutdown
 
-	StatefulType data.StatefulType `json:"stateful_type,omitempty"` // stateless, ST_MEMORY, ST_HARD_DRIVE
+	StatefulType data.StatefulType `json:"stateful_type"` // stateless, ST_MEMORY, ST_HARD_DRIVE
 }
 
 func NewWorkerEphJson(workerId string, sessionId string, startTimeMs int64, capacity int32) *WorkerEphJson {

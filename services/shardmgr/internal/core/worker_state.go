@@ -222,7 +222,7 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 	if dirty.IsDirty() {
 		reason := dirty.String()
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
-		ws.signalAll(ctx, reason)
+		ws.signalAll(ctx, "onEphNodeLost:"+reason)
 	}
 }
 
@@ -262,7 +262,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	if dirty.IsDirty() {
 		reason := dirty.String()
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
-		ws.signalAll(ctx, reason)
+		ws.signalAll(ctx, "onEphNodeUpdate:"+reason)
 	}
 }
 
@@ -525,7 +525,6 @@ func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, upd
 	entry := unicornjson.NewWorkerEntryJson(
 		string(ws.WorkerId),
 		ws.WorkerInfo.AddressPort,
-		ws.WorkerInfo.Capacity,
 		updateReason)
 
 	// 将WorkerState中的Assignments转换为AssignmentJson列表

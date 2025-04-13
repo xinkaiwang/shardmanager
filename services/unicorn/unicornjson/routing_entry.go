@@ -14,8 +14,8 @@ type WorkerEntryJson struct {
 
 	AddressPort string `json:"addr_port"` // for exp: "10.0.0.32:8080"
 
-	// Capacity 表示工作节点的处理容量
-	Capacity int32 `json:"capacity"`
+	// // Capacity 表示工作节点的处理容量
+	// Capacity int32 `json:"capacity"`
 
 	Assignments []*AssignmentJson `json:"assignments,omitempty"` // assignments is always sorted by shardId
 
@@ -23,11 +23,11 @@ type WorkerEntryJson struct {
 	LastUpdateReason string `json:"update_reason,omitempty"`
 }
 
-func NewWorkerEntryJson(workerId string, addressPort string, capacity int32, updateReason string) *WorkerEntryJson {
+func NewWorkerEntryJson(workerId string, addressPort string, updateReason string) *WorkerEntryJson {
 	return &WorkerEntryJson{
-		WorkerId:         workerId,
-		AddressPort:      addressPort,
-		Capacity:         capacity,
+		WorkerId:    workerId,
+		AddressPort: addressPort,
+		// Capacity:         capacity,
 		Assignments:      make([]*AssignmentJson, 0),
 		LastUpdateAtMs:   kcommon.GetWallTimeMs(),
 		LastUpdateReason: updateReason,
@@ -79,9 +79,6 @@ func (a *WorkerEntryJson) EqualsTo(b *WorkerEntryJson) bool {
 		return false
 	}
 	if a.AddressPort != b.AddressPort {
-		return false
-	}
-	if a.Capacity != b.Capacity {
 		return false
 	}
 	if len(a.Assignments) != len(b.Assignments) {

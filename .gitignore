@@ -30,3 +30,4 @@ bin/
 coverage.html
 coverage.out
 logs/
+.DS_Store

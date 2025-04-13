@@ -23,9 +23,10 @@ func NewPathManager() *PathManager {
 func (pm *PathManager) GetShardPlanPath() string {
 	return "/smg/config/shard_plan.txt"
 }
-func (pm *PathManager) GetServiceInfoPath() string {
-	return "/smg/config/service_info.json"
-}
+
+//	func (pm *PathManager) GetServiceInfoPath() string {
+//		return "/smg/config/service_info.json"
+//	}
 func (pm *PathManager) GetServiceConfigPath() string {
 	return "/smg/config/service_config.json"
 }
@@ -75,5 +76,5 @@ func (pm *PathManager) FmtPilotPath(workerFullId data.WorkerFullId) string {
 }
 
 func (pm *PathManager) FmtRoutingPath(workerFullId data.WorkerFullId) string {
-	return pm.GetRoutingPathPrefix() + workerFullId.String()
+	return pm.GetRoutingPathPrefix() + string(workerFullId.WorkerId)
 }

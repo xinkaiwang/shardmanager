@@ -32,7 +32,6 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	var accpeted []*costfunc.Proposal
 	var totalImpact costfunc.Gain
 	now := kcommon.GetWallTimeMs()
-	oldThreashold := ss.DynamicThreshold.GetCurrentThreshold(now)
 	for {
 		if ss.ProposalQueue.IsEmpty() {
 			break
@@ -78,11 +77,11 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		}
 	}
 	ss.AcceptedCount += len(accpeted)
-	newThreshold := ss.DynamicThreshold.GetCurrentThreshold(now)
-	klogging.Info(ctx).With("accpetedCount", len(accpeted)).With("queueRemain", ss.ProposalQueue.Size()).With("oldThreshold", oldThreashold).With("newThreadshold", newThreshold).With("impact", totalImpact).Log("AcceptEvent", "接受提案")
 }
 
 func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc.Proposal) {
+	threshold := ss.DynamicThreshold.GetCurrentThreshold(kcommon.GetWallTimeMs())
+	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("currentThreadshold", threshold).Log("AcceptEvent", "接受提案")
 	moveState := NewMoveStateFromProposal(ss, proposal)
 	minion := NewActionMinion(ss, moveState)
 	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson("accepted"))

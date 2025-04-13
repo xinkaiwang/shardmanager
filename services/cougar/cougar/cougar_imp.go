@@ -93,7 +93,12 @@ func (c *CougarImpl) watchPilotNode(ctx context.Context, ch <-chan etcdprov.Etcd
 		case <-ctx.Done():
 			stop = true
 			return
-		case eve := <-ch:
+		case eve, ok := <-ch:
+			if !ok {
+				klogging.Warning(ctx).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).Log("WatchPilotNodeExit", "watch pilot node exit")
+				stop = true
+				continue
+			}
 			if eve.Value == "" {
 				// delete
 				// this should not happen, pilot node should always exist unless we asking for shutdown
@@ -111,18 +116,18 @@ func (c *CougarImpl) watchPilotNode(ctx context.Context, ch <-chan etcdprov.Etcd
 }
 
 func (c *CougarImpl) ToEphNode(updateReason string) *cougarjson.WorkerEphJson {
-	ephNode := &cougarjson.WorkerEphJson{
-		WorkerId:         string(c.workerInfo.WorkerId),
-		SessionId:        string(c.workerInfo.SessionId),
-		AddressPort:      c.workerInfo.AddressPort,
-		StartTimeMs:      c.workerInfo.StartTimeMs,
-		Capacity:         c.workerInfo.Capacity,
-		MemorySizeMB:     c.workerInfo.MemorySizeMB,
-		Properties:       c.workerInfo.Properties,
-		LastUpdateAtMs:   kcommon.GetWallTimeMs(),
-		LastUpdateReason: updateReason,
-		ReqShutDown:      kcommon.BoolToInt8(c.reqShutDown),
-	}
+	ephNode := cougarjson.NewWorkerEphJson(
+		string(c.workerInfo.WorkerId),
+		string(c.workerInfo.SessionId),
+		c.workerInfo.StartTimeMs,
+		c.workerInfo.Capacity,
+	)
+	ephNode.AddressPort = c.workerInfo.AddressPort
+	ephNode.Properties = c.workerInfo.Properties
+	ephNode.StatefulType = c.workerInfo.StatefulType
+	ephNode.LastUpdateAtMs = kcommon.GetWallTimeMs()
+	ephNode.LastUpdateReason = updateReason
+	ephNode.ReqShutDown = kcommon.BoolToInt8(c.reqShutDown)
 	for shardId, shard := range c.cougarState.AllShards {
 		ephNode.Assignments = append(ephNode.Assignments, &cougarjson.AssignmentJson{
 			ShardId:      string(shardId),

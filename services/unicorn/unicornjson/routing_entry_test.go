@@ -18,7 +18,6 @@ func TestWorkerEntryJsonMarshal(t *testing.T) {
 				worker := NewWorkerEntryJson(
 					"unicorn-worker-75fffc88f9-fkbcm",
 					"10.0.0.32:8080",
-					10,
 					"update",
 				)
 				worker.Assignments = append(worker.Assignments,
@@ -29,7 +28,7 @@ func TestWorkerEntryJsonMarshal(t *testing.T) {
 				worker.LastUpdateAtMs = 1742104602847
 				return worker
 			}(),
-			expected: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","capacity":10,"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}],"update_time_ms":1742104602847,"update_reason":"update"}`,
+			expected: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}],"update_time_ms":1742104602847,"update_reason":"update"}`,
 		},
 		{
 			name: "最小字段",
@@ -37,14 +36,13 @@ func TestWorkerEntryJsonMarshal(t *testing.T) {
 				worker := NewWorkerEntryJson(
 					"unicorn-worker-75fffc88f9-xj9n2",
 					"10.0.0.33:8080",
-					20,
 					"update",
 				)
 				// 设置固定的时间戳用于测试
 				worker.LastUpdateAtMs = 1742104602847
 				return worker
 			}(),
-			expected: `{"worker_id":"unicorn-worker-75fffc88f9-xj9n2","addr_port":"10.0.0.33:8080","capacity":20,"update_time_ms":1742104602847,"update_reason":"update"}`,
+			expected: `{"worker_id":"unicorn-worker-75fffc88f9-xj9n2","addr_port":"10.0.0.33:8080","update_time_ms":1742104602847,"update_reason":"update"}`,
 		},
 	}
 
@@ -68,12 +66,11 @@ func TestWorkerEntryJsonUnmarshal(t *testing.T) {
 	}{
 		{
 			name:  "完整字段",
-			input: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","capacity":10,"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}]}`,
+			input: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}]}`,
 			want: func() *WorkerEntryJson {
 				worker := NewWorkerEntryJson(
 					"unicorn-worker-75fffc88f9-fkbcm",
 					"10.0.0.32:8080",
-					10,
 					"update",
 				)
 				worker.Assignments = append(worker.Assignments,
@@ -86,22 +83,20 @@ func TestWorkerEntryJsonUnmarshal(t *testing.T) {
 		},
 		{
 			name:  "最小字段",
-			input: `{"worker_id":"unicorn-worker-75fffc88f9-xj9n2","addr_port":"10.0.0.33:8080","capacity":20}`,
+			input: `{"worker_id":"unicorn-worker-75fffc88f9-xj9n2","addr_port":"10.0.0.33:8080"}`,
 			want: NewWorkerEntryJson(
 				"unicorn-worker-75fffc88f9-xj9n2",
 				"10.0.0.33:8080",
-				20,
 				"",
 			),
 			wantPanic: false,
 		},
 		{
 			name:  "缺少必需字段",
-			input: `{"worker_id":"unicorn-worker-75fffc88f9-r8t3v","capacity":40}`,
+			input: `{"worker_id":"unicorn-worker-75fffc88f9-r8t3v"}`,
 			want: NewWorkerEntryJson(
 				"unicorn-worker-75fffc88f9-r8t3v",
 				"",
-				40,
 				"",
 			),
 			wantPanic: false,
@@ -152,9 +147,6 @@ func TestWorkerEntryJsonUnmarshal(t *testing.T) {
 			if got.AddressPort != tt.want.AddressPort {
 				t.Errorf("AddressPort = %v, want %v", got.AddressPort, tt.want.AddressPort)
 			}
-			if got.Capacity != tt.want.Capacity {
-				t.Errorf("Capacity = %v, want %v", got.Capacity, tt.want.Capacity)
-			}
 
 			// 比较 Assignments 数组
 			if len(got.Assignments) != len(tt.want.Assignments) {
@@ -181,7 +173,6 @@ func TestWorkerEntryJsonRoundTrip(t *testing.T) {
 		worker := NewWorkerEntryJson(
 			"unicorn-worker-75fffc88f9-fkbcm",
 			"10.0.0.32:8080",
-			10,
 			"update",
 		)
 		worker.Assignments = append(worker.Assignments,
@@ -203,9 +194,6 @@ func TestWorkerEntryJsonRoundTrip(t *testing.T) {
 	}
 	if original.AddressPort != decoded.AddressPort {
 		t.Errorf("AddressPort mismatch: got %v, want %v", decoded.AddressPort, original.AddressPort)
-	}
-	if original.Capacity != decoded.Capacity {
-		t.Errorf("Capacity mismatch: got %v, want %v", decoded.Capacity, original.Capacity)
 	}
 
 	// 比较 Assignments 数组

@@ -52,14 +52,16 @@ func main() {
 			}
 		})
 	})
-	workerInfo := &cougar.WorkerInfo{
-		WorkerId:     "worker1",
-		SessionId:    "session1",
-		AddressPort:  "localhost:8080",
-		Capacity:     100,
-		MemorySizeMB: 16 * 1024,
-		StartTimeMs:  kcommon.GetWallTimeMs(),
-	}
+	workerInfo := cougar.NewWorkerInfo(
+		"worker1",
+		"session1",
+		"localhost:8080",
+		kcommon.GetWallTimeMs(),
+		100,
+		16*1024,
+		map[string]string{},
+		data.ST_MEMORY,
+	)
 	builder.WithWorkerInfo(workerInfo)
 	// 创建 Cougar
 	cougarInstance = builder.Build(ctx)

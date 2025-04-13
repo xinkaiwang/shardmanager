@@ -22,4 +22,19 @@ type WorkerInfo struct {
 	// Properties 存储工作节点的额外属性
 	// 键和值都是字符串类型
 	Properties map[string]string // gpu_ct="1", gpu_type="H100", etc.
+
+	StatefulType data.StatefulType // stateless, ST_MEMORY, ST_HARD_DRIVE
+}
+
+func NewWorkerInfo(workerId data.WorkerId, sessionId data.SessionId, addressPort string, startTimeMs int64, capacity int32, memorySizeMB int32, properties map[string]string, statefulType data.StatefulType) *WorkerInfo {
+	return &WorkerInfo{
+		WorkerId:     workerId,
+		SessionId:    sessionId,
+		AddressPort:  addressPort,
+		StartTimeMs:  startTimeMs,
+		Capacity:     capacity,
+		MemorySizeMB: memorySizeMB,
+		Properties:   properties,
+		StatefulType: statefulType,
+	}
 }
