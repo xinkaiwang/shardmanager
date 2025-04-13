@@ -32,11 +32,11 @@ func TestServiceState_Basic(t *testing.T) {
 	// 创建测试用的 FakeEtcdProvider
 	fakeEtcd := etcdprov.NewFakeEtcdProvider()
 
-	// 准备初始数据
-	serviceInfoPath := "/smg/config/service_info.json"
-	serviceInfo := smgjson.CreateTestServiceInfo(data.ST_MEMORY)
-	jsonData, _ := json.Marshal(serviceInfo)
-	fakeEtcd.Set(ctx, serviceInfoPath, string(jsonData))
+	// // 准备初始数据
+	// serviceInfoPath := "/smg/config/service_info.json"
+	// serviceInfo := smgjson.CreateTestServiceInfo(data.ST_MEMORY)
+	// jsonData, _ := json.Marshal(serviceInfo)
+	// fakeEtcd.Set(ctx, serviceInfoPath, string(jsonData))
 
 	// 设置服务配置
 	serviceConfigPath := "/smg/config/service_config.json"
@@ -53,11 +53,11 @@ func TestServiceState_Basic(t *testing.T) {
 		// defer ss.StopAndWaitForExit(ctx)
 
 		// 验证基本信息是否正确加载
-		assert.Equal(t, "test-service", ss.ServiceInfo.ServiceName)
-		assert.Equal(t, data.ST_MEMORY, ss.ServiceInfo.StatefulType)
-		assert.Equal(t, smgjson.MP_StartBeforeKill, ss.ServiceInfo.DefaultHints.MovePolicy)
-		assert.Equal(t, 10, ss.ServiceInfo.DefaultHints.MaxReplicaCount)
-		assert.Equal(t, 1, ss.ServiceInfo.DefaultHints.MinReplicaCount)
+		// assert.Equal(t, "test-service", ss.ServiceInfo.ServiceName)
+		// assert.Equal(t, data.ST_MEMORY, ss.ServiceInfo.StatefulType)
+		// assert.Equal(t, smgjson.MP_StartBeforeKill, ss.ServiceInfo.DefaultHints.MovePolicy)
+		// assert.Equal(t, 10, ss.ServiceInfo.DefaultHints.MaxReplicaCount)
+		// assert.Equal(t, 1, ss.ServiceInfo.DefaultHints.MinReplicaCount)
 
 		// 在测试结束前调用 StopAndWaitForExit
 		ss.StopAndWaitForExit(ctx)

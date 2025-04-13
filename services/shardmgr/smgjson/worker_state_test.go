@@ -18,8 +18,9 @@ func TestWorkerStateJsonMarshal(t *testing.T) {
 			input: NewWorkerStateJson(
 				data.WorkerId("worker-1"),
 				data.SessionId("session-1"),
+				data.ST_MEMORY,
 			),
-			expected: `{"worker_id":"worker-1","session_id":"session-1","assignments":{}}`,
+			expected: `{"worker_id":"worker-1","session_id":"session-1","assignments":{},"stateful_type":"state_in_mem"}`,
 		},
 		{
 			name: "带有任务的工作节点状态",
@@ -27,12 +28,13 @@ func TestWorkerStateJsonMarshal(t *testing.T) {
 				ws := NewWorkerStateJson(
 					data.WorkerId("worker-2"),
 					data.SessionId("session-2"),
+					data.ST_MEMORY,
 				)
 				ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson(data.ShardId("shard-1"), data.ReplicaIdx(0))
 				ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson(data.ShardId("shard-2"), data.ReplicaIdx(0))
 				return ws
 			}(),
-			expected: `{"worker_id":"worker-2","session_id":"session-2","assignments":{"asg-1":{"sid":"shard-1"},"asg-2":{"sid":"shard-2"}}}`,
+			expected: `{"worker_id":"worker-2","session_id":"session-2","assignments":{"asg-1":{"sid":"shard-1"},"asg-2":{"sid":"shard-2"}},"stateful_type":"state_in_mem"}`,
 		},
 	}
 
@@ -60,6 +62,7 @@ func TestWorkerStateJsonUnmarshal(t *testing.T) {
 			want: NewWorkerStateJson(
 				data.WorkerId("worker-1"),
 				data.SessionId("session-1"),
+				data.ST_MEMORY,
 			),
 			wantPanic: false,
 		},
@@ -70,6 +73,7 @@ func TestWorkerStateJsonUnmarshal(t *testing.T) {
 				ws := NewWorkerStateJson(
 					data.WorkerId("worker-2"),
 					data.SessionId("session-2"),
+					data.ST_MEMORY,
 				)
 				ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson(data.ShardId("shard-1"), data.ReplicaIdx(0))
 				ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson(data.ShardId("shard-2"), data.ReplicaIdx(0))
@@ -150,6 +154,7 @@ func TestWorkerStateJsonRoundTrip(t *testing.T) {
 		ws := NewWorkerStateJson(
 			data.WorkerId("worker-1"),
 			data.SessionId("session-1"),
+			data.ST_MEMORY,
 		)
 		ws.Assignments[data.AssignmentId("asg-1")] = NewAssignmentStateJson(data.ShardId("shard-1"), data.ReplicaIdx(0))
 		ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson(data.ShardId("shard-2"), data.ReplicaIdx(0))
@@ -186,7 +191,7 @@ func TestNewWorkerStateJson(t *testing.T) {
 	workerId := data.WorkerId("worker-1")
 	sessionId := data.SessionId("session-1")
 
-	ws := NewWorkerStateJson(workerId, sessionId)
+	ws := NewWorkerStateJson(workerId, sessionId, data.ST_MEMORY)
 
 	// 验证基本字段
 	if ws.WorkerId != workerId {

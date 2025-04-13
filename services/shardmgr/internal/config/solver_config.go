@@ -3,9 +3,9 @@ package config
 import "github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 
 type SolverConfig struct {
-	SoftSolverConfig     SoftSolverConfig
-	AssignSolverConfig   AssignSolverConfig
-	UnassignSolverConfig UnassignSolverConfig
+	SoftSolverConfig     BaseSolverConfig
+	AssignSolverConfig   BaseSolverConfig
+	UnassignSolverConfig BaseSolverConfig
 }
 
 type BaseSolverConfig struct {
@@ -14,34 +14,76 @@ type BaseSolverConfig struct {
 	ExplorePerRun int
 }
 
-type SoftSolverConfig struct {
-	BaseSolverConfig
+func NewBaseSolverConfig() BaseSolverConfig {
+	return BaseSolverConfig{
+		SolverEnabled: false,
+		RunPerMinute:  10,
+		ExplorePerRun: 10,
+	}
 }
 
-type AssignSolverConfig struct {
-	BaseSolverConfig
-}
-
-type UnassignSolverConfig struct {
-	BaseSolverConfig
-}
-
-func SolverConfigJsonToConfig(sjc *smgjson.SolverConfigJson) SolverConfig {
-	cfg := SolverConfig{
-		SoftSolverConfig:     SoftSolverConfigJsonToConfig(sjc.SoftSolverConfig),
-		AssignSolverConfig:   AssignSolverConfigJsonToConfig(sjc.AssignSolverConfig),
-		UnassignSolverConfig: UnassignSolverConfigJsonToConfig(sjc.UnassignSolverConfig),
+func (bsc *BaseSolverConfig) ToJson() *smgjson.BaseSolverConfigJson {
+	cfg := &smgjson.BaseSolverConfigJson{
+		SoftSolverEnabled: nil,
+		RunPerMinute:      nil,
+		ExplorePerRun:     nil,
+	}
+	if bsc.SolverEnabled {
+		cfg.SoftSolverEnabled = &bsc.SolverEnabled
+	}
+	if bsc.RunPerMinute > 0 {
+		intVal := int32(bsc.RunPerMinute)
+		cfg.RunPerMinute = &intVal
+	}
+	if bsc.ExplorePerRun > 0 {
+		intVal := int32(bsc.ExplorePerRun)
+		cfg.ExplorePerRun = &intVal
 	}
 	return cfg
 }
 
-func SoftSolverConfigJsonToConfig(ssc *smgjson.SoftSolverConfigJson) SoftSolverConfig {
-	cfg := SoftSolverConfig{
-		BaseSolverConfig: BaseSolverConfig{
-			SolverEnabled: false,
-			RunPerMinute:  10,
-			ExplorePerRun: 10,
-		},
+// type SoftSolverConfig struct {
+// 	BaseSolverConfig
+// }
+
+// type AssignSolverConfig struct {
+// 	BaseSolverConfig
+// }
+
+// type UnassignSolverConfig struct {
+// 	BaseSolverConfig
+// }
+
+func SolverConfigJsonToConfig(sjc *smgjson.SolverConfigJson) SolverConfig {
+	if sjc == nil {
+		return SolverConfig{
+			SoftSolverConfig:     NewBaseSolverConfig(),
+			AssignSolverConfig:   NewBaseSolverConfig(),
+			UnassignSolverConfig: NewBaseSolverConfig(),
+		}
+	}
+	cfg := SolverConfig{
+		SoftSolverConfig:     BaseSolverConfigFromJson(sjc.SoftSolverConfig),
+		AssignSolverConfig:   BaseSolverConfigFromJson(sjc.AssignSolverConfig),
+		UnassignSolverConfig: BaseSolverConfigFromJson(sjc.UnassignSolverConfig),
+	}
+	return cfg
+}
+
+func (sc *SolverConfig) ToJsonObj() *smgjson.SolverConfigJson {
+	cfg := &smgjson.SolverConfigJson{
+		SoftSolverConfig:     sc.SoftSolverConfig.ToJson(),
+		AssignSolverConfig:   sc.AssignSolverConfig.ToJson(),
+		UnassignSolverConfig: sc.UnassignSolverConfig.ToJson(),
+	}
+	return cfg
+}
+
+func BaseSolverConfigFromJson(ssc *smgjson.BaseSolverConfigJson) BaseSolverConfig {
+	cfg := BaseSolverConfig{
+		SolverEnabled: false,
+		RunPerMinute:  10,
+		ExplorePerRun: 10,
 	}
 	if ssc == nil {
 		return cfg
@@ -54,52 +96,6 @@ func SoftSolverConfigJsonToConfig(ssc *smgjson.SoftSolverConfigJson) SoftSolverC
 	}
 	if ssc.ExplorePerRun != nil {
 		cfg.ExplorePerRun = int(*ssc.ExplorePerRun)
-	}
-	return cfg
-}
-
-func AssignSolverConfigJsonToConfig(asc *smgjson.AssignSolverConfigJson) AssignSolverConfig {
-	cfg := AssignSolverConfig{
-		BaseSolverConfig: BaseSolverConfig{
-			SolverEnabled: false,
-			RunPerMinute:  10,
-			ExplorePerRun: 10,
-		},
-	}
-	if asc == nil {
-		return cfg
-	}
-	if asc.AssignSolverEnabled != nil {
-		cfg.SolverEnabled = *asc.AssignSolverEnabled
-	}
-	if asc.RunPerMinute != nil {
-		cfg.RunPerMinute = int(*asc.RunPerMinute)
-	}
-	if asc.ExplorePerRun != nil {
-		cfg.ExplorePerRun = int(*asc.ExplorePerRun)
-	}
-	return cfg
-}
-
-func UnassignSolverConfigJsonToConfig(usc *smgjson.UnassignSolverConfigJson) UnassignSolverConfig {
-	cfg := UnassignSolverConfig{
-		BaseSolverConfig: BaseSolverConfig{
-			SolverEnabled: false,
-			RunPerMinute:  10,
-			ExplorePerRun: 10,
-		},
-	}
-	if usc == nil {
-		return cfg
-	}
-	if usc.UnassignSolverEnabled != nil {
-		cfg.SolverEnabled = *usc.UnassignSolverEnabled
-	}
-	if usc.RunPerMinute != nil {
-		cfg.RunPerMinute = int(*usc.RunPerMinute)
-	}
-	if usc.ExplorePerRun != nil {
-		cfg.ExplorePerRun = int(*usc.ExplorePerRun)
 	}
 	return cfg
 }

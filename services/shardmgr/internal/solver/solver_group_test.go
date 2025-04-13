@@ -76,28 +76,28 @@ func (mcp *mockConfigProvider) GetByName(solverType SolverType) *config.BaseSolv
 
 	switch solverType {
 	case ST_SoftSolver:
-		return &mcp.config.SoftSolverConfig.BaseSolverConfig
+		return &mcp.config.SoftSolverConfig
 	case ST_AssignSolver:
-		return &mcp.config.AssignSolverConfig.BaseSolverConfig
+		return &mcp.config.AssignSolverConfig
 	case ST_UnassignSolver:
-		return &mcp.config.UnassignSolverConfig.BaseSolverConfig
+		return &mcp.config.UnassignSolverConfig
 	}
 	return nil
 }
 
-func (mcp *mockConfigProvider) GetSoftSolverConfig() *config.SoftSolverConfig {
+func (mcp *mockConfigProvider) GetSoftSolverConfig() *config.BaseSolverConfig {
 	mcp.mu.RLock()
 	defer mcp.mu.RUnlock()
 	return &mcp.config.SoftSolverConfig
 }
 
-func (mcp *mockConfigProvider) GetAssignSolverConfig() *config.AssignSolverConfig {
+func (mcp *mockConfigProvider) GetAssignSolverConfig() *config.BaseSolverConfig {
 	mcp.mu.RLock()
 	defer mcp.mu.RUnlock()
 	return &mcp.config.AssignSolverConfig
 }
 
-func (mcp *mockConfigProvider) GetUnassignSolverConfig() *config.UnassignSolverConfig {
+func (mcp *mockConfigProvider) GetUnassignSolverConfig() *config.BaseSolverConfig {
 	mcp.mu.RLock()
 	defer mcp.mu.RUnlock()
 	return &mcp.config.UnassignSolverConfig
@@ -170,7 +170,7 @@ func TestSolverGroup_Basic(t *testing.T) {
 		// 配置 solver
 		mockProvider := &mockConfigProvider{}
 		mockProvider.SetConfig(&smgjson.SolverConfigJson{
-			SoftSolverConfig: &smgjson.SoftSolverConfigJson{
+			SoftSolverConfig: &smgjson.BaseSolverConfigJson{
 				SoftSolverEnabled: func() *bool { v := true; return &v }(),
 				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
 				ExplorePerRun:     func() *int32 { v := int32(1); return &v }(),
@@ -273,18 +273,18 @@ func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 		// 配置所有 solver
 		mockProvider := &mockConfigProvider{}
 		mockProvider.SetConfig(&smgjson.SolverConfigJson{
-			SoftSolverConfig: &smgjson.SoftSolverConfigJson{
+			SoftSolverConfig: &smgjson.BaseSolverConfigJson{
 				SoftSolverEnabled: func() *bool { v := true; return &v }(),
 				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
 				ExplorePerRun:     func() *int32 { v := int32(1); return &v }(),
 			},
-			AssignSolverConfig: &smgjson.AssignSolverConfigJson{
-				AssignSolverEnabled: func() *bool { v := true; return &v }(),
-				RunPerMinute:        func() *int32 { v := int32(60); return &v }(),
+			AssignSolverConfig: &smgjson.BaseSolverConfigJson{
+				SoftSolverEnabled: func() *bool { v := true; return &v }(),
+				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
 			},
-			UnassignSolverConfig: &smgjson.UnassignSolverConfigJson{
-				UnassignSolverEnabled: func() *bool { v := true; return &v }(),
-				RunPerMinute:          func() *int32 { v := int32(60); return &v }(),
+			UnassignSolverConfig: &smgjson.BaseSolverConfigJson{
+				SoftSolverEnabled: func() *bool { v := true; return &v }(),
+				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
 			},
 		})
 
@@ -375,7 +375,7 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 			// 配置 solver 为低 QPM
 			mockProvider := &mockConfigProvider{}
 			mockProvider.SetConfig(&smgjson.SolverConfigJson{
-				SoftSolverConfig: &smgjson.SoftSolverConfigJson{
+				SoftSolverConfig: &smgjson.BaseSolverConfigJson{
 					SoftSolverEnabled: func() *bool { v := true; return &v }(),
 					RunPerMinute:      func() *int32 { v := int32(600); return &v }(), // 低 QPM
 					ExplorePerRun:     func() *int32 { v := int32(50); return &v }(),
@@ -408,7 +408,7 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 			// 配置 solver 为高 QPM
 			mockProvider := &mockConfigProvider{}
 			mockProvider.SetConfig(&smgjson.SolverConfigJson{
-				SoftSolverConfig: &smgjson.SoftSolverConfigJson{
+				SoftSolverConfig: &smgjson.BaseSolverConfigJson{
 					SoftSolverEnabled: func() *bool { v := true; return &v }(),
 					RunPerMinute:      func() *int32 { v := int32(1200); return &v }(), // 高 QPM
 					ExplorePerRun:     func() *int32 { v := int32(5); return &v }(),

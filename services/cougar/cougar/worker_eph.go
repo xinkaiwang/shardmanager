@@ -31,7 +31,8 @@ type WorkerEphNode struct {
 	LastUpdateAtMs   int64
 	LastUpdateReason string
 
-	ReqShutDown bool // if true, worker should drain and shutdown
+	ReqShutDown  bool              // if true, worker should drain and shutdown
+	StatefulType data.StatefulType // stateless, ST_MEMORY, ST_HARD_DRIVE
 }
 
 type Assignment struct {
@@ -51,6 +52,7 @@ func NewWorkerEphNode(workerId data.WorkerId, sessionId data.SessionId, startTim
 		Assignments:      make(map[data.AssignmentId]*Assignment),
 		LastUpdateAtMs:   startTimeMs,
 		LastUpdateReason: "init",
+		StatefulType:     data.ST_MEMORY,
 	}
 }
 
@@ -64,6 +66,7 @@ func (ephNode *WorkerEphNode) ToJson() *cougarjson.WorkerEphJson {
 		LastUpdateAtMs:   ephNode.LastUpdateAtMs,
 		LastUpdateReason: ephNode.LastUpdateReason,
 		ReqShutDown:      0,
+		StatefulType:     ephNode.StatefulType,
 	}
 
 	if ephNode.ReqShutDown {
@@ -81,4 +84,35 @@ func (ephNode *WorkerEphNode) ToJson() *cougarjson.WorkerEphJson {
 	}
 
 	return wej
+}
+
+func WorkerEphNodeFromJson(wej *cougarjson.WorkerEphJson) *WorkerEphNode {
+	workerId := data.WorkerId(wej.WorkerId)
+	workerSessionId := data.SessionId(wej.SessionId)
+
+	ephNode := NewWorkerEphNode(workerId, workerSessionId, wej.StartTimeMs, wej.Capacity)
+	ephNode.MemorySizeMB = wej.MemorySizeMB
+	ephNode.LastUpdateAtMs = wej.LastUpdateAtMs
+	ephNode.LastUpdateReason = wej.LastUpdateReason
+	ephNode.ReqShutDown = wej.ReqShutDown == 1
+	ephNode.StatefulType = wej.StatefulType
+
+	for _, assignment := range wej.Assignments {
+		asg := &Assignment{
+			ShardId:     assignment.ShardId,
+			ReplicaIdx:  assignment.ReplicaIdx,
+			AsginmentId: assignment.AssignmentId,
+			State:       assignment.State,
+		}
+		ephNode.Assignments[data.AssignmentId(asg.AsginmentId)] = asg
+	}
+
+	return ephNode
+}
+func (ephNode *WorkerEphNode) GetAssignments() []*Assignment {
+	assignments := make([]*Assignment, 0, len(ephNode.Assignments))
+	for _, assignment := range ephNode.Assignments {
+		assignments = append(assignments, assignment)
+	}
+	return assignments
 }

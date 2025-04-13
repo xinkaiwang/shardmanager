@@ -44,9 +44,10 @@ type WorkerState struct {
 	SignalBox                 *SignalBox
 	WorkerInfo                smgjson.WorkerInfoJson
 	WorkerReportedAssignments map[data.AssignmentId]common.Unit
+	StatefulType              data.StatefulType
 }
 
-func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId) *WorkerState {
+func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId, statefulType data.StatefulType) *WorkerState {
 	return &WorkerState{
 		WorkerId:           workerId,
 		SessionId:          sessionId,
@@ -57,17 +58,19 @@ func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId) *WorkerSta
 		SignalBox:                 NewSignalBox(),
 		WorkerInfo:                smgjson.WorkerInfoJson{},
 		WorkerReportedAssignments: make(map[data.AssignmentId]common.Unit),
+		StatefulType:              statefulType,
 	}
 }
 
 func NewWorkerStateFromJson(workerStateJson *smgjson.WorkerStateJson) *WorkerState {
 	workerState := &WorkerState{
-		WorkerId:    workerStateJson.WorkerId,
-		SessionId:   workerStateJson.SessionId,
-		State:       workerStateJson.WorkerState,
-		Assignments: make(map[data.AssignmentId]common.Unit),
-		SignalBox:   NewSignalBox(),
-		WorkerInfo:  smgjson.WorkerInfoJson{},
+		WorkerId:     workerStateJson.WorkerId,
+		SessionId:    workerStateJson.SessionId,
+		State:        workerStateJson.WorkerState,
+		Assignments:  make(map[data.AssignmentId]common.Unit),
+		SignalBox:    NewSignalBox(),
+		WorkerInfo:   smgjson.WorkerInfoJson{},
+		StatefulType: workerStateJson.StatefulType,
 	}
 	return workerState
 }
@@ -103,7 +106,7 @@ func (ws *WorkerState) GetState() data.WorkerStateEnum {
 }
 
 func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
-	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ss.ServiceInfo.StatefulType)
+	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ws.StatefulType)
 }
 
 func (ws *WorkerState) GetShutdownRequesting() bool {
@@ -137,7 +140,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 				// nothing to do
 			} else {
 				// Worker Event: Eph node created, worker becomes online
-				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId))
+				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
 				workerState.updateWorkerByEph(ctx, workerEph)
 				ss.AllWorkers[workerFullId] = workerState
 				ss.FlushWorkerState(ctx, workerFullId, workerState, "NewWorker")

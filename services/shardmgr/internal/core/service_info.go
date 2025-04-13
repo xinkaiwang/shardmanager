@@ -1,62 +1,52 @@
 package core
 
-import (
-	"context"
+// type ServiceInfo struct {
+// 	// ServiceName 是服务的名称
+// 	ServiceName string
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
-)
+// 	// StatefulType 服务的类型 (stateless, ST_MEMORY, ST_HARD_DRIVE)
+// 	StatefulType data.StatefulType
 
-type ServiceInfo struct {
-	// ServiceName 是服务的名称
-	ServiceName string
+// 	DefaultHints config.ShardConfig
+// }
 
-	// StatefulType 服务的类型 (stateless, ST_MEMORY, ST_HARD_DRIVE)
-	StatefulType data.StatefulType
+// func NewServiceInfo(serviceName string) *ServiceInfo {
+// 	return &ServiceInfo{
+// 		ServiceName: serviceName,
+// 	}
+// }
 
-	DefaultHints config.ShardConfig
-}
-
-func NewServiceInfo(serviceName string) *ServiceInfo {
-	return &ServiceInfo{
-		ServiceName: serviceName,
-	}
-}
-
-func (ss *ServiceState) LoadServiceInfo(ctx context.Context) *ServiceInfo {
-	path := ss.PathManager.GetServiceInfoPath()
-	node := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path)
-	if node.Value == "" {
-		ke := kerror.Create("ServiceInfoNotFound", "service info not found path="+path)
-		panic(ke)
-	}
-	siObj := smgjson.ParseServiceInfoJson(node.Value)
-	si := NewServiceInfo(siObj.ServiceName)
-	// ServiceType (default softStateful)
-	if siObj.StatefulType != nil {
-		si.StatefulType = *siObj.StatefulType
-	} else {
-		si.StatefulType = data.ST_MEMORY
-	}
-	// MoveType (default 先启后杀)
-	if siObj.MoveType != nil {
-		si.DefaultHints.MovePolicy = *siObj.MoveType
-	} else {
-		si.DefaultHints.MovePolicy = smgjson.MP_StartBeforeKill
-	}
-	// MaxResplicaCount/MinResplicaCount (default 10/1)
-	if siObj.MaxResplicaCount != nil {
-		si.DefaultHints.MaxReplicaCount = int(*siObj.MaxResplicaCount)
-	} else {
-		si.DefaultHints.MaxReplicaCount = 10
-	}
-	if siObj.MinResplicaCount != nil {
-		si.DefaultHints.MinReplicaCount = int(*siObj.MinResplicaCount)
-	} else {
-		si.DefaultHints.MinReplicaCount = 1
-	}
-	return si
-}
+// func (ss *ServiceState) LoadServiceInfo(ctx context.Context) *ServiceInfo {
+// 	path := ss.PathManager.GetServiceInfoPath()
+// 	node := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path)
+// 	if node.Value == "" {
+// 		ke := kerror.Create("ServiceInfoNotFound", "service info not found path="+path)
+// 		panic(ke)
+// 	}
+// 	siObj := smgjson.ParseServiceInfoJson(node.Value)
+// 	si := NewServiceInfo(siObj.ServiceName)
+// 	// ServiceType (default softStateful)
+// 	if siObj.StatefulType != nil {
+// 		si.StatefulType = *siObj.StatefulType
+// 	} else {
+// 		si.StatefulType = data.ST_MEMORY
+// 	}
+// 	// MoveType (default 先启后杀)
+// 	if siObj.MoveType != nil {
+// 		si.DefaultHints.MovePolicy = *siObj.MoveType
+// 	} else {
+// 		si.DefaultHints.MovePolicy = smgjson.MP_StartBeforeKill
+// 	}
+// 	// MaxResplicaCount/MinResplicaCount (default 10/1)
+// 	if siObj.MaxResplicaCount != nil {
+// 		si.DefaultHints.MaxReplicaCount = int(*siObj.MaxResplicaCount)
+// 	} else {
+// 		si.DefaultHints.MaxReplicaCount = 10
+// 	}
+// 	if siObj.MinResplicaCount != nil {
+// 		si.DefaultHints.MinReplicaCount = int(*siObj.MinResplicaCount)
+// 	} else {
+// 		si.DefaultHints.MinReplicaCount = 1
+// 	}
+// 	return si
+// }

@@ -31,3 +31,23 @@ func CostFuncConfigJsonToConfig(cfc *smgjson.CostFuncConfigJson) CostfuncConfig 
 	}
 	return cfg
 }
+
+func (cfc *CostfuncConfig) ToJsonObj() *smgjson.CostFuncConfigJson {
+	cfg := &smgjson.CostFuncConfigJson{
+		ShardCountCostEnable: nil,
+		ShardCountCostNorm:   nil,
+		WorkerMaxAssignments: nil,
+	}
+	if cfc.ShardCountCostEnable {
+		cfg.ShardCountCostEnable = &cfc.ShardCountCostEnable
+	}
+	if cfc.ShardCountCostNorm > 0 {
+		intVal := int32(cfc.ShardCountCostNorm)
+		cfg.ShardCountCostNorm = &intVal
+	}
+	if cfc.WorkerMaxAssignments > 0 {
+		intVal := int32(cfc.WorkerMaxAssignments)
+		cfg.WorkerMaxAssignments = &intVal
+	}
+	return cfg
+}

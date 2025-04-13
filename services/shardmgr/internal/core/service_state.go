@@ -15,10 +15,10 @@ import (
 
 // ServiceState implements the CriticalResource interface
 type ServiceState struct {
-	Name            string
-	runloop         *krunloop.RunLoop[*ServiceState]
-	PathManager     *config.PathManager
-	ServiceInfo     *ServiceInfo
+	Name        string
+	runloop     *krunloop.RunLoop[*ServiceState]
+	PathManager *config.PathManager
+	// ServiceInfo     *ServiceInfo
 	ServiceConfig   *config.ServiceConfig
 	storeProvider   shadow.StoreProvider
 	pilotProvider   shadow.PilotProvider

@@ -42,33 +42,30 @@ type CostFuncConfigJson struct {
 }
 
 type SolverConfigJson struct {
-	SoftSolverConfig     *SoftSolverConfigJson     `json:"soft_solver_config"`
-	AssignSolverConfig   *AssignSolverConfigJson   `json:"assign_solver_config"`
-	UnassignSolverConfig *UnassignSolverConfigJson `json:"unassign_solver_config"`
+	SoftSolverConfig     *BaseSolverConfigJson `json:"soft_solver_config"`
+	AssignSolverConfig   *BaseSolverConfigJson `json:"assign_solver_config"`
+	UnassignSolverConfig *BaseSolverConfigJson `json:"unassign_solver_config"`
 }
 
-type SoftSolverConfigJson struct {
+type BaseSolverConfigJson struct {
 	SoftSolverEnabled *bool  `json:"soft_solver_enabled"`
 	RunPerMinute      *int32 `json:"run_per_minute"`
 	ExplorePerRun     *int32 `json:"explore_per_run"`
-}
-
-type AssignSolverConfigJson struct {
-	AssignSolverEnabled *bool  `json:"assign_solver_enabled"`
-	RunPerMinute        *int32 `json:"run_per_minute"`
-	ExplorePerRun       *int32 `json:"explore_per_run"`
-}
-
-type UnassignSolverConfigJson struct {
-	UnassignSolverEnabled *bool  `json:"unassign_solver_enabled"`
-	RunPerMinute          *int32 `json:"run_per_minute"`
-	ExplorePerRun         *int32 `json:"explore_per_run"`
 }
 
 func (sc *ServiceConfigJson) ToJson() string {
 	data, err := json.Marshal(sc)
 	if err != nil {
 		ke := kerror.Wrap(err, "MarshalError", "failed to marshal ServiceConfigJson", false)
+		panic(ke)
+	}
+	return string(data)
+}
+
+func (sc *SolverConfigJson) ToJson() string {
+	data, err := json.Marshal(sc)
+	if err != nil {
+		ke := kerror.Wrap(err, "MarshalError", "failed to marshal SolverConfigJson", false)
 		panic(ke)
 	}
 	return string(data)

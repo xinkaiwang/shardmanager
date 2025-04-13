@@ -59,20 +59,20 @@ func CreateTestServiceConfig() *ServiceConfigJson {
 			WorkerMaxAssignments: NewInt32Pointer(100),
 		},
 		SolverConfig: &SolverConfigJson{
-			SoftSolverConfig: &SoftSolverConfigJson{
+			SoftSolverConfig: &BaseSolverConfigJson{
 				SoftSolverEnabled: NewBoolPointer(true),
 				RunPerMinute:      NewInt32Pointer(30),
 				ExplorePerRun:     NewInt32Pointer(100),
 			},
-			AssignSolverConfig: &AssignSolverConfigJson{
-				AssignSolverEnabled: NewBoolPointer(true),
-				RunPerMinute:        NewInt32Pointer(30),
-				ExplorePerRun:       NewInt32Pointer(100),
+			AssignSolverConfig: &BaseSolverConfigJson{
+				SoftSolverEnabled: NewBoolPointer(true),
+				RunPerMinute:      NewInt32Pointer(30),
+				ExplorePerRun:     NewInt32Pointer(100),
 			},
-			UnassignSolverConfig: &UnassignSolverConfigJson{
-				UnassignSolverEnabled: NewBoolPointer(false),
-				RunPerMinute:          NewInt32Pointer(30),
-				ExplorePerRun:         NewInt32Pointer(100),
+			UnassignSolverConfig: &BaseSolverConfigJson{
+				SoftSolverEnabled: NewBoolPointer(false),
+				RunPerMinute:      NewInt32Pointer(30),
+				ExplorePerRun:     NewInt32Pointer(100),
 			},
 		},
 	}

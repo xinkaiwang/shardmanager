@@ -28,7 +28,7 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 		// 创建测试用 WorkerState
 		workerId := data.WorkerId("worker-1")
 		sessionId := data.SessionId("session-1")
-		workerState := NewWorkerState(workerId, sessionId)
+		workerState := NewWorkerState(workerId, sessionId, data.ST_MEMORY)
 
 		// 设置通知原因
 		updateReason := "测试更新"

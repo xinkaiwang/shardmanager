@@ -16,7 +16,7 @@ func ParseServiceConfigFromJson(data string) *ServiceConfig {
 			panic(ke)
 		}
 	}
-	return ServiceConfigJsonToServiceConfig(si)
+	return ServiceConfigFromJson(si)
 }
 
 type ServiceConfigProvider interface {
@@ -58,7 +58,7 @@ type SystemLimitConfig struct {
 	MaxHatCountLimit int32
 }
 
-func ServiceConfigJsonToServiceConfig(si *smgjson.ServiceConfigJson) *ServiceConfig {
+func ServiceConfigFromJson(si *smgjson.ServiceConfigJson) *ServiceConfig {
 	return &ServiceConfig{
 		ShardConfig:            ShardConfigJsonToConfig(si.ShardConfig),
 		WorkerConfig:           WorkerConfigJsonToConfig(si.WorkerConfig),
@@ -66,6 +66,17 @@ func ServiceConfigJsonToServiceConfig(si *smgjson.ServiceConfigJson) *ServiceCon
 		CostFuncCfg:            CostFuncConfigJsonToConfig(si.CostFuncCfg),
 		SolverConfig:           SolverConfigJsonToConfig(si.SolverConfig),
 		DynamicThresholdConfig: DynamicThresholdConfigJsonToConfig(si.DynamicThresholdConfig),
+	}
+}
+
+func (cfg *ServiceConfig) ToJsonObj() *smgjson.ServiceConfigJson {
+	return &smgjson.ServiceConfigJson{
+		ShardConfig:            cfg.ShardConfig.ToJsonObj(),
+		WorkerConfig:           cfg.WorkerConfig.ToJsonObj(),
+		SystemLimit:            cfg.SystemLimit.ToJsonObj(),
+		CostFuncCfg:            cfg.CostFuncCfg.ToJsonObj(),
+		SolverConfig:           cfg.SolverConfig.ToJsonObj(),
+		DynamicThresholdConfig: cfg.DynamicThresholdConfig.ToJsonObj(),
 	}
 }
 
@@ -160,31 +171,31 @@ func DynamicThresholdConfigJsonToConfig(sc *smgjson.DynamicThresholdConfigJson) 
 
 func (cfg *ServiceConfig) ToServiceConfigJson() *smgjson.ServiceConfigJson {
 	return &smgjson.ServiceConfigJson{
-		ShardConfig: cfg.ShardConfig.ToShardConfigJson(),
-		SystemLimit: cfg.SystemLimit.ToSystemLimitConfigJson(),
+		ShardConfig: cfg.ShardConfig.ToJsonObj(),
+		SystemLimit: cfg.SystemLimit.ToJsonObj(),
 	}
 }
-func (cfg *ShardConfig) ToShardConfigJson() *smgjson.ShardConfigJson {
+func (cfg *ShardConfig) ToJsonObj() *smgjson.ShardConfigJson {
 	return &smgjson.ShardConfigJson{
 		MoveType:        &cfg.MovePolicy,
 		MaxReplicaCount: func() *int32 { i := int32(cfg.MaxReplicaCount); return &i }(),
 		MinReplicaCount: func() *int32 { i := int32(cfg.MinReplicaCount); return &i }(),
 	}
 }
-func (cfg *WorkerConfig) ToWorkerConfigJson() *smgjson.WorkerConfigJson {
+func (cfg *WorkerConfig) ToJsonObj() *smgjson.WorkerConfigJson {
 	return &smgjson.WorkerConfigJson{
 		MaxAssignmentCountPerWorker: &cfg.MaxAssignmentCountPerWorker,
 		OfflineGracePeriodSec:       &cfg.OfflineGracePeriodSec,
 	}
 }
-func (cfg *SystemLimitConfig) ToSystemLimitConfigJson() *smgjson.SystemLimitConfigJson {
+func (cfg *SystemLimitConfig) ToJsonObj() *smgjson.SystemLimitConfigJson {
 	return &smgjson.SystemLimitConfigJson{
 		MaxShardsCountLimit:     &cfg.MaxShardsCountLimit,
 		MaxReplicaCountLimit:    &cfg.MaxReplicaCountLimit,
 		MaxAssignmentCountLimit: &cfg.MaxAssignmentCountLimit,
 	}
 }
-func (cfg *DynamicThresholdConfig) ToDynamicThresholdConfigJson() *smgjson.DynamicThresholdConfigJson {
+func (cfg *DynamicThresholdConfig) ToJsonObj() *smgjson.DynamicThresholdConfigJson {
 	return &smgjson.DynamicThresholdConfigJson{
 		DynamicThresholdMax: &cfg.DynamicThresholdMax,
 		DynamicThresholdMin: &cfg.DynamicThresholdMin,

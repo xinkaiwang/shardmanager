@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/services/unicorn/data"
 )
 
 // etcd path is "/smg/eph/{worker_id}:{session_id}"
@@ -34,16 +35,19 @@ type WorkerEphJson struct {
 	LastUpdateReason string `json:"update_reason,omitempty"`
 
 	ReqShutDown int8 `json:"req_shutdown,omitempty"` // if true, worker should drain and shutdown
+
+	StatefulType data.StatefulType `json:"stateful_type,omitempty"` // stateless, ST_MEMORY, ST_HARD_DRIVE
 }
 
 func NewWorkerEphJson(workerId string, sessionId string, startTimeMs int64, capacity int32) *WorkerEphJson {
 	return &WorkerEphJson{
-		WorkerId:    workerId,
-		SessionId:   sessionId,
-		StartTimeMs: startTimeMs,
-		Capacity:    capacity,
-		Properties:  make(map[string]string),
-		Assignments: make([]*AssignmentJson, 0),
+		WorkerId:     workerId,
+		SessionId:    sessionId,
+		StartTimeMs:  startTimeMs,
+		Capacity:     capacity,
+		Properties:   make(map[string]string),
+		Assignments:  make([]*AssignmentJson, 0),
+		StatefulType: data.ST_MEMORY,
 	}
 }
 

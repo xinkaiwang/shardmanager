@@ -45,16 +45,16 @@ func RunWithSolverConfigProvider(solverConfigProvider SolverConfigProvider, f fu
 type SolverConfigProvider interface {
 	SetConfig(solverConfig *smgjson.SolverConfigJson)
 	GetByName(solverName SolverType) *config.BaseSolverConfig
-	GetSoftSolverConfig() *config.SoftSolverConfig
-	GetAssignSolverConfig() *config.AssignSolverConfig
-	GetUnassignSolverConfig() *config.UnassignSolverConfig
+	GetSoftSolverConfig() *config.BaseSolverConfig
+	GetAssignSolverConfig() *config.BaseSolverConfig
+	GetUnassignSolverConfig() *config.BaseSolverConfig
 }
 
 type DefaultSolverConfigProvider struct {
 	mu                   sync.RWMutex // 保护对配置的访问
-	SoftSolverConfig     config.SoftSolverConfig
-	AssignSolverConfig   config.AssignSolverConfig
-	UnassignSolverConfig config.UnassignSolverConfig
+	SoftSolverConfig     config.BaseSolverConfig
+	AssignSolverConfig   config.BaseSolverConfig
+	UnassignSolverConfig config.BaseSolverConfig
 }
 
 func NewDefaultSolverConfigProvider() *DefaultSolverConfigProvider {
@@ -69,28 +69,28 @@ func (dscp *DefaultSolverConfigProvider) GetByName(solverName SolverType) *confi
 
 	switch solverName {
 	case ST_SoftSolver:
-		return &dscp.SoftSolverConfig.BaseSolverConfig
+		return &dscp.SoftSolverConfig
 	case ST_AssignSolver:
-		return &dscp.AssignSolverConfig.BaseSolverConfig
+		return &dscp.AssignSolverConfig
 	case ST_UnassignSolver:
-		return &dscp.UnassignSolverConfig.BaseSolverConfig
+		return &dscp.UnassignSolverConfig
 	}
 	return nil
 }
 
-func (dscp *DefaultSolverConfigProvider) GetSoftSolverConfig() *config.SoftSolverConfig {
+func (dscp *DefaultSolverConfigProvider) GetSoftSolverConfig() *config.BaseSolverConfig {
 	dscp.mu.RLock()
 	defer dscp.mu.RUnlock()
 	return &dscp.SoftSolverConfig
 }
 
-func (dscp *DefaultSolverConfigProvider) GetAssignSolverConfig() *config.AssignSolverConfig {
+func (dscp *DefaultSolverConfigProvider) GetAssignSolverConfig() *config.BaseSolverConfig {
 	dscp.mu.RLock()
 	defer dscp.mu.RUnlock()
 	return &dscp.AssignSolverConfig
 }
 
-func (dscp *DefaultSolverConfigProvider) GetUnassignSolverConfig() *config.UnassignSolverConfig {
+func (dscp *DefaultSolverConfigProvider) GetUnassignSolverConfig() *config.BaseSolverConfig {
 	dscp.mu.RLock()
 	defer dscp.mu.RUnlock()
 	return &dscp.UnassignSolverConfig
@@ -100,7 +100,7 @@ func (dscp *DefaultSolverConfigProvider) SetConfig(solverConfig *smgjson.SolverC
 	dscp.mu.Lock()
 	defer dscp.mu.Unlock()
 
-	dscp.SoftSolverConfig = config.SoftSolverConfigJsonToConfig(solverConfig.SoftSolverConfig)
-	dscp.AssignSolverConfig = config.AssignSolverConfigJsonToConfig(solverConfig.AssignSolverConfig)
-	dscp.UnassignSolverConfig = config.UnassignSolverConfigJsonToConfig(solverConfig.UnassignSolverConfig)
+	dscp.SoftSolverConfig = config.BaseSolverConfigFromJson(solverConfig.SoftSolverConfig)
+	dscp.AssignSolverConfig = config.BaseSolverConfigFromJson(solverConfig.AssignSolverConfig)
+	dscp.UnassignSolverConfig = config.BaseSolverConfigFromJson(solverConfig.UnassignSolverConfig)
 }
