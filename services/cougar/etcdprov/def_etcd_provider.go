@@ -1,4 +1,4 @@
-package etcd
+package etcdprov
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -20,12 +21,19 @@ type DefEtcdProvider struct {
 	client        *clientv3.Client
 }
 
-func NewDefEtcdProvider() *DefEtcdProvider {
+// NewDefEtcdProvider creates a new EtcdProvider implementation.
+// It attempts to connect to etcd and panics if the initial connection fails.
+func NewDefEtcdProvider(ctx context.Context) *DefEtcdProvider {
 	// 从环境变量获取配置
 	endpoints := getEndpointsFromEnv()
 	dialTimeoutMs := getDialTimeoutMsFromEnv()
 
+	klogging.Info(ctx).With("endpoints", strings.Join(endpoints, ",")).
+		With("dialTimeoutMs", dialTimeoutMs).
+		Log("DefEtcdProvider", "Creating etcd provider")
 	// 创建 etcd 客户端
+	// Note: clientv3.New doesn't take a context for the initial dial itself,
+	// but DialTimeout controls the connection attempt duration.
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: time.Duration(dialTimeoutMs) * time.Millisecond,
@@ -35,35 +43,54 @@ func NewDefEtcdProvider() *DefEtcdProvider {
 			WithErrorCode(kerror.EC_INTERNAL_ERROR).
 			With("endpoints", strings.Join(endpoints, ",")).
 			With("error", err.Error())
+		// Panic if connection fails
 		panic(ke)
 	}
+	klogging.Info(ctx).With("endpoints", strings.Join(endpoints, ",")).
+		Log("DefEtcdProvider", "Etcd client created successfully")
+	// 创建 etcd 客户端成功，返回 DefEtcdProvider 实例
 	return &DefEtcdProvider{
 		etcdEndpoints: endpoints,
 		client:        cli,
 	}
 }
 
+// CreateEtcdSession creates a new EtcdSession.
 func (p *DefEtcdProvider) CreateEtcdSession(ctx context.Context) EtcdSession {
 	return NewDefEtcdSession(p, ctx)
 }
 
 // DefEtcdSession implements EtcdSession
-func NewDefEtcdSession(parent *DefEtcdProvider, ctx context.Context) *DefEtcdSession {
-	lease, err := parent.client.Grant(ctx, int64(etcdLeaseTimeoutMs/1000))
-	if err != nil {
-		ke := kerror.Wrap(err, "EtcdGrantError", "failed to grant lease", false).With("endpoints", strings.Join(parent.etcdEndpoints, ","))
-		panic(ke) // Keep panic here, as session creation failed fundamentally
-	}
+// Panics if lease cannot be granted within etcdTimeoutMs.
+func NewDefEtcdSession(parent *DefEtcdProvider, ctx context.Context) *DefEtcdSession { // ctx here is mainly for logging in this func
+	klogging.Info(ctx).With("etcdLeaseTimeoutMs", etcdLeaseTimeoutMs).Log("DefEtcdSession", "Creating new etcd session")
 
+	// Create a context with timeout specifically for the Grant operation
+	grantCtx, cancel := context.WithTimeout(ctx, time.Duration(etcdTimeoutMs)*time.Millisecond)
+	defer cancel() // Ensure context is cancelled even if Grant panics or returns early
+
+	startTime := kcommon.GetWallTimeMs()
+	lease, err := parent.client.Grant(grantCtx, int64(etcdLeaseTimeoutMs/1000))
+	elapsedMs := kcommon.GetWallTimeMs() - startTime
+	if err != nil {
+		ke := kerror.Wrap(err, "EtcdGrantError", "failed to grant lease", false).
+			With("endpoints", strings.Join(parent.etcdEndpoints, ",")).
+			With("elapsedMs", elapsedMs).
+			With("timeoutMs", etcdTimeoutMs) // Add timeout info to error
+		// Panic if lease grant fails (or times out)
+		panic(ke)
+	}
+	klogging.Info(ctx).With("leaseId", lease.ID).With("elapsedMs", elapsedMs).Log("DefEtcdSession", "Lease granted successfully")
 	sessionId := strconv.FormatInt(int64(lease.ID), 10)
 	// Create a context for keepalive that can be cancelled independently
 	keepAliveCtx, keepAliveCancel := context.WithCancel(context.Background())
 
 	session := &DefEtcdSession{
 		sessionId:       sessionId,
-		state:           ESS_Connecting, // Start as connecting
+		state:           ESS_Connected, // lease already connected
 		parent:          parent,
 		lease:           lease.ID,
+		chClosed:        make(chan struct{}),
 		keepAliveCancel: keepAliveCancel,
 	}
 
@@ -82,6 +109,9 @@ type DefEtcdSession struct {
 
 	mu              sync.RWMutex // Mutex to protect state and listener
 	keepAliveCancel context.CancelFunc
+
+	closeOnce sync.Once // To ensure Close actions run only once
+	chClosed  chan struct{}
 }
 
 func (session *DefEtcdSession) keepalive(ctx context.Context) {
@@ -133,6 +163,12 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 	revokeCtx, cancel := context.WithTimeout(context.Background(), time.Duration(etcdTimeoutMs)*time.Millisecond)
 	defer cancel()
 	_, _ = session.parent.client.Revoke(revokeCtx, session.lease)
+
+	// Ensure the closed channel is signaled when keepalive exits
+	session.closeOnce.Do(func() {
+		close(session.chClosed)
+		klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Closed channel signaled by keepalive exit")
+	})
 }
 
 func (session *DefEtcdSession) setState(state EtcdSessionState, message string) {
@@ -215,11 +251,18 @@ func (session *DefEtcdSession) SetStateListener(listener EtcdStateListener) {
 
 // Close implements EtcdSession.
 func (session *DefEtcdSession) Close() {
-	klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Closing session")
-	if session.keepAliveCancel != nil {
-		session.keepAliveCancel() // This will stop the keepalive goroutine
-	}
-	// Note: Revoke is attempted inside the keepalive loop upon exit.
+	klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Closing session explicitly")
+
+	// Use sync.Once to ensure cleanup happens only once
+	session.closeOnce.Do(func() {
+		klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Running Close actions")
+		// Cancel the keepalive context first
+		if session.keepAliveCancel != nil {
+			session.keepAliveCancel()
+		}
+		// Signal watchers to close by closing the channel
+		close(session.chClosed)
+	})
 }
 
 func (session *DefEtcdSession) WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan EtcdKvItem {
@@ -248,29 +291,46 @@ func (session *DefEtcdSession) WatchByPrefix(ctx context.Context, pathPrefix str
 		}
 
 		rch := session.parent.client.Watch(watchCtx, pathPrefix, clientv3.WithPrefix(), clientv3.WithRev(watchStartRev))
-		for wr := range rch {
-			if wr.Err() != nil {
-				klogging.Error(watchCtx).WithError(wr.Err()).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatchError", "Watch channel received an error")
-				// Optionally, notify listener or attempt to restart watch based on error type
-				break // Exit the loop on watch error
-			}
-			for _, ev := range wr.Events {
-				if ev.Type == clientv3.EventTypeDelete {
-					ch <- EtcdKvItem{
-						Key:         string(ev.Kv.Key),
-						Value:       "",
-						ModRevision: EtcdRevision(ev.Kv.ModRevision),
-					}
-				} else {
-					ch <- EtcdKvItem{
-						Key:         string(ev.Kv.Key),
-						Value:       string(ev.Kv.Value),
-						ModRevision: EtcdRevision(ev.Kv.ModRevision),
+		stop := false
+		var stopReason string
+		for !stop {
+			select {
+			case <-ctx.Done():
+				klogging.Info(watchCtx).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatch", "Watch context cancelled")
+				stop = true
+				stopReason = "watch context cancelled"
+				continue
+			case <-session.chClosed:
+				klogging.Info(watchCtx).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatch", "Session closed, exiting watch loop")
+				stop = true
+				stopReason = "session closed"
+				continue
+			case wr := <-rch:
+				if wr.Err() != nil {
+					klogging.Error(watchCtx).WithError(wr.Err()).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatchError", "Watch channel received an error")
+					// Optionally, notify listener or attempt to restart watch based on error type
+					stop = true // Exit the loop on watch error
+					stopReason = "watch error"
+					continue
+				}
+				for _, ev := range wr.Events {
+					if ev.Type == clientv3.EventTypeDelete {
+						ch <- EtcdKvItem{
+							Key:         string(ev.Kv.Key),
+							Value:       "",
+							ModRevision: EtcdRevision(ev.Kv.ModRevision),
+						}
+					} else {
+						ch <- EtcdKvItem{
+							Key:         string(ev.Kv.Key),
+							Value:       string(ev.Kv.Value),
+							ModRevision: EtcdRevision(ev.Kv.ModRevision),
+						}
 					}
 				}
 			}
 		}
-		klogging.Info(watchCtx).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatch", "Watch loop exited")
+		klogging.Info(watchCtx).With("prefix", pathPrefix).With("sessionId", session.sessionId).With("stopReason", stopReason).Log("EtcdWatch", "Watch loop exited")
 	}()
 	return ch
 }

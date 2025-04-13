@@ -72,10 +72,10 @@ func (ephNode *WorkerEphNode) ToJson() *cougarjson.WorkerEphJson {
 
 	for _, assignment := range ephNode.Assignments {
 		asg := &cougarjson.AssignmentJson{
-			ShardId:     assignment.ShardId,
-			ReplicaIdx:  assignment.ReplicaIdx,
-			AsginmentId: assignment.AsginmentId,
-			State:       assignment.State,
+			ShardId:      assignment.ShardId,
+			ReplicaIdx:   assignment.ReplicaIdx,
+			AssignmentId: assignment.AsginmentId,
+			State:        assignment.State,
 		}
 		wej.Assignments = append(wej.Assignments, asg)
 	}

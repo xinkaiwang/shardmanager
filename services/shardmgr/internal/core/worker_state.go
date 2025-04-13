@@ -282,7 +282,7 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 	updateCount := 0
 	for _, assignmentJson := range workerEph.Assignments {
 		dirty := false
-		assignmentId := data.AssignmentId(assignmentJson.AsginmentId)
+		assignmentId := data.AssignmentId(assignmentJson.AssignmentId)
 		assignState, ok := dict[assignmentId]
 		if !ok {
 			continue
@@ -401,7 +401,7 @@ func (ws *WorkerState) updateWorkerByEph(ctx context.Context, workerEph *cougarj
 	// Assignments
 	newReportedAssign := make(map[data.AssignmentId]common.Unit)
 	for _, assignment := range workerEph.Assignments {
-		newReportedAssign[data.AssignmentId(assignment.AsginmentId)] = common.Unit{}
+		newReportedAssign[data.AssignmentId(assignment.AssignmentId)] = common.Unit{}
 	}
 	if !assignMapEquals(ws.WorkerReportedAssignments, newReportedAssign) {
 		ws.WorkerReportedAssignments = newReportedAssign

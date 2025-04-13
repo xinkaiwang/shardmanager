@@ -223,8 +223,8 @@ func TestWorkerEphJsonUnmarshal(t *testing.T) {
 				if got.Assignments[i].ReplicaIdx != a.ReplicaIdx {
 					t.Errorf("Assignments[%d].ReplicaIdx = %v, want %v", i, got.Assignments[i].ReplicaIdx, a.ReplicaIdx)
 				}
-				if got.Assignments[i].AsginmentId != a.AsginmentId {
-					t.Errorf("Assignments[%d].AsginmentId = %v, want %v", i, got.Assignments[i].AsginmentId, a.AsginmentId)
+				if got.Assignments[i].AssignmentId != a.AssignmentId {
+					t.Errorf("Assignments[%d].AsginmentId = %v, want %v", i, got.Assignments[i].AssignmentId, a.AssignmentId)
 				}
 				if got.Assignments[i].State != a.State {
 					t.Errorf("Assignments[%d].State = %v, want %v", i, got.Assignments[i].State, a.State)
@@ -304,8 +304,8 @@ func TestWorkerEphJsonRoundTrip(t *testing.T) {
 		if decoded.Assignments[i].ReplicaIdx != a.ReplicaIdx {
 			t.Errorf("Assignments[%d].ReplicaIdx mismatch: got %v, want %v", i, decoded.Assignments[i].ReplicaIdx, a.ReplicaIdx)
 		}
-		if decoded.Assignments[i].AsginmentId != a.AsginmentId {
-			t.Errorf("Assignments[%d].AsginmentId mismatch: got %v, want %v", i, decoded.Assignments[i].AsginmentId, a.AsginmentId)
+		if decoded.Assignments[i].AssignmentId != a.AssignmentId {
+			t.Errorf("Assignments[%d].AsginmentId mismatch: got %v, want %v", i, decoded.Assignments[i].AssignmentId, a.AssignmentId)
 		}
 		if decoded.Assignments[i].State != a.State {
 			t.Errorf("Assignments[%d].State mismatch: got %v, want %v", i, decoded.Assignments[i].State, a.State)
@@ -415,8 +415,8 @@ func TestNewAssignmentJson(t *testing.T) {
 			if assignment.ReplicaIdx != tt.replicaIdx {
 				t.Errorf("ReplicaIdx = %v, want %v", assignment.ReplicaIdx, tt.replicaIdx)
 			}
-			if assignment.AsginmentId != tt.assignmentId {
-				t.Errorf("AsginmentId = %v, want %v", assignment.AsginmentId, tt.assignmentId)
+			if assignment.AssignmentId != tt.assignmentId {
+				t.Errorf("AsginmentId = %v, want %v", assignment.AssignmentId, tt.assignmentId)
 			}
 			if assignment.State != tt.state {
 				t.Errorf("State = %v, want %v", assignment.State, tt.state)

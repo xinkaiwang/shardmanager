@@ -97,18 +97,18 @@ func ParseCougarAssignmentStateFromString(state string) CougarAssignmentState {
 
 // Update the ReplicaJson struct to use the custom State type
 type AssignmentJson struct {
-	ShardId     string                `json:"shd"`
-	ReplicaIdx  int                   `json:"idx,omitempty"`
-	AsginmentId string                `json:"asg"`
-	State       CougarAssignmentState `json:"sts"`
+	ShardId      string                `json:"shd"`
+	ReplicaIdx   int                   `json:"idx,omitempty"`
+	AssignmentId string                `json:"asg"`
+	State        CougarAssignmentState `json:"sts"`
 }
 
 func NewAssignmentJson(shardId string, replicaIdx int, assignmentId string, state CougarAssignmentState) *AssignmentJson {
 	return &AssignmentJson{
-		ShardId:     shardId,
-		ReplicaIdx:  replicaIdx,
-		AsginmentId: assignmentId,
-		State:       state,
+		ShardId:      shardId,
+		ReplicaIdx:   replicaIdx,
+		AssignmentId: assignmentId,
+		State:        state,
 	}
 }
 

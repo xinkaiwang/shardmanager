@@ -1,4 +1,4 @@
-package etcd
+package etcdprov
 
 import (
 	"context"
@@ -9,9 +9,18 @@ import (
 )
 
 var (
-	etcdTimeoutMs      = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 5*1000)
+	etcdTimeoutMs      = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 3*1000)
 	etcdLeaseTimeoutMs = kcommon.GetEnvInt("ETCD_LEASE_TIMEOUT_MS", 15*1000)
+
+	currentEtcdProvider EtcdProvider
 )
+
+func GetCurrentEtcdProvider(ctx context.Context) EtcdProvider {
+	if currentEtcdProvider == nil {
+		currentEtcdProvider = NewDefEtcdProvider(ctx)
+	}
+	return currentEtcdProvider
+}
 
 type EtcdSessionState string
 
@@ -41,6 +50,7 @@ type EtcdSession interface {
 type EtcdProvider interface {
 	// CreateEtcdSession 创建一个新的 EtcdSession。
 	// 调用者负责在不再需要时调用 Session 的 Close 方法。
+	// 如果初始连接或租约授予失败，此方法会 panic。
 	CreateEtcdSession(ctx context.Context) EtcdSession
 }
 

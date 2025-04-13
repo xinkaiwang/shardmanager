@@ -14,17 +14,22 @@ LDFLAGS := -X main.Version=$(VERSION) \
 
 # 定义构建目录和输出目录
 BIN_DIR := bin
-MAIN_PKG := ./cmd/cougardemo
-BINARY_NAME := cougardemo
-BINARY_PATH := $(BIN_DIR)/$(BINARY_NAME)
+# cougardemo
+MAIN_PKG_COUGARDEMO := ./cmd/cougardemo
+BINARY_NAME_COUGARDEMO := cougardemo
+BINARY_PATH_COUGARDEMO := $(BIN_DIR)/$(BINARY_NAME_COUGARDEMO)
+# etcddemo
+MAIN_PKG_ETCDDEMO := ./cmd/etcddemo
+BINARY_NAME_ETCDDEMO := etcddemo
+BINARY_PATH_ETCDDEMO := $(BIN_DIR)/$(BINARY_NAME_ETCDDEMO)
 
 # 定义 Go 命令
 GO ?= go
 GOFMT ?= gofmt
 GOLINT ?= golangci-lint
 
-# 默认目标，执行完整构建流程：fmt -> lint -> build -> test
-all: fmt lint build test
+# 默认目标，执行完整构建流程：fmt -> lint -> build (cougardemo) -> test
+all: fmt lint build test build-etcddemo
 
 # 创建必要的目录
 $(BIN_DIR):
@@ -45,26 +50,32 @@ lint:
 		echo "可以使用 'go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest' 安装"; \
 	fi
 
-# 构建服务
+# 构建主服务 (cougardemo)
 build: $(BIN_DIR)
-	@echo "构建 $(BINARY_NAME)..."
-	@$(GO) build -ldflags "$(LDFLAGS)" -o $(BINARY_PATH) $(MAIN_PKG)
-	@echo "构建完成: $(BINARY_PATH)"
+	@echo "构建 $(BINARY_NAME_COUGARDEMO)..."
+	@$(GO) build -ldflags "$(LDFLAGS)" -o $(BINARY_PATH_COUGARDEMO) $(MAIN_PKG_COUGARDEMO)
+	@echo "构建完成: $(BINARY_PATH_COUGARDEMO)"
+
+# 构建 etcd demo 服务
+build-etcddemo: $(BIN_DIR)
+	@echo "构建 $(BINARY_NAME_ETCDDEMO)..."
+	@$(GO) build -ldflags "$(LDFLAGS)" -o $(BINARY_PATH_ETCDDEMO) $(MAIN_PKG_ETCDDEMO)
+	@echo "构建完成: $(BINARY_PATH_ETCDDEMO)"
 
 # 运行测试
 test:
 	@echo "运行测试..."
 	@$(GO) test -v ./...
 
-# Docker 构建（可选）
+# Docker 构建（可选，默认构建 cougardemo）
 docker-build:
-	@echo "构建 Docker 镜像..."
-	@cd ../../ && docker build -t xinkaiw/$(BINARY_NAME):$(VERSION) -f services/cougar/Dockerfile .
+	@echo "构建 Docker 镜像 ($(BINARY_NAME_COUGARDEMO))..."
+	@cd ../../ && docker build -t xinkaiw/$(BINARY_NAME_COUGARDEMO):$(VERSION) -f services/cougar/Dockerfile .
 
-# Docker 推送（可选）
+# Docker 推送（可选，默认推送 cougardemo）
 docker-push:
-	@echo "推送 Docker 镜像..."
-	@docker push xinkaiw/$(BINARY_NAME):$(VERSION)
+	@echo "推送 Docker 镜像 ($(BINARY_NAME_COUGARDEMO))..."
+	@docker push xinkaiw/$(BINARY_NAME_COUGARDEMO):$(VERSION)
 
 # 清理构建产物
 clean:
@@ -76,15 +87,16 @@ clean:
 # 显示帮助信息
 help:
 	@echo "可用目标:"
-	@echo "  all          - 执行完整的构建流程（fmt -> lint -> build -> test）"
-	@echo "  fmt          - 格式化代码"
-	@echo "  lint         - 代码检查"
-	@echo "  build        - 构建服务"
-	@echo "  test         - 运行测试"
-	@echo "  docker-build - 构建 Docker 镜像"
-	@echo "  docker-push  - 推送 Docker 镜像"
-	@echo "  clean        - 清理构建产物"
-	@echo "  help         - 显示帮助信息"
+	@echo "  all              - 执行完整的构建流程（fmt -> lint -> build (cougardemo) -> test）"
+	@echo "  fmt              - 格式化代码"
+	@echo "  lint             - 代码检查"
+	@echo "  build            - 构建主服务 (cougardemo)"
+	@echo "  build-etcddemo   - 构建 etcd demo 服务"
+	@echo "  test             - 运行测试"
+	@echo "  docker-build     - 构建 Docker 镜像 (cougardemo)"
+	@echo "  docker-push      - 推送 Docker 镜像 (cougardemo)"
+	@echo "  clean            - 清理构建产物"
+	@echo "  help             - 显示帮助信息"
 
 # 声明伪目标
-.PHONY: all fmt lint build test docker-build docker-push clean help 
+.PHONY: all fmt lint build build-etcddemo test docker-build docker-push clean help 
