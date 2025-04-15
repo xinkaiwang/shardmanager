@@ -68,8 +68,8 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 		succ := true
 		var ke *kerror.Kerror
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
-			ws, ok := am.ss.AllWorkers[workerFullId]
-			if !ok {
+			ws := am.ss.FindWorkerStateByWorkerFullId(workerFullId)
+			if ws == nil {
 				succ = false
 				ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
 				return
@@ -105,8 +105,8 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 		workerFullId := action.To
 		// step 1: add to routing table
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
-			ws, ok := am.ss.AllWorkers[workerFullId]
-			if !ok {
+			ws := am.ss.FindWorkerStateByWorkerFullId(workerFullId)
+			if ws == nil {
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
 				status = AS_Failed
 				return
@@ -167,8 +167,8 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
-			workerState, ok := ss.AllWorkers[workerFullId]
-			if !ok {
+			workerState := ss.FindWorkerStateByWorkerFullId(workerFullId)
+			if workerState == nil {
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
 				status = AS_Failed
 				return
@@ -284,8 +284,8 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
-			workerState, ok := ss.AllWorkers[workerFullId]
-			if !ok {
+			workerState := ss.FindWorkerStateByWorkerFullId(workerFullId)
+			if workerState == nil {
 				ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
 				status = AS_Failed
 				return

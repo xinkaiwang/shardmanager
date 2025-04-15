@@ -39,8 +39,8 @@ type ServiceState struct {
 	SnapshotCurrent  *costfunc.Snapshot // current means current state
 	SnapshotFuture   *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
 
-	EphDirty         map[data.WorkerId]common.Unit
-	EphWorkerStaging map[data.WorkerId]*cougarjson.WorkerEphJson
+	EphDirty         map[data.WorkerFullId]common.Unit
+	EphWorkerStaging map[data.WorkerId]map[data.SessionId]*cougarjson.WorkerEphJson
 	ShutdownHat      map[data.WorkerFullId]common.Unit // those worker with hat means they are in shutdown process
 
 	ShardPlanWatcher *ShardPlanWatcher
@@ -57,8 +57,8 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
 		AllAssignments:   make(map[data.AssignmentId]*AssignmentState),
 		AllMoves:         make(map[data.ProposalId]*ActionMinion),
-		EphDirty:         make(map[data.WorkerId]common.Unit),
-		EphWorkerStaging: make(map[data.WorkerId]*cougarjson.WorkerEphJson),
+		EphDirty:         make(map[data.WorkerFullId]common.Unit),
+		EphWorkerStaging: make(map[data.WorkerId]map[data.SessionId]*cougarjson.WorkerEphJson),
 		ShutdownHat:      make(map[data.WorkerFullId]common.Unit),
 	}
 	ss.PathManager = config.NewPathManager()
@@ -68,7 +68,7 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 	ss.actionProvider = shadow.NewDefaultActionProvider(ss.PathManager)
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
 	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerBatch", func(ctx context.Context, ss *ServiceState) {
-		ss.syncEphStagingToWorkerState(ctx)
+		ss.digestStagingWorkerEph(ctx)
 	})
 	ss.reCreateSnapshotBatchManager = NewBatchManager(ss, 10, "reCreateSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.ReCreateSnapshot(ctx)
@@ -119,4 +119,13 @@ func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.
 	ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
 	// trigger snapshot recreate
 	ss.reCreateSnapshotBatchManager.TrySchedule(ctx)
+}
+
+// in case of worker not found, we return nil
+func (ss *ServiceState) FindWorkerStateByWorkerFullId(workerFullId data.WorkerFullId) *WorkerState {
+	workerState, ok := ss.AllWorkers[workerFullId]
+	if !ok {
+		return nil
+	}
+	return workerState
 }

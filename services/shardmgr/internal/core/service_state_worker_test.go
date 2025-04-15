@@ -16,8 +16,8 @@ func getWorkerStateAndPath(t *testing.T, ss *ServiceState, workerFullId data.Wor
 	var workerStatePath string
 
 	safeAccessServiceState(ss, func(ss *ServiceState) {
-		worker, exists := ss.AllWorkers[workerFullId]
-		assert.True(t, exists, "worker应该已创建")
+		worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
+		assert.True(t, worker != nil, "worker应该已创建")
 		workerState = worker
 		workerStatePath = ss.PathManager.FmtWorkerStatePath(workerFullId)
 	})

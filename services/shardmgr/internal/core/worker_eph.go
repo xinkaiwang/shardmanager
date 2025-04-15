@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
@@ -84,43 +85,62 @@ func (e *WorkerEphEvent) GetName() string {
 }
 
 func (e *WorkerEphEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.writeWorkerEphToStaging(ctx, e.WorkerId, e.WorkerEph)
+	ss.stagingWorkerEph(ctx, e.WorkerId, e.WorkerEph)
 }
 
-// writeWorkerEphToStaging: must be called in runloop
-func (ss *ServiceState) writeWorkerEphToStaging(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) {
-	// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-	// 	With("hasEph", workerEph != nil).With("eph", workerEph).
-	// 	Log("writeWorkerEphToStaging", "开始处理worker eph")
+// stagingWorkerEph: must call in runloop. Staging area is write by (individual) worker eph event(s), read by digestStagingWorkerEph (in batch)
+func (ss *ServiceState) stagingWorkerEph(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) {
+	klogging.Info(ctx).With("workerId", workerId).
+		With("hasEph", workerEph != nil).With("eph", workerEph).
+		Log("stagingWorkerEph", "开始处理worker eph")
 
 	defer func() {
 		ss.syncWorkerBatchManager.TrySchedule(ctx)
 		// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 		// 	With("dirtyCount", len(ss.EphDirty)).
-		// 	Log("writeWorkerEphToStaging", "已安排BatchManager")
+		// 	Log("stagingWorkerEph", "已安排BatchManager")
 	}()
 
 	if workerEph == nil {
 		// delete
+		// step 1: find out the workerFullId
+		dict, ok := ss.EphWorkerStaging[workerId]
+		if !ok {
+			ke := kerror.Create("DeletedEphNotFound", "worker eph not found in staging area") // this should not happen
+			panic(ke)
+		}
+		if len(dict) >= 2 {
+			ke := kerror.Create("DeletedEphNotFound", "multiple worker eph in staging area") // this should not happen
+			panic(ke)
+		}
+		var workerFullId data.WorkerFullId
+		for k := range dict {
+			workerFullId = data.WorkerFullId{
+				WorkerId:  workerId,
+				SessionId: k,
+			}
+			delete(dict, k)
+		}
+		// step 2: delete the workerEph from staging area
 		delete(ss.EphWorkerStaging, workerId)
-		ss.EphDirty[workerId] = common.Unit{}
+		ss.EphDirty[workerFullId] = common.Unit{}
 		// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-		// 	Log("writeWorkerEphToStaging", "worker eph已删除")
+		// 	Log("stagingWorkerEph", "worker eph已删除")
 		return
 	}
 
-	if ss.EphWorkerStaging[workerId] == nil {
-		// add
-		ss.EphWorkerStaging[workerId] = workerEph
-		ss.EphDirty[workerId] = common.Unit{}
-		// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-		// 	Log("writeWorkerEphToStaging", "worker eph已添加")
+	workerFullId := data.NewWorkerFullId(workerId, data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
+	dict, ok := ss.EphWorkerStaging[workerId]
+	if ok { // defensive coding, this is rarely happen (is it even possible?)
+		// update
+		dict[workerFullId.SessionId] = workerEph
+		ss.EphDirty[workerFullId] = common.Unit{}
 		return
 	}
 
-	// update
-	ss.EphWorkerStaging[workerId] = workerEph
-	ss.EphDirty[workerId] = common.Unit{}
+	// add
+	ss.EphWorkerStaging[workerId] = map[data.SessionId]*cougarjson.WorkerEphJson{workerFullId.SessionId: workerEph}
+	ss.EphDirty[workerFullId] = common.Unit{}
 	// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-	// 	Log("writeWorkerEphToStaging", "worker eph已更新")
+	// 	Log("stagingWorkerEph", "worker eph已更新")
 }

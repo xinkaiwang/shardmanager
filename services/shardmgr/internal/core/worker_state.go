@@ -119,16 +119,15 @@ func (ws *WorkerState) GetShutdownPermited() bool {
 		ws.State == data.WS_Deleted
 }
 
-// syncEphStagingToWorkerState: must be called in runloop.
+// digestStagingWorkerEph: must be called in runloop.
 // syncs from eph staging to worker state, should batch as much as possible
-func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
+func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 	// klogging.Info(ctx).With("dirtyCount", len(ss.EphDirty)).
 	// 	Log("syncEphStagingToWorkerState", "开始同步worker eph到worker state")
 
 	// only updates those have dirty flag
-	for workerId := range ss.EphDirty {
-		workerEph := ss.EphWorkerStaging[workerId]
-		workerFullId := data.NewWorkerFullId(workerId, data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
+	for workerFullId := range ss.EphDirty {
+		workerEph := ss.EphWorkerStaging[workerFullId.WorkerId][workerFullId.SessionId]
 		workerState := ss.AllWorkers[workerFullId]
 
 		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
@@ -159,7 +158,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 		}
 	}
 
-	ss.EphDirty = make(map[data.WorkerId]common.Unit)
+	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
 }
 
 func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.PassiveMove, mode costfunc.ApplyMode) {

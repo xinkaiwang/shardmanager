@@ -183,7 +183,7 @@ func safeAccessWorkerById(ss *ServiceState, workerFullId data.WorkerFullId, fn f
 	completed := make(chan struct{})
 	ss.PostEvent(&serviceStateAccessEvent{
 		callback: func(ss *ServiceState) {
-			worker := ss.AllWorkers[workerFullId]
+			worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
 			fn(worker)
 			close(completed)
 		},
@@ -258,7 +258,8 @@ func (setup *FakeTimeTestSetup) WaitUntilWorkerState(t *testing.T, workerFullId 
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
 		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
-			worker := ss.AllWorkers[workerFullId]
+			worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
+
 			result = fn(worker)
 		})
 		return result, ""
@@ -271,7 +272,7 @@ func (setup *FakeTimeTestSetup) WaitUntilWorkerFullState(t *testing.T, workerFul
 		var result bool
 		var reason string
 		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
-			worker := ss.AllWorkers[workerFullId]
+			worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
 			dict := map[data.AssignmentId]*AssignmentState{}
 			for assignId := range worker.Assignments {
 				dict[assignId] = ss.AllAssignments[assignId]

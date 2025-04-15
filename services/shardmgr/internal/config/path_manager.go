@@ -60,6 +60,7 @@ func (pm *PathManager) FmtShardStatePath(shardId data.ShardId) string {
 }
 
 func (pm *PathManager) FmtWorkerStatePath(workerFullId data.WorkerFullId) string {
+	// WorkerState node is using workerFullId as key (in case stateful_mem, it's workerId:sessionId. in case stateful_hd, it's just workerId).
 	return pm.GetWorkerStatePathPrefix() + workerFullId.String()
 }
 
@@ -68,13 +69,17 @@ func (pm *PathManager) FmtMoveStatePath(proposalId data.ProposalId) string {
 }
 
 func (pm *PathManager) FmtWorkerEphPath(workerFullId data.WorkerFullId) string {
+	// Eph node is using workerId (not workerFullId) as key. This is to avoid multiple worker alive at same time.
+	// The new worker should failed to start if the old worker is still alive.
 	return pm.GetWorkerEphPathPrefix() + string(workerFullId.WorkerId)
 }
 
 func (pm *PathManager) FmtPilotPath(workerFullId data.WorkerFullId) string {
+	// Pilot node is using workerId (not workerFullId) as key. Since it's not possible for multiple worker to alive at same time, it's safe.
 	return pm.GetPilotPathPrefix() + string(workerFullId.WorkerId)
 }
 
 func (pm *PathManager) FmtRoutingPath(workerFullId data.WorkerFullId) string {
+	// Routing node is using workerId (not workerFullId) as key.
 	return pm.GetRoutingPathPrefix() + string(workerFullId.WorkerId)
 }
