@@ -43,8 +43,9 @@ type ServiceState struct {
 	EphWorkerStaging map[data.WorkerId]map[data.SessionId]*cougarjson.WorkerEphJson
 	ShutdownHat      map[data.WorkerFullId]common.Unit // those worker with hat means they are in shutdown process
 
-	ShardPlanWatcher *ShardPlanWatcher
-	WorkerEphWatcher *WorkerEphWatcher
+	ShardPlanWatcher     *ShardPlanWatcher
+	WorkerEphWatcher     *WorkerEphWatcher
+	ServiceConfigWatcher *ServiceConfigWatcher
 
 	syncWorkerBatchManager       *BatchManager // enqueue when any worker eph changed, dequeue= trigger ss.syncEphStagingToWorkerState()
 	reCreateSnapshotBatchManager *BatchManager // enqueue when any workerState/shardState add/remove/etc. dequeue=trigger snapshot recreate

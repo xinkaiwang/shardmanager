@@ -78,7 +78,7 @@ func (c *CougarImpl) RequestShutdown() {
 
 // etcd path is "/smg/eph/{worker_id}:{session_id}"
 func (c *CougarImpl) ephPath() string {
-	return fmt.Sprintf("/smg/eph/%s:%s", c.workerInfo.WorkerId, c.workerInfo.SessionId)
+	return fmt.Sprintf("/smg/eph/%s", c.workerInfo.WorkerId)
 }
 
 // etcd path is "/smg/pilot/{worker_id}"

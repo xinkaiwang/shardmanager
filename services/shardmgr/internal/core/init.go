@@ -15,9 +15,11 @@ import (
 )
 
 func (ss *ServiceState) Init(ctx context.Context) {
+	klogging.Info(ctx).Log("ServiceStateInit", "start")
 	// step 1: load ServiceInfo
 	// ss.ServiceInfo = ss.LoadServiceInfo(ctx)     // from /smg/config/service_info.json
-	ss.ServiceConfig = ss.LoadServiceConfig(ctx) // from /smg/config/service_config.json
+	var currentServiceConfigRevision etcdprov.EtcdRevision
+	ss.ServiceConfig, currentServiceConfigRevision = ss.LoadServiceConfig(ctx) // from /smg/config/service_config.json
 	ss.DynamicThreshold = NewDynamicThreshold(func() config.DynamicThresholdConfig {
 		return ss.ServiceConfig.DynamicThresholdConfig
 	})
@@ -39,10 +41,10 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 6: sync workerEph to workerState
 	ss.digestStagingWorkerEph(ctx)
 
-	// step 6: start listening to shard plan changes
+	// step 7: start listening to shard plan changes/worker eph changes/service config changes
 	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision)
-	// step 7: start listening to worker eph changes
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
+	ss.ServiceConfigWatcher = NewServiceConfigWatcher(ctx, ss, currentServiceConfigRevision)
 
 	// step 8: start housekeeping threads
 	ss.PostEvent(NewHousekeep1sEvent())
@@ -54,6 +56,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 
 	// step 10: start
 	// Note: The runloop is now initialized in AssembleSsXxxx
+	klogging.Info(ctx).Log("ServiceStateInit", "done")
 }
 
 func (ss *ServiceState) LoadAllShardState(ctx context.Context) {

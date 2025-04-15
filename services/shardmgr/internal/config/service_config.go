@@ -12,7 +12,7 @@ func ParseServiceConfigFromJson(data string) *ServiceConfig {
 	if data != "" {
 		err := json.Unmarshal([]byte(data), si)
 		if err != nil {
-			ke := kerror.Wrap(err, "UnmarshalError", "failed to unmarshal ServiceConfigJson", false)
+			ke := kerror.Wrap(err, "UnmarshalError", "failed to unmarshal ServiceConfigJson", false).With("data", data)
 			panic(ke)
 		}
 	}

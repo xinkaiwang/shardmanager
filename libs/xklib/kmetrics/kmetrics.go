@@ -196,7 +196,7 @@ func CreateTimeSequence(ctx context.Context, key string, parent *Kmetric, tagVal
 
 	go func() {
 		// we have to defer this log operation into another goroutine to avoid dead-lock caused by re-entry
-		klogging.Info(ctxCopy).With("gaugeName", metricName).With("tagKey", tagKey).Log("CreateTimeSequence", "")
+		klogging.Verbose(ctxCopy).With("gaugeName", metricName).With("tagKey", tagKey).Log("CreateTimeSequence", "")
 	}()
 	return seq
 }
