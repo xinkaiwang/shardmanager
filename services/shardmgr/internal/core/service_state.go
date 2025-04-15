@@ -39,8 +39,8 @@ type ServiceState struct {
 	SnapshotCurrent  *costfunc.Snapshot // current means current state
 	SnapshotFuture   *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
 
-	EphDirty         map[data.WorkerFullId]common.Unit
-	EphWorkerStaging map[data.WorkerFullId]*cougarjson.WorkerEphJson
+	EphDirty         map[data.WorkerId]common.Unit
+	EphWorkerStaging map[data.WorkerId]*cougarjson.WorkerEphJson
 	ShutdownHat      map[data.WorkerFullId]common.Unit // those worker with hat means they are in shutdown process
 
 	ShardPlanWatcher *ShardPlanWatcher
@@ -57,8 +57,8 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 		AllWorkers:       make(map[data.WorkerFullId]*WorkerState),
 		AllAssignments:   make(map[data.AssignmentId]*AssignmentState),
 		AllMoves:         make(map[data.ProposalId]*ActionMinion),
-		EphDirty:         make(map[data.WorkerFullId]common.Unit),
-		EphWorkerStaging: make(map[data.WorkerFullId]*cougarjson.WorkerEphJson),
+		EphDirty:         make(map[data.WorkerId]common.Unit),
+		EphWorkerStaging: make(map[data.WorkerId]*cougarjson.WorkerEphJson),
 		ShutdownHat:      make(map[data.WorkerFullId]common.Unit),
 	}
 	ss.PathManager = config.NewPathManager()

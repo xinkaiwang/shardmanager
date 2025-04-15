@@ -48,21 +48,21 @@ func WorkerFullIdParseFromString(str string) WorkerFullId {
 	return WorkerFullId{WorkerId: WorkerId(parts[0]), SessionId: SessionId(parts[1])}
 }
 
-// WorkerRuntimeId: both WorkerId and SessionId are always required
-type WorkerRuntimeId struct {
+// WorkerCompleteId: both WorkerId and SessionId are always required
+type WorkerCompleteId struct {
 	WorkerId  WorkerId
 	SessionId SessionId
 }
 
-func (wrId WorkerRuntimeId) String() string {
+func (wrId WorkerCompleteId) String() string {
 	return string(wrId.WorkerId) + ":" + string(wrId.SessionId)
 }
 
-func WorkerRuntimeIdParseFromString(str string) WorkerRuntimeId {
+func WorkerRuntimeIdParseFromString(str string) WorkerCompleteId {
 	parts := strings.Split(str, ":")
-	return WorkerRuntimeId{WorkerId: WorkerId(parts[0]), SessionId: SessionId(parts[1])}
+	return WorkerCompleteId{WorkerId: WorkerId(parts[0]), SessionId: SessionId(parts[1])}
 }
 
-func (wrId WorkerRuntimeId) ToWorkerFullId(statefulType StatefulType) WorkerFullId {
+func (wrId WorkerCompleteId) ToWorkerFullId(statefulType StatefulType) WorkerFullId {
 	return NewWorkerFullId(wrId.WorkerId, wrId.SessionId, statefulType)
 }

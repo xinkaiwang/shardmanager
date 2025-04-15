@@ -105,7 +105,7 @@ func (ws *WorkerState) GetState() data.WorkerStateEnum {
 	return ws.State
 }
 
-func (ws *WorkerState) GetWorkerFullId(ss *ServiceState) data.WorkerFullId {
+func (ws *WorkerState) GetWorkerFullId() data.WorkerFullId {
 	return data.NewWorkerFullId(ws.WorkerId, ws.SessionId, ws.StatefulType)
 }
 
@@ -126,8 +126,9 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 	// 	Log("syncEphStagingToWorkerState", "开始同步worker eph到worker state")
 
 	// only updates those have dirty flag
-	for workerFullId := range ss.EphDirty {
-		workerEph := ss.EphWorkerStaging[workerFullId]
+	for workerId := range ss.EphDirty {
+		workerEph := ss.EphWorkerStaging[workerId]
+		workerFullId := data.NewWorkerFullId(workerId, data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
 		workerState := ss.AllWorkers[workerFullId]
 
 		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
@@ -158,7 +159,7 @@ func (ss *ServiceState) syncEphStagingToWorkerState(ctx context.Context) {
 		}
 	}
 
-	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
+	ss.EphDirty = make(map[data.WorkerId]common.Unit)
 }
 
 func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.PassiveMove, mode costfunc.ApplyMode) {
@@ -221,7 +222,7 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		Log("onEphNodeLostDone", "worker eph lost")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, reason)
 		ws.signalAll(ctx, "onEphNodeLost:"+reason)
 	}
 }
@@ -261,7 +262,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		Log("onEphNodeUpdateDone", "workerEph updated finished")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, reason)
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, reason)
 		ws.signalAll(ctx, "onEphNodeUpdate:"+reason)
 	}
 }
@@ -317,7 +318,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		// nothing to do
 	case data.WS_Online_shutdown_req:
 		// try to get a hat
-		if !ss.hatTryGet(ctx, ws.GetWorkerFullId(ss)) {
+		if !ss.hatTryGet(ctx, ws.GetWorkerFullId()) {
 			break
 		}
 		// Worker Event: Hat got, worker becomes offline
@@ -331,7 +332,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		}
 		// Worker Event: Draining complete, worker becomes offline
 		ws.State = data.WS_Online_shutdown_permit
-		ss.hatReturn(ctx, ws.GetWorkerFullId(ss))
+		ss.hatReturn(ctx, ws.GetWorkerFullId())
 		dirty.AddDirtyFlag("WorkerState")
 		fallthrough
 	case data.WS_Online_shutdown_permit:
@@ -346,7 +347,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		fallthrough
 	case data.WS_Offline_draining_candidate:
 		// try to get the draining hat
-		if !ss.hatTryGet(ctx, ws.GetWorkerFullId(ss)) {
+		if !ss.hatTryGet(ctx, ws.GetWorkerFullId()) {
 			break
 		}
 		// Worker Event: Hat applied, worker becomes offline
@@ -361,7 +362,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		// Worker Event: Draining complete, worker becomes offline
 		ws.State = data.WS_Offline_draining_complete
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
-		ss.hatReturn(ctx, ws.GetWorkerFullId(ss))
+		ss.hatReturn(ctx, ws.GetWorkerFullId())
 		dirty.AddDirtyFlag("WorkerState")
 		fallthrough
 	case data.WS_Offline_draining_complete:
@@ -382,10 +383,10 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 	}
 	if dirty.IsDirty() {
 		if needsDelete {
-			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), nil, dirty.String())
+			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), nil, dirty.String())
 			// ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), nil)
 		} else {
-			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(ss), ws, dirty.String())
+			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, dirty.String())
 			// ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))
 		}
 	}

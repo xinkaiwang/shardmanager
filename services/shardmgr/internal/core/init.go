@@ -34,8 +34,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 5: load current worker eph
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
 	for _, workerEph := range currentWorkerEph {
-		workerFullId := data.NewWorkerFullId(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
-		ss.writeWorkerEphToStaging(ctx, workerFullId, workerEph)
+		ss.writeWorkerEphToStaging(ctx, data.WorkerId(workerEph.WorkerId), workerEph)
 	}
 	// step 6: sync workerEph to workerState
 	ss.syncEphStagingToWorkerState(ctx)

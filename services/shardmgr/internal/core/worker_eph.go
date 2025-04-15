@@ -34,21 +34,27 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 		case kvItem := <-w.ch:
 			if kvItem.Value == "" {
 				// this is a delete event
-				str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
-				klogging.Info(ctx).With("workerFullId", str).
+				// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
+				workerId := w.workerIdFromPath(kvItem.Key)
+				klogging.Info(ctx).With("workerId", workerId).With("path", kvItem.Key).
 					Log("WorkerEphWatcher", "观察到worker eph已删除")
-				w.ss.PostEvent(NewWorkerEphEvent(data.WorkerFullIdParseFromString(str), nil))
+				w.ss.PostEvent(NewWorkerEphEvent(workerId, nil))
 				continue
 			}
 			// this is a add or update event
 			klogging.Info(ctx).With("workerFullId", kvItem.Key).With("eph", kvItem.Value).
 				Log("WorkerEphWatcher", "观察到worker eph已更新")
-			str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
-			workerFullId := data.WorkerFullIdParseFromString(str)
+			// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
+			workerId := w.workerIdFromPath(kvItem.Key)
 			workerEph := cougarjson.WorkerEphJsonFromJson(kvItem.Value)
-			w.ss.PostEvent(NewWorkerEphEvent(workerFullId, workerEph))
+			w.ss.PostEvent(NewWorkerEphEvent(workerId, workerEph))
 		}
 	}
+}
+
+func (w *WorkerEphWatcher) workerIdFromPath(path string) data.WorkerId {
+	// exclude prefix '/smg/eph/'
+	return data.WorkerFullIdParseFromString(path[len(w.ss.PathManager.GetWorkerEphPathPrefix()):]).WorkerId
 }
 
 func (ss *ServiceState) LoadCurrentWorkerEph(ctx context.Context) ([]*cougarjson.WorkerEphJson, etcdprov.EtcdRevision) {
@@ -62,14 +68,14 @@ func (ss *ServiceState) LoadCurrentWorkerEph(ctx context.Context) ([]*cougarjson
 
 // WorkerEphEvent: implements IEvent[*ServiceState]
 type WorkerEphEvent struct {
-	WorkerFullId data.WorkerFullId
-	WorkerEph    *cougarjson.WorkerEphJson
+	WorkerId  data.WorkerId
+	WorkerEph *cougarjson.WorkerEphJson
 }
 
-func NewWorkerEphEvent(workerFullId data.WorkerFullId, workerEph *cougarjson.WorkerEphJson) *WorkerEphEvent {
+func NewWorkerEphEvent(workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) *WorkerEphEvent {
 	return &WorkerEphEvent{
-		WorkerFullId: workerFullId,
-		WorkerEph:    workerEph,
+		WorkerId:  workerId,
+		WorkerEph: workerEph,
 	}
 }
 
@@ -78,11 +84,11 @@ func (e *WorkerEphEvent) GetName() string {
 }
 
 func (e *WorkerEphEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.writeWorkerEphToStaging(ctx, e.WorkerFullId, e.WorkerEph)
+	ss.writeWorkerEphToStaging(ctx, e.WorkerId, e.WorkerEph)
 }
 
 // writeWorkerEphToStaging: must be called in runloop
-func (ss *ServiceState) writeWorkerEphToStaging(ctx context.Context, workerFullId data.WorkerFullId, workerEph *cougarjson.WorkerEphJson) {
+func (ss *ServiceState) writeWorkerEphToStaging(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) {
 	// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 	// 	With("hasEph", workerEph != nil).With("eph", workerEph).
 	// 	Log("writeWorkerEphToStaging", "开始处理worker eph")
@@ -96,25 +102,25 @@ func (ss *ServiceState) writeWorkerEphToStaging(ctx context.Context, workerFullI
 
 	if workerEph == nil {
 		// delete
-		delete(ss.EphWorkerStaging, workerFullId)
-		ss.EphDirty[workerFullId] = common.Unit{}
+		delete(ss.EphWorkerStaging, workerId)
+		ss.EphDirty[workerId] = common.Unit{}
 		// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 		// 	Log("writeWorkerEphToStaging", "worker eph已删除")
 		return
 	}
 
-	if ss.EphWorkerStaging[workerFullId] == nil {
+	if ss.EphWorkerStaging[workerId] == nil {
 		// add
-		ss.EphWorkerStaging[workerFullId] = workerEph
-		ss.EphDirty[workerFullId] = common.Unit{}
+		ss.EphWorkerStaging[workerId] = workerEph
+		ss.EphDirty[workerId] = common.Unit{}
 		// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 		// 	Log("writeWorkerEphToStaging", "worker eph已添加")
 		return
 	}
 
 	// update
-	ss.EphWorkerStaging[workerFullId] = workerEph
-	ss.EphDirty[workerFullId] = common.Unit{}
+	ss.EphWorkerStaging[workerId] = workerEph
+	ss.EphDirty[workerId] = common.Unit{}
 	// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 	// 	Log("writeWorkerEphToStaging", "worker eph已更新")
 }

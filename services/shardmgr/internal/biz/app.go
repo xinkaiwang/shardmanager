@@ -60,7 +60,7 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 	workers := make([]api.WorkerState, 0)
 	for _, workerState := range ss.AllWorkers {
 		worker := api.WorkerState{
-			WorkerFullId: workerState.GetWorkerFullId(ss).String(),
+			WorkerFullId: workerState.GetWorkerFullId().String(),
 		}
 		workers = append(workers, worker)
 	}

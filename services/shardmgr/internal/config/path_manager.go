@@ -68,11 +68,11 @@ func (pm *PathManager) FmtMoveStatePath(proposalId data.ProposalId) string {
 }
 
 func (pm *PathManager) FmtWorkerEphPath(workerFullId data.WorkerFullId) string {
-	return pm.GetWorkerEphPathPrefix() + workerFullId.String()
+	return pm.GetWorkerEphPathPrefix() + string(workerFullId.WorkerId)
 }
 
 func (pm *PathManager) FmtPilotPath(workerFullId data.WorkerFullId) string {
-	return pm.GetPilotPathPrefix() + workerFullId.String()
+	return pm.GetPilotPathPrefix() + string(workerFullId.WorkerId)
 }
 
 func (pm *PathManager) FmtRoutingPath(workerFullId data.WorkerFullId) string {
