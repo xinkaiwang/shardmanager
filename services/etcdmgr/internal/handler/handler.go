@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -25,38 +26,52 @@ func NewHandler(app *biz.App) *Handler {
 
 // RegisterRoutes 注册路由
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	// 包装所有处理器以添加错误处理中间件
+	// API 路由
 	mux.Handle("/api/status", ErrorHandlingMiddleware(http.HandlerFunc(h.StatusHandler)))
 	mux.Handle("/api/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.PingHandler)))
-
-	// 新的 etcd 操作 API
 	mux.Handle("/api/list_keys", ErrorHandlingMiddleware(http.HandlerFunc(h.ListKeysHandler)))
 	mux.Handle("/api/get_key", ErrorHandlingMiddleware(http.HandlerFunc(h.GetKeyHandler)))
 	mux.Handle("/api/set_key", ErrorHandlingMiddleware(http.HandlerFunc(h.SetKeyHandler)))
 	mux.Handle("/api/delete_key", ErrorHandlingMiddleware(http.HandlerFunc(h.DeleteKeyHandler)))
 
-	// 添加静态文件服务，使用 SPA 处理器
-	mux.Handle("/", h.SPAHandler(http.FileServer(http.Dir("web/dist"))))
+	// 静态文件服务 (SPA)
+	// IMPORTANT: This handler should be registered LAST as it catches all non-API paths.
+	staticFs := http.FileServer(http.Dir("web/dist"))
+	mux.Handle("/", h.SPAHandler("web/dist", staticFs))
 }
 
-// SPAHandler 包装静态文件服务器以支持 SPA 路由
-func (h *Handler) SPAHandler(handler http.Handler) http.Handler {
+// SPAHandler creates a handler that serves static files and handles SPA routing.
+func (h *Handler) SPAHandler(staticPath string, fileSystem http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 如果请求的是 API 路径，直接返回
+		// Let API requests fall through to previous handlers (ServeMux handles this naturally)
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			handler.ServeHTTP(w, r)
+			// This case should ideally not be reached if API handlers are registered first,
+			// but as a safeguard, return 404.
+			http.NotFound(w, r)
 			return
 		}
 
-		// 检查文件是否存在
-		path := "web/dist" + r.URL.Path
-		_, err := os.Stat(path)
+		// Construct the path for the requested file.
+		filePath := path.Join(staticPath, r.URL.Path)
+
+		// Check if the requested file exists.
+		_, err := os.Stat(filePath)
 		if os.IsNotExist(err) {
-			// 文件不存在，返回 index.html
-			r.URL.Path = "/"
+			// File does not exist, serve index.html for SPA routing.
+			klogging.Debug(r.Context()).With("path", filePath).Log("SPAHandler", "File not found, serving index.html")
+			http.ServeFile(w, r, path.Join(staticPath, "index.html"))
+			return
+		}
+		if err != nil {
+			// Other error (e.g., permission denied)
+			klogging.Error(r.Context()).WithError(err).With("path", filePath).Log("SPAHandler", "Error checking file existence")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
 		}
 
-		handler.ServeHTTP(w, r)
+		// File exists, serve it using the provided fileSystem handler.
+		klogging.Debug(r.Context()).With("path", filePath).Log("SPAHandler", "Serving static file")
+		fileSystem.ServeHTTP(w, r)
 	})
 }
 

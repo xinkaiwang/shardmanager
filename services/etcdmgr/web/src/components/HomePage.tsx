@@ -24,8 +24,15 @@ import * as api from '../services/api';
 import { EtcdKeyResponse } from '../types/api';
 
 // 辅助函数：截断文本
-const truncateText = (text: string, maxLength: number = 50) => {
-  if (text.length <= maxLength) return text;
+const truncateText = (text: string | undefined | null, maxLength: number = 50): string => {
+  // Handle null or undefined input
+  if (text === undefined || text === null) {
+    return '(无值)'; // Or return '', or '(undefined)', etc. depending on desired display
+  }
+  // Now we know text is a string
+  if (text.length <= maxLength) {
+    return text;
+  }
   return text.slice(0, maxLength) + '...';
 };
 

@@ -9,7 +9,7 @@ type EtcdKeyRequest struct {
 // EtcdKeyResponse 定义了 etcd key 操作的响应
 type EtcdKeyResponse struct {
 	Key     string `json:"key"`
-	Value   string `json:"value,omitempty"`
+	Value   string `json:"value"`
 	Version int64  `json:"version,omitempty"`
 }
 
