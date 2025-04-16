@@ -16,10 +16,14 @@ type ShardState struct {
 	Hints            config.ShardConfig
 	CustomProperties map[string]string
 	LameDuck         bool
+	LastUpdateReason string // for logging/debugging purpose only
 }
 
 func NewShardState(shardId data.ShardId) *ShardState {
-	return &ShardState{ShardId: shardId}
+	return &ShardState{
+		ShardId:  shardId,
+		Replicas: make(map[data.ReplicaIdx]*ReplicaState),
+	}
 }
 
 func NewShardStateByPlan(shardLine *smgjson.ShardLineJson, defCfg config.ShardConfig) *ShardState {
@@ -41,12 +45,13 @@ func NewShardStateByPlan(shardLine *smgjson.ShardLineJson, defCfg config.ShardCo
 		Hints:            defCfg,
 		CustomProperties: shardLine.CustomProperties,
 		LameDuck:         false,
+		LastUpdateReason: "unmarshal",
 	}
 }
 
 // return 1 if shard state is updated, 0 if not
-func (ss *ServiceState) UpdateShardStateByPlan(shard *ShardState, shardLine *smgjson.ShardLineJson) bool {
-	dirty := false
+func (ss *ServiceState) UpdateShardStateByPlan(shard *ShardState, shardLine *smgjson.ShardLineJson) *DirtyFlag {
+	dirtyFlag := NewDirtyFlag()
 	newHints := ss.ServiceConfig.ShardConfig
 	if shardLine.Hints != nil {
 		if shardLine.Hints.MinReplicaCount != nil {
@@ -61,13 +66,29 @@ func (ss *ServiceState) UpdateShardStateByPlan(shard *ShardState, shardLine *smg
 	}
 	if shard.Hints != newHints {
 		shard.Hints = newHints
-		dirty = true
+		dirtyFlag.AddDirtyFlag("hints")
 	}
+	replicaCountDiff := shard.ReEvaluateReplicaCount()
+	if replicaCountDiff > 0 {
+		dirtyFlag.AddDirtyFlag("addedReplica")
+	} else if replicaCountDiff < 0 {
+		dirtyFlag.AddDirtyFlag("removedReplica")
+	}
+
 	if shard.LameDuck { // 如果分片已经被标记为软删除，则undo软删除, 重新激活分片
 		shard.LameDuck = false
-		dirty = true
+		dirtyFlag.AddDirtyFlag("undoLameDuck")
 	}
-	return dirty
+	return dirtyFlag
+}
+
+func (shard *ShardState) EvaluateReplicaCount() []string {
+	dirtyFlag := NewDirtyFlag()
+	replicaCount := shard.ReEvaluateReplicaCount()
+	if replicaCount != len(shard.Replicas) {
+		dirtyFlag.AddDirtyFlag("replicaCount")
+	}
+	return dirtyFlag.flags
 }
 
 func (shard *ShardState) MarkAsSoftDelete(ctx context.Context) {
@@ -106,10 +127,12 @@ func (shard *ShardState) ToJson() *smgjson.ShardStateJson {
 		obj.Resplicas[replica.ReplicaIdx] = replica.ToJson()
 	}
 	obj.LameDuck = smgjson.Bool2Int8(shard.LameDuck)
+	obj.LastUpdateReason = shard.LastUpdateReason
 	return obj
 }
 
 // ReEvaluateReplicaCount: based on the current replica count and the minimum replica count, add new replicas if needed
+// return >0 means replica added, <0 means replica removed, 0 means no change
 func (shard *ShardState) ReEvaluateReplicaCount() int {
 	// 重新计算副本数
 	replicaCount := 0

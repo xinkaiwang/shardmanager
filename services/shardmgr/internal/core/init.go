@@ -39,7 +39,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
 	ss.batchAddToStagingWorkerEph(ctx, currentWorkerEph) // staging area, will be used in ss.syncEphStagingToWorkerState
 	// step 6: sync workerEph to workerState
-	ss.digestStagingWorkerEph(ctx)
+	ss.firstDigestStagingWorkerEph(ctx)
 
 	// step 7: start listening to shard plan changes/worker eph changes/service config changes
 	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision)

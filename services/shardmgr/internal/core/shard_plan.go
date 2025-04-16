@@ -28,8 +28,10 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 		shardId := data.ShardId(shardLine.ShardName)
 		if shard, ok := ss.AllShards[shardId]; ok {
 			// update shard state
-			if ss.UpdateShardStateByPlan(shard, shardLine) {
+			dirtyFlags := ss.UpdateShardStateByPlan(shard, shardLine)
+			if dirtyFlags.IsDirty() {
 				updated = append(updated, shard.ShardId)
+				shard.LastUpdateReason = dirtyFlags.String()
 			}
 			delete(needRemove, shard.ShardId)
 		} else {

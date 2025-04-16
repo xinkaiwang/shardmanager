@@ -21,16 +21,20 @@ type Proposal struct {
 
 	Move         Move
 	ProposalSize int                               // size of the proposal: foe example, 1 for simple move, 2 for swap move
+	Signature    string                            // signature of the move (redundant info, but useful for debugging)
 	OnClose      func(reason common.EnqueueResult) // will get called when proposal is closed
 }
 
 func NewProposal(ctx context.Context, solverType string, gain Gain, basedOn SnapshotId) *Proposal {
-	return &Proposal{
+	proposal := &Proposal{
 		ProposalId:   data.ProposalId(kcommon.RandomString(ctx, 8)),
 		SolverType:   solverType,
+		Gain:         gain,
+		BasedOn:      basedOn,
 		StartTimeMs:  kcommon.GetWallTimeMs(),
 		ProposalSize: 1,
 	}
+	return proposal
 }
 
 type Action struct {

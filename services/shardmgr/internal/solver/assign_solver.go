@@ -30,6 +30,16 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	var bestMove *costfunc.AssignMove
 	bestCost := baseCost
 
+	// candidate worker list
+	candidateWorkers := []data.WorkerFullId{}
+	snapshot.AllWorkers.VisitAll(func(fullId data.WorkerFullId, worker *costfunc.WorkerSnap) {
+		candidateWorkers = append(candidateWorkers, fullId)
+	})
+	if len(candidateWorkers) == 0 {
+		// no worker can accept this assignment
+		return nil
+	}
+
 	stop := false
 	for i := 0; i < asCfg.ExplorePerRun && !stop; i++ {
 		var replicaCandidate data.ReplicaFullId
@@ -55,17 +65,6 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 		var destWorkerId data.WorkerFullId
 		{
 			// step 3: which dest worker?
-			// candidate worker list
-			candidateWorkers := []data.WorkerFullId{}
-			snapshot.AllWorkers.VisitAll(func(fullId data.WorkerFullId, worker *costfunc.WorkerSnap) {
-				if worker.CanAcceptAssignment(replicaCandidate.ShardId) {
-					candidateWorkers = append(candidateWorkers, fullId)
-				}
-			})
-			if len(candidateWorkers) == 0 {
-				// no worker can accept this assignment
-				return nil
-			}
 			rnd := kcommon.RandomInt(ctx, len(candidateWorkers))
 			destWorkerId = candidateWorkers[rnd]
 		}
@@ -92,6 +91,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	}
 	proposal := costfunc.NewProposal(ctx, "AssignMove", baseCost.Substract(bestCost), snapshot.SnapshotId)
 	proposal.Move = bestMove
+	proposal.Signature = bestMove.GetSignature()
 	proposal.OnClose = func(reason common.EnqueueResult) {
 		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
 		klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "AssignSolver").Log("ProposalClosed", "")

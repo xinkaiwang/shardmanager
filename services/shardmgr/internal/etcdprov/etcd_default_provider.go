@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	timeoutMs = common.GetEnvInt("ETCD_TIMEOUT_MS", 5000)
+	timeoutMs = common.GetEnvInt("ETCD_TIMEOUT_MS", 60*1000)
 )
 
 // etcdDefaultProvider 是默认的 etcd 客户端实现

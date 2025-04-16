@@ -15,6 +15,8 @@ type ShardStateJson struct {
 	Resplicas map[data.ReplicaIdx]*ReplicaStateJson `json:"resplicas"`
 
 	LameDuck int8 `json:"lame_duck,omitempty"` // use int to represent bool
+
+	LastUpdateReason string `json:"last_update_reason,omitempty"`
 }
 
 func NewShardStateJson(shardName data.ShardId) *ShardStateJson {

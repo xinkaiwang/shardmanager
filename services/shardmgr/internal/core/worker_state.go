@@ -119,6 +119,35 @@ func (ws *WorkerState) GetShutdownPermited() bool {
 		ws.State == data.WS_Deleted
 }
 
+func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
+	workers := map[data.WorkerFullId]*cougarjson.WorkerEphJson{}
+	for workerId, dict := range ss.EphWorkerStaging {
+		for sessionId, workerEph := range dict {
+			workerFullId := data.NewWorkerFullId(workerId, sessionId, data.StatefulType(workerEph.StatefulType))
+			workers[workerFullId] = workerEph
+		}
+	}
+	// compare with current workerStates and decide add/update/delete
+	for workerFullId, workerState := range ss.AllWorkers {
+		if workerEph, ok := workers[workerFullId]; ok {
+			// update
+			delete(workers, workerFullId)
+			workerState.onEphNodeUpdate(ctx, ss, workerEph)
+		} else {
+			// delete
+			workerState.onEphNodeLost(ctx, ss)
+		}
+	}
+	// remaining workers are new
+	for workerFullId, workerEph := range workers {
+		// add
+		workerState := NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
+		workerState.updateWorkerByEph(ctx, workerEph)
+		ss.AllWorkers[workerFullId] = workerState
+		ss.FlushWorkerState(ctx, workerFullId, workerState, "NewWorker")
+	}
+}
+
 // digestStagingWorkerEph: must be called in runloop.
 // syncs from eph staging to worker state, should batch as much as possible
 func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
