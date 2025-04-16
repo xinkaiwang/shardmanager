@@ -11,6 +11,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/solver"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // ServiceState implements the CriticalResource interface
@@ -39,9 +40,12 @@ type ServiceState struct {
 	SnapshotCurrent  *costfunc.Snapshot // current means current state
 	SnapshotFuture   *costfunc.Snapshot // future = current + in_flight_moves (this is expected future, assume all moves goes well. most solver explore should be based on this.)
 
+	// staging area: worker eph
 	EphDirty         map[data.WorkerFullId]common.Unit
 	EphWorkerStaging map[data.WorkerId]map[data.SessionId]*cougarjson.WorkerEphJson
 	ShutdownHat      map[data.WorkerFullId]common.Unit // those worker with hat means they are in shutdown process
+	// staging area: shard plan
+	stagingShardPlan []*smgjson.ShardLineJson
 
 	ShardPlanWatcher     *ShardPlanWatcher
 	WorkerEphWatcher     *WorkerEphWatcher
@@ -49,6 +53,7 @@ type ServiceState struct {
 
 	syncWorkerBatchManager       *BatchManager // enqueue when any worker eph changed, dequeue= trigger ss.syncEphStagingToWorkerState()
 	reCreateSnapshotBatchManager *BatchManager // enqueue when any workerState/shardState add/remove/etc. dequeue=trigger snapshot recreate
+	syncShardsBatchManager       *BatchManager // enqueue when 1) shard plan new/changed, 2) shard config changed, etc. dequeue=trigger ss.syncShardPlan()
 }
 
 func NewServiceState(ctx context.Context, name string) *ServiceState {
@@ -73,6 +78,9 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 	})
 	ss.reCreateSnapshotBatchManager = NewBatchManager(ss, 10, "reCreateSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.ReCreateSnapshot(ctx)
+	})
+	ss.syncShardsBatchManager = NewBatchManager(ss, 10, "syncShardsBatch", func(ctx context.Context, ss *ServiceState) {
+		ss.digestStagingShardPlan(ctx)
 	})
 	return ss
 }

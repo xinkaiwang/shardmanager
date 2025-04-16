@@ -132,3 +132,35 @@ func (rl *RunLoop[T]) StopAndWaitForExit() {
 		klogging.Warning(context.Background()).Log("RunLoopStopTimeout", "RunLoop.StopAndWaitForExit 超时")
 	}
 }
+
+// ResourceVisitorEvent implements IEvent[T] interface
+type ResourceVisitorEvent[T CriticalResource] struct {
+	callback func(res T)
+}
+
+func NewServiceStateVisitorEvent[T CriticalResource](callback func(res T)) *ResourceVisitorEvent[T] {
+	return &ResourceVisitorEvent[T]{
+		callback: callback,
+	}
+}
+func (e *ResourceVisitorEvent[T]) GetName() string {
+	return "ResourceVisitor"
+}
+func (e *ResourceVisitorEvent[T]) Process(ctx context.Context, resource T) {
+	e.callback(resource)
+}
+func VisitResource[T CriticalResource](poster EventPoster[T], callback func(res T)) {
+	eve := NewServiceStateVisitorEvent(func(res T) {
+		callback(res)
+	})
+	poster.PostEvent(eve)
+}
+func VisitResourceAndWait[T CriticalResource](poster EventPoster[T], callback func(res T)) {
+	ch := make(chan struct{})
+	eve := NewServiceStateVisitorEvent(func(res T) {
+		callback(res)
+		close(ch)
+	})
+	poster.PostEvent(eve)
+	<-ch
+}

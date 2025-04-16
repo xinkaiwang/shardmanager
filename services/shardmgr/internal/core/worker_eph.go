@@ -85,11 +85,11 @@ func (e *WorkerEphEvent) GetName() string {
 }
 
 func (e *WorkerEphEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.stagingWorkerEph(ctx, e.WorkerId, e.WorkerEph)
+	ss.StagingWorkerEph(ctx, e.WorkerId, e.WorkerEph)
 }
 
 // stagingWorkerEph: must call in runloop. Staging area is write by (individual) worker eph event(s), read by digestStagingWorkerEph (in batch)
-func (ss *ServiceState) stagingWorkerEph(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) {
+func (ss *ServiceState) StagingWorkerEph(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) {
 	klogging.Info(ctx).With("workerId", workerId).
 		With("hasEph", workerEph != nil).With("eph", workerEph).
 		Log("stagingWorkerEph", "开始处理worker eph")
@@ -143,4 +143,14 @@ func (ss *ServiceState) stagingWorkerEph(ctx context.Context, workerId data.Work
 	ss.EphDirty[workerFullId] = common.Unit{}
 	// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 	// 	Log("stagingWorkerEph", "worker eph已更新")
+}
+
+func (ss *ServiceState) batchAddToStagingWorkerEph(ctx context.Context, workers []*cougarjson.WorkerEphJson) {
+	for _, workerEph := range workers {
+		workerId := data.WorkerId(workerEph.WorkerId)
+		sessionId := data.SessionId(workerEph.SessionId)
+		ss.EphWorkerStaging[workerId] = map[data.SessionId]*cougarjson.WorkerEphJson{sessionId: workerEph}
+		workerFullId := data.NewWorkerFullId(workerId, sessionId, data.StatefulType(workerEph.StatefulType))
+		ss.EphDirty[workerFullId] = common.Unit{}
+	}
 }

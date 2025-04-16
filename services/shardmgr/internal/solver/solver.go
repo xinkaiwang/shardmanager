@@ -3,7 +3,12 @@ package solver
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
+)
+
+var (
+	SolverElapsedMsMetrics = kmetrics.CreateKmetric(context.Background(), "solver_elapsed_ms", "desc", []string{"name"})
 )
 
 type Solver interface {

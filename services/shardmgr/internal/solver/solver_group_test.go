@@ -12,7 +12,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // MockSolver implements Solver interface for testing
@@ -64,10 +63,10 @@ type mockConfigProvider struct {
 	config config.SolverConfig
 }
 
-func (mcp *mockConfigProvider) SetConfig(cfg *smgjson.SolverConfigJson) {
+func (mcp *mockConfigProvider) OnSolverConfigChange(cfg *config.SolverConfig) {
 	mcp.mu.Lock()
 	defer mcp.mu.Unlock()
-	mcp.config = config.SolverConfigJsonToConfig(cfg)
+	mcp.config = *cfg
 }
 
 func (mcp *mockConfigProvider) GetByName(solverType SolverType) *config.BaseSolverConfig {
@@ -169,18 +168,14 @@ func TestSolverGroup_Basic(t *testing.T) {
 
 		// 配置 solver
 		mockProvider := &mockConfigProvider{}
-		mockProvider.SetConfig(&smgjson.SolverConfigJson{
-			SoftSolverConfig: &smgjson.BaseSolverConfigJson{
-				SoftSolverEnabled: func() *bool { v := true; return &v }(),
-				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
-				ExplorePerRun:     func() *int32 { v := int32(1); return &v }(),
-			},
-		})
+		cfg := config.NewSolverConfig()
+		cfg.SoftSolverConfig.RunPerMinute = 60
+		mockProvider.OnSolverConfigChange(cfg)
 
 		RunWithSolverConfigProvider(mockProvider, func() {
 			// 使用 VirtualTimeForward 前进虚拟时间，替代真实等待
 			// 前进3000毫秒（3秒），等同于原测试中的 time.Sleep(3 * time.Second)
-			fakeTime.VirtualTimeForward(ctx, 3000)
+			fakeTime.VirtualTimeForward(ctx, 10*1000)
 
 			// 验证是否生成了提案
 			proposalMu.Lock()
@@ -272,26 +267,31 @@ func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 
 		// 配置所有 solver
 		mockProvider := &mockConfigProvider{}
-		mockProvider.SetConfig(&smgjson.SolverConfigJson{
-			SoftSolverConfig: &smgjson.BaseSolverConfigJson{
-				SoftSolverEnabled: func() *bool { v := true; return &v }(),
-				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
-				ExplorePerRun:     func() *int32 { v := int32(1); return &v }(),
-			},
-			AssignSolverConfig: &smgjson.BaseSolverConfigJson{
-				SoftSolverEnabled: func() *bool { v := true; return &v }(),
-				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
-			},
-			UnassignSolverConfig: &smgjson.BaseSolverConfigJson{
-				SoftSolverEnabled: func() *bool { v := true; return &v }(),
-				RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
-			},
-		})
+		cfg := config.NewSolverConfig()
+		cfg.SoftSolverConfig.RunPerMinute = 60
+		cfg.AssignSolverConfig.RunPerMinute = 60
+		cfg.UnassignSolverConfig.RunPerMinute = 60
+		mockProvider.OnSolverConfigChange(cfg)
+		// mockProvider.SetConfig(&smgjson.SolverConfigJson{
+		// 	SoftSolverConfig: &smgjson.BaseSolverConfigJson{
+		// 		SoftSolverEnabled: func() *bool { v := true; return &v }(),
+		// 		RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
+		// 		ExplorePerRun:     func() *int32 { v := int32(1); return &v }(),
+		// 	},
+		// 	AssignSolverConfig: &smgjson.BaseSolverConfigJson{
+		// 		SoftSolverEnabled: func() *bool { v := true; return &v }(),
+		// 		RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
+		// 	},
+		// 	UnassignSolverConfig: &smgjson.BaseSolverConfigJson{
+		// 		SoftSolverEnabled: func() *bool { v := true; return &v }(),
+		// 		RunPerMinute:      func() *int32 { v := int32(60); return &v }(),
+		// 	},
+		// })
 
 		RunWithSolverConfigProvider(mockProvider, func() {
 			// 使用 VirtualTimeForward 前进虚拟时间，替代真实等待
 			// 前进3000毫秒（3秒），等同于原测试中的 time.Sleep(3 * time.Second)
-			fakeTime.VirtualTimeForward(ctx, 3000)
+			fakeTime.VirtualTimeForward(ctx, 10000)
 
 			// 验证每个 solver 是否生成了提案
 			proposalMu.Lock()
@@ -374,13 +374,17 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 		{
 			// 配置 solver 为低 QPM
 			mockProvider := &mockConfigProvider{}
-			mockProvider.SetConfig(&smgjson.SolverConfigJson{
-				SoftSolverConfig: &smgjson.BaseSolverConfigJson{
-					SoftSolverEnabled: func() *bool { v := true; return &v }(),
-					RunPerMinute:      func() *int32 { v := int32(600); return &v }(), // 低 QPM
-					ExplorePerRun:     func() *int32 { v := int32(50); return &v }(),
-				},
-			})
+			cfg := config.NewSolverConfig()
+			cfg.SoftSolverConfig.RunPerMinute = 600
+			cfg.SoftSolverConfig.ExplorePerRun = 50
+			mockProvider.OnSolverConfigChange(cfg)
+			// mockProvider.SetConfig(&smgjson.SolverConfigJson{
+			// 	SoftSolverConfig: &smgjson.BaseSolverConfigJson{
+			// 		SoftSolverEnabled: func() *bool { v := true; return &v }(),
+			// 		RunPerMinute:      func() *int32 { v := int32(600); return &v }(), // 低 QPM
+			// 		ExplorePerRun:     func() *int32 { v := int32(50); return &v }(),
+			// 	},
+			// })
 
 			RunWithSolverConfigProvider(mockProvider, func() {
 				group.AddSolver(ctx, mockSolver)
@@ -407,13 +411,17 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 		{
 			// 配置 solver 为高 QPM
 			mockProvider := &mockConfigProvider{}
-			mockProvider.SetConfig(&smgjson.SolverConfigJson{
-				SoftSolverConfig: &smgjson.BaseSolverConfigJson{
-					SoftSolverEnabled: func() *bool { v := true; return &v }(),
-					RunPerMinute:      func() *int32 { v := int32(1200); return &v }(), // 高 QPM
-					ExplorePerRun:     func() *int32 { v := int32(5); return &v }(),
-				},
-			})
+			cfg := config.NewSolverConfig()
+			cfg.SoftSolverConfig.RunPerMinute = 1200
+			cfg.SoftSolverConfig.ExplorePerRun = 5
+			mockProvider.OnSolverConfigChange(cfg)
+			// mockProvider.SetConfig(&smgjson.SolverConfigJson{
+			// 	SoftSolverConfig: &smgjson.BaseSolverConfigJson{
+			// 		SoftSolverEnabled: func() *bool { v := true; return &v }(),
+			// 		RunPerMinute:      func() *int32 { v := int32(1200); return &v }(), // 高 QPM
+			// 		ExplorePerRun:     func() *int32 { v := int32(5); return &v }(),
+			// 	},
+			// })
 
 			RunWithSolverConfigProvider(mockProvider, func() {
 				// 使用 VirtualTimeForward 前进虚拟时间，替代真实等待

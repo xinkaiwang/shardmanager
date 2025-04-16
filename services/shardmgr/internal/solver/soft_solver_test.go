@@ -8,7 +8,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // 测试用的 CostProvider
@@ -47,11 +46,14 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 	ctx := context.Background()
 
 	// 设置 SoftSolver 配置
-	GetCurrentSolverConfigProvider().SetConfig(&smgjson.SolverConfigJson{
-		SoftSolverConfig: &smgjson.BaseSolverConfigJson{
-			ExplorePerRun: func() *int32 { v := int32(100); return &v }(), // 增加探索次数以提高找到好方案的概率
-		},
-	})
+	cfg := config.NewSolverConfig()
+	cfg.SoftSolverConfig.ExplorePerRun = 100
+	GetCurrentSolverConfigProvider().OnSolverConfigChange(cfg)
+	// GetCurrentSolverConfigProvider().SetConfig(&smgjson.SolverConfigJson{
+	// 	SoftSolverConfig: &smgjson.BaseSolverConfigJson{
+	// 		ExplorePerRun: func() *int32 { v := int32(100); return &v }(), // 增加探索次数以提高找到好方案的概率
+	// 	},
+	// })
 
 	costfuncCfg := config.CostfuncConfig{
 		ShardCountCostEnable: true,

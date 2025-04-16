@@ -11,6 +11,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/solver"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
@@ -32,12 +33,11 @@ func (ss *ServiceState) Init(ctx context.Context) {
 
 	// step 4: load current shard plan
 	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
-	ss.syncShardPlan(ctx, currentShardPlan) // based on crrentShardPlan, update ss.AllShards, and write to etcd
+	ss.stagingShardPlan = currentShardPlan // staging area, will be used in ss.syncShardPlan
+	ss.digestStagingShardPlan(ctx)         // based on crrentShardPlan, update ss.AllShards, and write to etcd
 	// step 5: load current worker eph
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
-	for _, workerEph := range currentWorkerEph {
-		ss.stagingWorkerEph(ctx, data.WorkerId(workerEph.WorkerId), workerEph)
-	}
+	ss.batchAddToStagingWorkerEph(ctx, currentWorkerEph) // staging area, will be used in ss.syncEphStagingToWorkerState
 	// step 6: sync workerEph to workerState
 	ss.digestStagingWorkerEph(ctx)
 
@@ -45,14 +45,17 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision)
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
 	ss.ServiceConfigWatcher = NewServiceConfigWatcher(ctx, ss, currentServiceConfigRevision)
+	ss.ServiceConfigWatcher.SolverConfigListener = append(ss.ServiceConfigWatcher.SolverConfigListener, func(sc *config.SolverConfig) {
+		solver.GetCurrentSolverConfigProvider().OnSolverConfigChange(sc)
+	})
 
-	// step 8: start housekeeping threads
+	// step 8: current snapshot and future snapshot
+	ss.ReCreateSnapshot(ctx)
+
+	// step 9: start housekeeping threads
 	ss.PostEvent(NewHousekeep1sEvent())
 	ss.PostEvent(NewHousekeep5sEvent())
 	ss.PostEvent(NewAcceptEvent())
-
-	// step 9: current snapshot and future snapshot
-	ss.ReCreateSnapshot(ctx)
 
 	// step 10: start
 	// Note: The runloop is now initialized in AssembleSsXxxx

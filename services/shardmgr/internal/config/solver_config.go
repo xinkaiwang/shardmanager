@@ -8,6 +8,14 @@ type SolverConfig struct {
 	UnassignSolverConfig BaseSolverConfig
 }
 
+func NewSolverConfig() *SolverConfig {
+	return &SolverConfig{
+		SoftSolverConfig:     NewBaseSolverConfig(),
+		AssignSolverConfig:   NewBaseSolverConfig(),
+		UnassignSolverConfig: NewBaseSolverConfig(),
+	}
+}
+
 type BaseSolverConfig struct {
 	SolverEnabled bool
 	RunPerMinute  int
@@ -16,7 +24,7 @@ type BaseSolverConfig struct {
 
 func NewBaseSolverConfig() BaseSolverConfig {
 	return BaseSolverConfig{
-		SolverEnabled: false,
+		SolverEnabled: true,
 		RunPerMinute:  10,
 		ExplorePerRun: 10,
 	}

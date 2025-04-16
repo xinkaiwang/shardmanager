@@ -14,7 +14,7 @@ type App struct {
 }
 
 func NewApp(ctx context.Context) *App {
-	ss := core.AssembleSsWithShadowState(ctx, "app")
+	ss := core.AssembleSsAll(ctx, "app")
 	app := &App{
 		ss: ss,
 	}

@@ -210,6 +210,10 @@ func (dtt *DriverThreadTask) GetName() string {
 
 func (dtt *DriverThreadTask) Execute() {
 	proposal := dtt.parent.parent.solver.FindProposal(dtt.parent.parent.ctx, dtt.parent.parent.parent.loadSnapshot())
+	if proposal == nil {
+		close(dtt.done)
+		return
+	}
 	result := dtt.parent.parent.parent.enqueueProposals(proposal)
 	if result != common.ER_Enqueued {
 		klogging.Debug(dtt.ctx).With("solver", dtt.name).With("result", result).Log("SolverGroup", "EnqueueProposal")

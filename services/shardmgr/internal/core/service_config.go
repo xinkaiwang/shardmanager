@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	configUpdateMetrics = kmetrics.CreateKmetric(context.Background(), "config_update", "service config update count", []string{"type"})
+	configUpdateMetrics = kmetrics.CreateKmetric(context.Background(), "config_update", "service config update count", []string{"type"}).CountOnly()
 )
 
 func (ss *ServiceState) LoadServiceConfig(ctx context.Context) (*config.ServiceConfig, etcdprov.EtcdRevision) {

@@ -10,15 +10,10 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
-// syncShardPlan: this must called in runloop
+// digestStagingShardPlan: this must called in runloop
 // this will modify AllShards, and call FlushShardState
-func (ss *ServiceState) syncShardPlan(ctx context.Context, shardPlan []*smgjson.ShardLineJson) {
-	// 注意：此函数已经在 runloop 中调用，它是 ServiceState 的方法
-	// ServiceState 已经有限制只能在 runloop 中修改，因此这里不需要额外的锁
-	// runloop 是单线程的，因此这里的 map 操作是安全的
-
-	// 如果外部仍需要安全地访问这个 map，ServiceState 应该提供安全的访问方法
-	// 此处的问题可能是测试代码直接访问了 ss.AllShards 而不通过安全方法
+func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
+	shardPlan := ss.stagingShardPlan
 
 	// compare with current shard state
 	needRemove := map[data.ShardId]*ShardState{}
@@ -81,7 +76,10 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 				return
 			}
 			shardPlan := smgjson.ParseShardPlan(item.Value)
-			sp.parent.PostEvent(&ShardPlanUpdateEvent{ShardPlan: shardPlan})
+			krunloop.VisitResource(sp.parent, func(ss *ServiceState) {
+				ss.stagingShardPlan = shardPlan
+				ss.syncShardsBatchManager.TrySchedule(ctx)
+			})
 		}
 	}
 }
@@ -96,5 +94,5 @@ func (spue *ShardPlanUpdateEvent) GetName() string {
 }
 
 func (spue *ShardPlanUpdateEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.syncShardPlan(ctx, spue.ShardPlan)
+	ss.digestStagingShardPlan(ctx)
 }
