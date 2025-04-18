@@ -18,6 +18,8 @@ type ShardStateJson struct {
 
 	CustomProperties map[string]string `json:"custom_properties,omitempty"`
 
+	LastUpdateTimeMs int64 `json:"last_update_time_ms,omitempty"` // last update time in ms
+
 	LastUpdateReason string `json:"last_update_reason,omitempty"`
 }
 

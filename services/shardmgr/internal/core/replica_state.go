@@ -11,7 +11,7 @@ import (
 type ReplicaState struct {
 	ShardId    data.ShardId
 	ReplicaIdx data.ReplicaIdx
-	LameDuck   bool
+	LameDuck   bool // soft delete, we will delete this replica (in housekeeping) when assignments are gone
 
 	Assignments map[data.AssignmentId]common.Unit
 }
@@ -40,6 +40,7 @@ func NewReplicaStateByJson(parent *ShardState, replicaStateJson *smgjson.Replica
 
 func (rs *ReplicaState) ToJson() *smgjson.ReplicaStateJson {
 	obj := smgjson.NewReplicaStateJson()
+	obj.LameDuck = common.Int8FromBool(rs.LameDuck)
 	if rs.ReplicaIdx != 0 {
 		idx := int32(rs.ReplicaIdx)
 		obj.ReplicaIdx = idx

@@ -171,8 +171,12 @@ func DynamicThresholdConfigJsonToConfig(sc *smgjson.DynamicThresholdConfigJson) 
 
 func (cfg *ServiceConfig) ToServiceConfigJson() *smgjson.ServiceConfigJson {
 	return &smgjson.ServiceConfigJson{
-		ShardConfig: cfg.ShardConfig.ToJsonObj(),
-		SystemLimit: cfg.SystemLimit.ToJsonObj(),
+		ShardConfig:            cfg.ShardConfig.ToJsonObj(),
+		WorkerConfig:           cfg.WorkerConfig.ToJsonObj(),
+		SystemLimit:            cfg.SystemLimit.ToJsonObj(),
+		CostFuncCfg:            cfg.CostFuncCfg.ToJsonObj(),
+		SolverConfig:           cfg.SolverConfig.ToJsonObj(),
+		DynamicThresholdConfig: cfg.DynamicThresholdConfig.ToJsonObj(),
 	}
 }
 func (cfg *ShardConfig) ToJsonObj() *smgjson.ShardConfigJson {

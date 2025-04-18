@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -30,15 +31,30 @@ func NewHousekeep5sEvent() *Housekeep5sEvent {
 func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 	// check shard tombstone
 	for _, shard := range ss.AllShards {
-		if !shard.LameDuck {
-			continue
+		dirtyFlag := NewDirtyFlag()
+		// cleanup lame duck replicas
+		for _, replica := range shard.Replicas {
+			if replica.LameDuck {
+				// hard delete this if no assignment left
+				if len(replica.Assignments) == 0 {
+					// delete this replica
+					// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
+					delete(shard.Replicas, replica.ReplicaIdx)
+					dirtyFlag.AddDirtyFlag("hardDeleteReplica" + strconv.Itoa(int(replica.ReplicaIdx)))
+				}
+			}
 		}
-		if len(shard.Replicas) > 0 {
-			continue
+		if shard.LameDuck && len(shard.Replicas) == 0 {
+			// shard is tombstone, delete it
+			delete(ss.AllShards, shard.ShardId)
+			ss.storeProvider.StoreShardState(shard.ShardId, nil)
+			klogging.Info(ctx).With("shardId", shard.ShardId).Log("checkShardTombStone", "delete shardState")
+		} else if dirtyFlag.IsDirty() {
+			// shard is dirty, update it
+			shard.LastUpdateTimeMs = kcommon.GetWallTimeMs()
+			shard.LastUpdateReason = dirtyFlag.String()
+			ss.storeProvider.StoreShardState(shard.ShardId, shard.ToJson())
+			klogging.Info(ctx).With("shardId", shard.ShardId).With("updateReason", shard.LastUpdateReason).Log("checkShardTombStone", "update shardState")
 		}
-		// shard is tombstone, delete it
-		delete(ss.AllShards, shard.ShardId)
-		ss.storeProvider.StoreShardState(shard.ShardId, nil)
-		klogging.Info(ctx).With("shardId", shard.ShardId).Log("checkShardTombStone", "delete shardState")
 	}
 }

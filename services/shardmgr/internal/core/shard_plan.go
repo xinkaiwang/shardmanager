@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -32,6 +33,7 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 			dirtyFlags := ss.UpdateShardStateByPlan(shard, shardLine)
 			if dirtyFlags.IsDirty() {
 				updated = append(updated, shard.ShardId)
+				shard.LastUpdateTimeMs = kcommon.GetWallTimeMs()
 				shard.LastUpdateReason = dirtyFlags.String()
 			} else {
 				unchanged++

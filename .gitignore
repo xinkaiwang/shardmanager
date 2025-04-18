@@ -31,3 +31,4 @@ coverage.html
 coverage.out
 logs/
 .DS_Store
+__debug_bin*

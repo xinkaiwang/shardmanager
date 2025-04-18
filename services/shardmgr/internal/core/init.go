@@ -52,6 +52,9 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.ServiceConfigWatcher.SolverConfigListener = append(ss.ServiceConfigWatcher.SolverConfigListener, func(sc *config.SolverConfig) {
 		solver.GetCurrentSolverConfigProvider().OnSolverConfigChange(sc)
 	})
+	ss.ServiceConfigWatcher.ShardConfigListener = append(ss.ServiceConfigWatcher.ShardConfigListener, func(sc *config.ShardConfig) {
+		ss.syncShardsBatchManager.TrySchedule(ctx)
+	})
 
 	// step 8: current snapshot and future snapshot
 	ss.ReCreateSnapshot(ctx)
