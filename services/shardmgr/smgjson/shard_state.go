@@ -16,6 +16,8 @@ type ShardStateJson struct {
 
 	LameDuck int8 `json:"lame_duck,omitempty"` // use int to represent bool
 
+	CustomProperties map[string]string `json:"custom_properties,omitempty"`
+
 	LastUpdateReason string `json:"last_update_reason,omitempty"`
 }
 

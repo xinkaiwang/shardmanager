@@ -26,11 +26,11 @@ func NewWorkerEphWatcher(ctx context.Context, ss *ServiceState, currentWorkerEph
 }
 
 func (w *WorkerEphWatcher) Run(ctx context.Context) {
-	klogging.Info(ctx).Log("WorkerEphWatcherStarted", "exit")
+	klogging.Info(ctx).Log("WorkerEphWatcher", "Started")
 	for {
 		select {
 		case <-ctx.Done():
-			klogging.Info(ctx).Log("WorkerEphWatcherExit", "exit")
+			klogging.Info(ctx).Log("WorkerEphWatcher", "CtxDone.Exit")
 			return
 		case kvItem := <-w.ch:
 			if kvItem.Value == "" {

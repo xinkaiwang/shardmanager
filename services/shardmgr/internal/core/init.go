@@ -25,11 +25,15 @@ func (ss *ServiceState) Init(ctx context.Context) {
 		return ss.ServiceConfig.DynamicThresholdConfig
 	})
 
-	// step 2: load all shard state
-	ss.LoadAllShardState(ctx) // (from /smg/shard_state/ to ss.AllShards)
-	// setp 3: load all worker state
+	// setp 2: load all worker state
 	ss.LoadAllWorkerState(ctx) // (from /smg/worker_state/ to ss.AllWorkers and ss.AllAssignments)
+	// step 3: load all shard state (note: we need to load workerStates first, because workerState will populate assignments)
+	ss.LoadAllShardState(ctx) // (from /smg/shard_state/ to ss.AllShards)
 	ss.ShadowState.InitDone()
+	ss.PrintAllShards(ctx)
+	ss.PrintAllWorkers(ctx)
+	ss.PrintAllAssignments(ctx)
+	klogging.Info(ctx).Log("ServiceStateInit", "load all shard and worker state done")
 
 	// step 4: load current shard plan
 	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
@@ -42,9 +46,9 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.firstDigestStagingWorkerEph(ctx)
 
 	// step 7: start listening to shard plan changes/worker eph changes/service config changes
-	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision)
-	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision)
-	ss.ServiceConfigWatcher = NewServiceConfigWatcher(ctx, ss, currentServiceConfigRevision)
+	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision+1) // +1 to skip the current revision
+	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision+1)
+	ss.ServiceConfigWatcher = NewServiceConfigWatcher(ctx, ss, currentServiceConfigRevision+1)
 	ss.ServiceConfigWatcher.SolverConfigListener = append(ss.ServiceConfigWatcher.SolverConfigListener, func(sc *config.SolverConfig) {
 		solver.GetCurrentSolverConfigProvider().OnSolverConfigChange(sc)
 	})
@@ -69,12 +73,12 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 	for _, item := range list {
 		shardStateJson := smgjson.ShardStateJsonFromJson(item.Value)
 		ss.ShadowState.InitShardState(shardStateJson.ShardName, shardStateJson)
-		shardObj := NewShardState(shardStateJson.ShardName)
+		shardState := NewShardStateByJson(ctx, ss, shardStateJson)
 
 		// 设置软删除状态，使用辅助函数转换
-		shardObj.LameDuck = smgjson.Int82Bool(shardStateJson.LameDuck)
+		shardState.LameDuck = smgjson.Int82Bool(shardStateJson.LameDuck)
 
-		ss.AllShards[data.ShardId(shardObj.ShardId)] = shardObj
+		ss.AllShards[data.ShardId(shardState.ShardId)] = shardState
 	}
 }
 
@@ -84,7 +88,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
 		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
-		WorkerState := NewWorkerStateFromJson(workerStateJson)
+		WorkerState := NewWorkerStateFromJson(ss, workerStateJson)
 		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), data.StatefulType(workerStateJson.StatefulType))
 		if WorkerState.HasShutdownHat() {
 			ss.ShutdownHat[workerFullId] = common.Unit{}

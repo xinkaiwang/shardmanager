@@ -23,6 +23,7 @@ func (ss *ServiceState) LoadServiceConfig(ctx context.Context) (*config.ServiceC
 		etcdprov.GetCurrentEtcdProvider(ctx).Set(ctx, path, defVal.ToServiceConfigJson().ToJson())
 		node = etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path) // read the value again
 	}
+	klogging.Info(ctx).With("path", path).With("value", node.Value).With("revision", node.ModRevision).Log("LoadServiceConfig", "读取服务配置")
 	sc := config.ParseServiceConfigFromJson(node.Value)
 	return sc, node.ModRevision
 }
@@ -105,14 +106,16 @@ func NewServiceConfigWatcher(ctx context.Context, parent *ServiceState, currentS
 	watcher := &ServiceConfigWatcher{
 		parent: parent,
 	}
-	watcher.ch = etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, parent.PathManager.GetServiceConfigPath(), currentServiceConfigRevision)
+	path := parent.PathManager.GetServiceConfigPath()
+	klogging.Debug(ctx).With("path", path).With("revision", currentServiceConfigRevision).Log("ServiceConfigWatcher", "创建服务配置观察者")
+	watcher.ch = etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, path, currentServiceConfigRevision)
 	go watcher.Run(ctx)
 	watcher.touchAll(ctx)
 	return watcher
 }
 
 func (w *ServiceConfigWatcher) Run(ctx context.Context) {
-	klogging.Info(ctx).Log("ServiceConfigWatcherStarted", "exit")
+	klogging.Info(ctx).Log("ServiceConfigWatcherRun", "started")
 	stop := false
 	for !stop {
 		select {
@@ -131,7 +134,7 @@ func (w *ServiceConfigWatcher) Run(ctx context.Context) {
 				continue
 			}
 			// this is a add or update event
-			klogging.Info(ctx).With("serviceConfig", kvItem.Value).Log("ServiceConfigWatcher", "观察到服务配置已更新")
+			klogging.Info(ctx).With("serviceConfig", kvItem.Value).With("revision", kvItem.ModRevision).Log("ServiceConfigWatcher", "观察到服务配置已更新")
 			cfg := config.ParseServiceConfigFromJson(kvItem.Value)
 			w.parent.PostEvent(NewServiceConfigUpdateEvent(w, cfg))
 		}

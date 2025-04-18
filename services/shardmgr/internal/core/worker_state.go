@@ -62,15 +62,21 @@ func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId, statefulTy
 	}
 }
 
-func NewWorkerStateFromJson(workerStateJson *smgjson.WorkerStateJson) *WorkerState {
+func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerStateJson) *WorkerState {
 	workerState := &WorkerState{
-		WorkerId:     workerStateJson.WorkerId,
-		SessionId:    workerStateJson.SessionId,
-		State:        workerStateJson.WorkerState,
-		Assignments:  make(map[data.AssignmentId]common.Unit),
-		SignalBox:    NewSignalBox(),
-		WorkerInfo:   smgjson.WorkerInfoJson{},
-		StatefulType: workerStateJson.StatefulType,
+		WorkerId:    workerStateJson.WorkerId,
+		SessionId:   workerStateJson.SessionId,
+		State:       workerStateJson.WorkerState,
+		Assignments: make(map[data.AssignmentId]common.Unit),
+		SignalBox:   NewSignalBox(),
+		WorkerInfo:  smgjson.WorkerInfoJson{},
+	}
+	workerState.StatefulType = data.StatefulTypeParseFromString(workerStateJson.StatefulType)
+	for assignId, assignmentJson := range workerStateJson.Assignments {
+		assignmentId := data.AssignmentId(assignId)
+		assignmentState := NewAssignmentState(assignmentId, assignmentJson.ShardId, assignmentJson.ReplicaIdx, workerState.GetWorkerFullId())
+		workerState.Assignments[assignmentId] = common.Unit{}
+		ss.AllAssignments[assignmentId] = assignmentState
 	}
 	return workerState
 }

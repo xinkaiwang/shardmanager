@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 )
 
@@ -34,7 +35,11 @@ func (bm *BatchManager) TrySchedule(ctx context.Context) {
 		needSchedule = true
 	}
 	bm.mutex.Unlock()
-	// klogging.Info(ctx).With("name", bm.name).With("needSchedule", needSchedule).Log("TrySchedule", "done")
+	scheduled := "scheduled"
+	if !needSchedule {
+		scheduled = "merged"
+	}
+	klogging.Info(ctx).With("name", bm.name).With("result", scheduled).Log("BatchManager", "in-bound")
 	if !needSchedule {
 		return
 	}
@@ -63,5 +68,6 @@ func (bpe *BatchProcessEvent) Process(ctx context.Context, ss *ServiceState) {
 	bpe.parent.isInFlight = false
 	bpe.parent.mutex.Unlock()
 
+	klogging.Info(ctx).With("name", bpe.parent.name).Log("BatchManager", "out-bound")
 	bpe.parent.fn(ctx, ss)
 }

@@ -18,13 +18,13 @@ type WorkerStateJson struct {
 
 	Assignments map[data.AssignmentId]*AssignmentStateJson `json:"assignments"`
 
-	LastUpdateAtMs   int64             `json:"update_time_ms,omitempty"`
-	LastUpdateReason string            `json:"update_reason,omitempty"`
-	RequestShutdown  int8              `json:"req_shutdown,omitempty"`
-	StatefulType     data.StatefulType `json:"stateful_type,omitempty"` // stateless, ST_MEMORY, ST_HARD_DRIVE
+	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
+	LastUpdateReason string `json:"update_reason,omitempty"`
+	RequestShutdown  int8   `json:"req_shutdown,omitempty"`
+	StatefulType     string `json:"stateful_type,omitempty"` // stateless, ST_MEMORY, ST_HARD_DRIVE
 }
 
-func NewWorkerStateJson(workerId data.WorkerId, sessionId data.SessionId, statefulType data.StatefulType) *WorkerStateJson {
+func NewWorkerStateJson(workerId data.WorkerId, sessionId data.SessionId, statefulType string) *WorkerStateJson {
 	return &WorkerStateJson{
 		WorkerId:     workerId,
 		SessionId:    sessionId,

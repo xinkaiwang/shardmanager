@@ -2,6 +2,8 @@ package data
 
 import (
 	"strings"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
 type WorkerId string
@@ -15,6 +17,18 @@ const (
 	ST_MEMORY     StatefulType = "state_in_mem" // 弱状态，状态存在于内存。热身需要数秒,若掉电后需要重新热身。
 	ST_HARD_DRIVE StatefulType = "state_in_hd"  // 强状态，状态存在于硬盘。热身需要数分钟/小时,但掉电重启后不需要重新热身
 )
+
+func StatefulTypeParseFromString(str string) StatefulType {
+	switch str {
+	case "state_in_mem":
+		return ST_MEMORY
+	case "state_in_hd":
+		return ST_HARD_DRIVE
+	default:
+		ke := kerror.Create("InvalidStatefulType", "invalid stateful type").With("stateful_type", str)
+		panic(ke)
+	}
+}
 
 // WorkerFullId: sessionId is optional, it only exists when state is in memory
 type WorkerFullId struct {

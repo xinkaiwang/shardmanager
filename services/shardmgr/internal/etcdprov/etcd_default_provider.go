@@ -151,7 +151,7 @@ func (pvd *etcdDefaultProvider) Set(ctx context.Context, key, value string) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("etcdDefaultProvider", "setting key in etcd")
+	klogging.Info(ctx).With("key", key).With("value", value).With("len", len(value)).Log("etcdDefaultProvider", "setting key in etcd")
 	_, err := pvd.client.Put(timeoutCtx, key, value)
 	if err != nil {
 		panic(kerror.Create("EtcdPutError", "failed to set key in etcd").
@@ -176,6 +176,7 @@ func (pvd *etcdDefaultProvider) Delete(ctx context.Context, key string) {
 			With("key", key).
 			With("error", err.Error()))
 	}
+	klogging.Info(ctx).With("key", key).With("deleted", resp.Deleted).Log("etcdDefaultProvider", "deleting key from etcd")
 
 	// 删除时键必须存在
 	if resp.Deleted == 0 {
@@ -225,7 +226,7 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 	revision := resp.Header.Revision
 
 	// 记录开始加载的版本号
-	klogging.Info(ctx).
+	klogging.Debug(ctx).
 		With("pathPrefix", pathPrefix).
 		With("revision", revision).
 		Log("LoadAllByPrefix", "starting load at revision")
@@ -256,7 +257,7 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 		}
 
 		// 记录本次加载的数量
-		klogging.Info(ctx).
+		klogging.Debug(ctx).
 			With("pathPrefix", pathPrefix).
 			With("pageCount", len(resp.Kvs)).
 			With("totalCount", len(items)+len(resp.Kvs)).
@@ -291,6 +292,12 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 		key = string(resp.Kvs[len(resp.Kvs)-1].Key)
 	}
 
+	for _, kv := range items {
+		klogging.Info(ctx).
+			With("key", kv.Key).
+			With("value", kv.Value).
+			Log("LoadAllByPrefix", "found key")
+	}
 	return items, EtcdRevision(revision)
 }
 

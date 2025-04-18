@@ -29,7 +29,7 @@ func main() {
 	}
 	logFormat := os.Getenv("LOG_FORMAT")
 	if logFormat == "" {
-		logFormat = "text" // 默认 JSON 格式
+		logFormat = "simple" // 默认 JSON 格式
 	}
 
 	// 创建并配置 LogrusLogger

@@ -5,6 +5,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -47,6 +48,30 @@ func NewShardStateByPlan(shardLine *smgjson.ShardLineJson, defCfg config.ShardCo
 		LameDuck:         false,
 		LastUpdateReason: "unmarshal",
 	}
+}
+
+func NewShardStateByJson(ctx context.Context, ss *ServiceState, shardStateJson *smgjson.ShardStateJson) *ShardState {
+	shardState := &ShardState{
+		ShardId:          shardStateJson.ShardName,
+		Replicas:         make(map[data.ReplicaIdx]*ReplicaState),
+		Hints:            ss.ServiceConfig.ShardConfig,
+		CustomProperties: shardStateJson.CustomProperties,
+		LameDuck:         common.BoolFromInt8(shardStateJson.LameDuck),
+		LastUpdateReason: "unmarshal",
+	}
+	for i, replicaJson := range shardStateJson.Resplicas {
+		replica := NewReplicaStateByJson(shardState, replicaJson)
+		shardState.Replicas[data.ReplicaIdx(i)] = replica
+		for _, assignId := range replicaJson.Assignments {
+			_, ok := ss.AllAssignments[data.AssignmentId(assignId)]
+			if !ok {
+				klogging.Warning(ctx).With("shardId", shardState.ShardId).With("replicaIdx", i).With("assignId", assignId).Log("NewShardStateByJson", "assignment not found")
+				continue
+			}
+			replica.Assignments[data.AssignmentId(assignId)] = common.Unit{}
+		}
+	}
+	return shardState
 }
 
 // return 1 if shard state is updated, 0 if not
@@ -99,7 +124,7 @@ func (shard *ShardState) MarkAsSoftDelete(ctx context.Context) {
 }
 
 func (ss *ServiceState) FlushShardState(ctx context.Context, updated []data.ShardId, inserted []data.ShardId, deleted []data.ShardId) {
-	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).Log("FlushShardState", "开始刷新分片状态")
+	// klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).Log("FlushShardState", "开始刷新分片状态")
 
 	for _, shardId := range updated {
 		klogging.Info(ctx).With("shardId", shardId).With("time", kcommon.GetWallTimeMs()).Log("FlushShardState", "更新分片")
@@ -135,38 +160,41 @@ func (shard *ShardState) ToJson() *smgjson.ShardStateJson {
 // return >0 means replica added, <0 means replica removed, 0 means no change
 func (shard *ShardState) ReEvaluateReplicaCount() int {
 	// 重新计算副本数
-	replicaCount := 0
+	curReplicaCount := 0
+	addedReplicaCount := 0
 	largestReplicaIdx := data.ReplicaIdx(0)
 	for _, replica := range shard.Replicas {
 		if !replica.LameDuck {
-			replicaCount++
+			curReplicaCount++
 		}
 		if replica.ReplicaIdx > largestReplicaIdx {
 			largestReplicaIdx = replica.ReplicaIdx
 		}
 	}
 	// add new replicas if needed
-	for replicaCount < shard.Hints.MinReplicaCount {
+	for curReplicaCount < shard.Hints.MinReplicaCount {
 		// add new replica
 		// step 1: find the next available replica index
 		nextReplicaIdx := shard.findNextAvailableReplicaIndex()
 		// step 2: create a new replica
 		replica := NewReplicaState(shard.ShardId, nextReplicaIdx)
 		shard.Replicas[nextReplicaIdx] = replica
-		replicaCount++
+		curReplicaCount++
+		addedReplicaCount++
 	}
 	// (soft delete) remove extra replicas if needed
-	for replicaCount > shard.Hints.MaxReplicaCount {
+	for curReplicaCount > shard.Hints.MaxReplicaCount {
 		// remove the last replica
 		if replica, ok := shard.Replicas[largestReplicaIdx]; ok {
 			if !replica.LameDuck {
 				replica.LameDuck = true
-				replicaCount--
+				curReplicaCount--
+				addedReplicaCount--
 			}
 		}
 		largestReplicaIdx--
 	}
-	return replicaCount
+	return addedReplicaCount
 }
 
 func (shard *ShardState) findNextAvailableReplicaIndex() data.ReplicaIdx {

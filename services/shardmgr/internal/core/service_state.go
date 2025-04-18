@@ -2,7 +2,10 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
@@ -73,13 +76,13 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 	ss.routingProvider = shadow.NewDefaultRoutingProvider(ss.PathManager)
 	ss.actionProvider = shadow.NewDefaultActionProvider(ss.PathManager)
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
-	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerBatch", func(ctx context.Context, ss *ServiceState) {
+	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerEphBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.digestStagingWorkerEph(ctx)
 	})
 	ss.reCreateSnapshotBatchManager = NewBatchManager(ss, 10, "reCreateSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.ReCreateSnapshot(ctx)
 	})
-	ss.syncShardsBatchManager = NewBatchManager(ss, 10, "syncShardsBatch", func(ctx context.Context, ss *ServiceState) {
+	ss.syncShardsBatchManager = NewBatchManager(ss, 10, "syncShardPlanBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.digestStagingShardPlan(ctx)
 	})
 	return ss
@@ -137,4 +140,25 @@ func (ss *ServiceState) FindWorkerStateByWorkerFullId(workerFullId data.WorkerFu
 		return nil
 	}
 	return workerState
+}
+
+func (ss *ServiceState) PrintAllShards(ctx context.Context) {
+	for _, shard := range ss.AllShards {
+		data, err := json.Marshal(shard)
+		if err != nil {
+			ke := kerror.Wrap(err, "json.Marshal", "failed to marshal shard", false).With("shardId", shard.ShardId)
+			panic(ke)
+		}
+		klogging.Info(ctx).With("shardId", shard.ShardId).With("data", string(data)).Log("PrintAllShards", "shard")
+	}
+}
+func (ss *ServiceState) PrintAllWorkers(ctx context.Context) {
+	for id, workerState := range ss.AllWorkers {
+		klogging.Info(ctx).With("workerId", id).With("sessionId", workerState.SessionId).Log("PrintAllWorkers", "worker")
+	}
+}
+func (ss *ServiceState) PrintAllAssignments(ctx context.Context) {
+	for _, assignment := range ss.AllAssignments {
+		klogging.Info(ctx).With("assignmentId", assignment.AssignmentId).With("shardId", assignment.ShardId).With("replicaIdx", assignment.ReplicaIdx).Log("PrintAllAssignments", "assignment")
+	}
 }

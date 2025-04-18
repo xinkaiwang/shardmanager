@@ -24,11 +24,25 @@ func NewReplicaState(shardId data.ShardId, replicaIdx data.ReplicaIdx) *ReplicaS
 	}
 }
 
+func NewReplicaStateByJson(parent *ShardState, replicaStateJson *smgjson.ReplicaStateJson) *ReplicaState {
+	replicaState := &ReplicaState{
+		ShardId:     parent.ShardId,
+		ReplicaIdx:  data.ReplicaIdx(replicaStateJson.ReplicaIdx),
+		LameDuck:    common.BoolFromInt8(replicaStateJson.LameDuck),
+		Assignments: make(map[data.AssignmentId]common.Unit),
+	}
+
+	for _, assignId := range replicaStateJson.Assignments {
+		replicaState.Assignments[data.AssignmentId(assignId)] = common.Unit{}
+	}
+	return replicaState
+}
+
 func (rs *ReplicaState) ToJson() *smgjson.ReplicaStateJson {
 	obj := smgjson.NewReplicaStateJson()
 	if rs.ReplicaIdx != 0 {
 		idx := int32(rs.ReplicaIdx)
-		obj.ReplicaIdx = &idx
+		obj.ReplicaIdx = idx
 	}
 	for assignId := range rs.Assignments {
 		obj.Assignments = append(obj.Assignments, string(assignId))

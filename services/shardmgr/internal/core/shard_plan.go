@@ -23,6 +23,7 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 	updated := []data.ShardId{}
 	inserted := []data.ShardId{}
 	deleted := []data.ShardId{}
+	unchanged := 0
 	// Based on what we have in shardPlan, we will update shard state, add new shard if not exist, and remove shard if not in shardPlan, update shard state if shardPlan is different
 	for _, shardLine := range shardPlan {
 		shardId := data.ShardId(shardLine.ShardName)
@@ -32,6 +33,8 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 			if dirtyFlags.IsDirty() {
 				updated = append(updated, shard.ShardId)
 				shard.LastUpdateReason = dirtyFlags.String()
+			} else {
+				unchanged++
 			}
 			delete(needRemove, shard.ShardId)
 		} else {
@@ -49,34 +52,44 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 		shard.MarkAsSoftDelete(ctx)
 	}
 	// log
-	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).Log("syncShardPlan", "done")
-	ss.FlushShardState(ctx, updated, inserted, deleted)
-	ss.reCreateSnapshotBatchManager.TrySchedule(ctx)
+	dirty := len(updated) + len(inserted) + len(deleted)
+	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).With("unchanged", unchanged).With("dirty", dirty).Log("syncShardPlan", "done")
+	if dirty != 0 {
+		ss.FlushShardState(ctx, updated, inserted, deleted)
+		ss.reCreateSnapshotBatchManager.TrySchedule(ctx)
+	}
 }
 
 type ShardPlanWatcher struct {
 	parent krunloop.EventPoster[*ServiceState]
 	ch     chan etcdprov.EtcdKvItem
+	path   string
 }
 
 func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShardPlanRevision etcdprov.EtcdRevision) *ShardPlanWatcher {
+	path := parent.PathManager.GetShardPlanPath()
 	sp := &ShardPlanWatcher{
 		parent: parent,
-		ch:     etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, parent.PathManager.GetShardPlanPath(), currentShardPlanRevision),
+		ch:     etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, path, currentShardPlanRevision),
+		path:   path,
 	}
 	go sp.run(ctx)
 	return sp
 }
 
 func (sp *ShardPlanWatcher) run(ctx context.Context) {
+	klogging.Info(ctx).With("path", sp.path).Log("ShardPlanWatcher", "start watching")
 	for {
 		select {
 		case <-ctx.Done():
+			klogging.Info(ctx).Log("ShardPlanWatcher", "CtxDone.Exit")
 			return
 		case item, ok := <-sp.ch:
 			if !ok {
+				klogging.Info(ctx).Log("ShardPlanWatcher", "ch closed")
 				return
 			}
+			klogging.Info(ctx).With("path", item.Key).With("len", len(item.Value)).With("revision", item.ModRevision).Log("ShardPlanWatcher", "watcher event")
 			shardPlan := smgjson.ParseShardPlan(item.Value)
 			krunloop.VisitResource(sp.parent, func(ss *ServiceState) {
 				ss.stagingShardPlan = shardPlan
@@ -86,15 +99,15 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 	}
 }
 
-// implements IEvent[*ServiceState]
-type ShardPlanUpdateEvent struct {
-	ShardPlan []*smgjson.ShardLineJson
-}
+// // implements IEvent[*ServiceState]
+// type ShardPlanUpdateEvent struct {
+// 	ShardPlan []*smgjson.ShardLineJson
+// }
 
-func (spue *ShardPlanUpdateEvent) GetName() string {
-	return "ShardPlanUpdateEvent"
-}
+// func (spue *ShardPlanUpdateEvent) GetName() string {
+// 	return "ShardPlanUpdateEvent"
+// }
 
-func (spue *ShardPlanUpdateEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.digestStagingShardPlan(ctx)
-}
+// func (spue *ShardPlanUpdateEvent) Process(ctx context.Context, ss *ServiceState) {
+// 	ss.digestStagingShardPlan(ctx)
+// }

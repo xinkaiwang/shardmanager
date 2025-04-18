@@ -134,12 +134,12 @@ func (eve *ShardStateJsonEvent) Process(ctx context.Context, shadow *ShadowState
 		GetCurrentEtcdStore(ctx).Put(ctx, key, "", "ShardState")
 		return
 	}
-	klogging.Info(ctx).With("shardId", eve.ShardId).With("lameDuck", eve.ShardState.LameDuck).Log("ShardStateJsonEventUpdate", "正在更新分片状态")
+	// klogging.Info(ctx).With("shardId", eve.ShardId).With("lameDuck", eve.ShardState.LameDuck).Log("ShardStateJsonEventUpdate", "正在更新分片状态")
 	shadow.AllShards[eve.ShardState.ShardName] = eve.ShardState
 	// write to etcd
 	key := shadow.PathManager.FmtShardStatePath(eve.ShardId)
 	value := eve.ShardState.ToJson()
-	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("ShardStateJsonEventUpdate", "向etcd写入数据")
+	klogging.Debug(ctx).With("key", key).With("valueLength", len(value)).Log("ShardStateJsonEventUpdate", "向etcd写入数据")
 	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ShardState")
 }
 

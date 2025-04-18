@@ -78,6 +78,7 @@ type LogFormat uint32
 const (
 	TextFormat LogFormat = iota + 1
 	JsonFormat
+	SimpleFormat
 )
 
 func (e LogFormat) String() string {
@@ -86,6 +87,8 @@ func (e LogFormat) String() string {
 		return "Text"
 	case JsonFormat:
 		return "Json"
+	case SimpleFormat:
+		return "Simple"
 	default:
 		return fmt.Sprintf("%d", int(e))
 	}
@@ -97,6 +100,8 @@ func parseLogFormat(str string) LogFormat {
 		return TextFormat
 	} else if strings.EqualFold("json", str) {
 		return JsonFormat
+	} else if strings.EqualFold("simple", str) {
+		return SimpleFormat
 	}
 	panic(kerror.Create("UnknownLogFormat", "parse log format failed").With("str", str))
 }
@@ -136,6 +141,10 @@ func (logger *LogrusLogger) SetConfig(ctx context.Context, newLevelStr string, n
 				logger.RusLogger.SetFormatter(&logrus.JSONFormatter{
 					TimestampFormat: TimestampFormat,
 				})
+			}
+		case SimpleFormat:
+			{
+				logger.RusLogger.SetFormatter(NewSimpleFormatter())
 			}
 		default:
 			{
