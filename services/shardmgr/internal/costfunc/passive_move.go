@@ -12,7 +12,7 @@ const (
 	AM_Relaxed ApplyMode = "relaxed"
 )
 
-// PassiveMove: something that has already happened. We need to update the system state to reflect that.
+// PassiveMove: something that has already happened. We need to update the system state to reflect that. for example, a worker has been deleted or added.
 // This is different from the active move, which is something we can choose to do or not. For instance, we can choose to assign a shard to a worker or not.
 type PassiveMove interface {
 	Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot

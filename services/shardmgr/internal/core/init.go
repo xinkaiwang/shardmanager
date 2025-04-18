@@ -121,7 +121,7 @@ func (ss *ServiceState) ReCreateSnapshot(ctx context.Context) {
 	}
 	ss.SnapshotFuture.Freeze()
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ss.SnapshotFuture)
+		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture)
 		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup.OnSnapshot")
 	} else {
 		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup is nil, skip OnSnapshot")

@@ -34,7 +34,7 @@ type FakeSnapshotListener struct {
 func NewFakeSnapshotListener() *FakeSnapshotListener {
 	return &FakeSnapshotListener{}
 }
-func (l *FakeSnapshotListener) OnSnapshot(snapshot *costfunc.Snapshot) {
+func (l *FakeSnapshotListener) OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot) {
 	l.CallCount++
 	l.snapshot = snapshot
 }

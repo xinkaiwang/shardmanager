@@ -202,7 +202,7 @@ func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.Pass
 	ss.SnapshotCurrent = newCurrent
 	ss.SnapshotFuture = newFuture
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ss.SnapshotFuture)
+		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture)
 	}
 }
 

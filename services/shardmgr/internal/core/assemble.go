@@ -24,6 +24,7 @@ func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is 
 	sg.AddSolver(ctx, solver.NewAssignSolver())
 	sg.AddSolver(ctx, solver.NewUnassignSolver())
 	ss.SolverGroup = sg
+	ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture)
 
 	go ss.runloop.Run(ctx)
 	return ss
