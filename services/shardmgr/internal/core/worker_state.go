@@ -90,6 +90,7 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 		LastUpdateAtMs:   kcommon.GetWallTimeMs(),
 		LastUpdateReason: updateReason,
 		RequestShutdown:  common.Int8FromBool(ws.ShutdownRequesting),
+		StatefulType:     string(ws.StatefulType),
 	}
 	for assignmentId := range ws.Assignments {
 		assignState, ok := ss.AllAssignments[assignmentId]

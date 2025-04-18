@@ -15,6 +15,11 @@ func NewMovePolicyPointer(v MovePolicy) *MovePolicy {
 	return &v
 }
 
+// NewInt8Pointer 创建一个指向给定 int32 的指针
+func NewInt8Pointer(v int8) *int8 {
+	return &v
+}
+
 // NewInt32Pointer 创建一个指向给定 int32 的指针
 func NewInt32Pointer(v int32) *int32 {
 	return &v

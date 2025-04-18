@@ -21,6 +21,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// ss.ServiceInfo = ss.LoadServiceInfo(ctx)     // from /smg/config/service_info.json
 	var currentServiceConfigRevision etcdprov.EtcdRevision
 	ss.ServiceConfig, currentServiceConfigRevision = ss.LoadServiceConfig(ctx) // from /smg/config/service_config.json
+	solver.GetCurrentSolverConfigProvider().OnSolverConfigChange(&ss.ServiceConfig.SolverConfig)
 	ss.DynamicThreshold = NewDynamicThreshold(func() config.DynamicThresholdConfig {
 		return ss.ServiceConfig.DynamicThresholdConfig
 	})

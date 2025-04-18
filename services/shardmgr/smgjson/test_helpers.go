@@ -54,25 +54,25 @@ func CreateTestServiceConfig() *ServiceConfigJson {
 			MaxHatCountLimit:        NewInt32Pointer(10),
 		},
 		CostFuncCfg: &CostFuncConfigJson{
-			ShardCountCostEnable: NewBoolPointer(true),
+			ShardCountCostEnable: NewInt8Pointer(1),
 			ShardCountCostNorm:   NewInt32Pointer(100),
 			WorkerMaxAssignments: NewInt32Pointer(100),
 		},
 		SolverConfig: &SolverConfigJson{
 			SoftSolverConfig: &BaseSolverConfigJson{
-				SoftSolverEnabled: NewBoolPointer(true),
-				RunPerMinute:      NewInt32Pointer(30),
-				ExplorePerRun:     NewInt32Pointer(100),
+				SolverEnabled: NewInt8Pointer(1),
+				RunPerMinute:  NewInt32Pointer(30),
+				ExplorePerRun: NewInt32Pointer(100),
 			},
 			AssignSolverConfig: &BaseSolverConfigJson{
-				SoftSolverEnabled: NewBoolPointer(true),
-				RunPerMinute:      NewInt32Pointer(30),
-				ExplorePerRun:     NewInt32Pointer(100),
+				SolverEnabled: NewInt8Pointer(1),
+				RunPerMinute:  NewInt32Pointer(30),
+				ExplorePerRun: NewInt32Pointer(100),
 			},
 			UnassignSolverConfig: &BaseSolverConfigJson{
-				SoftSolverEnabled: NewBoolPointer(false),
-				RunPerMinute:      NewInt32Pointer(30),
-				ExplorePerRun:     NewInt32Pointer(100),
+				SolverEnabled: NewInt8Pointer(0),
+				RunPerMinute:  NewInt32Pointer(30),
+				ExplorePerRun: NewInt32Pointer(100),
 			},
 		},
 	}

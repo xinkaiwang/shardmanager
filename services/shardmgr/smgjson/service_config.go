@@ -35,7 +35,7 @@ type SystemLimitConfigJson struct {
 }
 
 type CostFuncConfigJson struct {
-	ShardCountCostEnable *bool  `json:"shard_count_cost_enable"`
+	ShardCountCostEnable *int8  `json:"shard_count_cost_enable"`
 	ShardCountCostNorm   *int32 `json:"shard_count_cost_norm"`
 
 	WorkerMaxAssignments *int32 `json:"worker_max_assignments"`
@@ -48,9 +48,9 @@ type SolverConfigJson struct {
 }
 
 type BaseSolverConfigJson struct {
-	SoftSolverEnabled *bool  `json:"soft_solver_enabled"`
-	RunPerMinute      *int32 `json:"run_per_minute"`
-	ExplorePerRun     *int32 `json:"explore_per_run"`
+	SolverEnabled *int8  `json:"solver_enabled"`
+	RunPerMinute  *int32 `json:"run_per_minute"`
+	ExplorePerRun *int32 `json:"explore_per_run"`
 }
 
 func (sc *ServiceConfigJson) ToJson() string {

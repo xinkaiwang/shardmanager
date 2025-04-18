@@ -1,6 +1,9 @@
 package config
 
-import "github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+import (
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+)
 
 type SolverConfig struct {
 	SoftSolverConfig     BaseSolverConfig
@@ -32,13 +35,12 @@ func NewBaseSolverConfig() BaseSolverConfig {
 
 func (bsc *BaseSolverConfig) ToJson() *smgjson.BaseSolverConfigJson {
 	cfg := &smgjson.BaseSolverConfigJson{
-		SoftSolverEnabled: nil,
-		RunPerMinute:      nil,
-		ExplorePerRun:     nil,
+		SolverEnabled: nil,
+		RunPerMinute:  nil,
+		ExplorePerRun: nil,
 	}
-	if bsc.SolverEnabled {
-		cfg.SoftSolverEnabled = &bsc.SolverEnabled
-	}
+	val := common.Int8FromBool(bsc.SolverEnabled)
+	cfg.SolverEnabled = &val
 	if bsc.RunPerMinute > 0 {
 		intVal := int32(bsc.RunPerMinute)
 		cfg.RunPerMinute = &intVal
@@ -96,8 +98,8 @@ func BaseSolverConfigFromJson(ssc *smgjson.BaseSolverConfigJson) BaseSolverConfi
 	if ssc == nil {
 		return cfg
 	}
-	if ssc.SoftSolverEnabled != nil {
-		cfg.SolverEnabled = *ssc.SoftSolverEnabled
+	if ssc.SolverEnabled != nil {
+		cfg.SolverEnabled = common.BoolFromInt8(*ssc.SolverEnabled)
 	}
 	if ssc.RunPerMinute != nil {
 		cfg.RunPerMinute = int(*ssc.RunPerMinute)

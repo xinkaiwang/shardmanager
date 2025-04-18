@@ -1,6 +1,9 @@
 package config
 
-import "github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+import (
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+)
 
 type CostfuncConfig struct {
 	ShardCountCostEnable bool
@@ -21,7 +24,7 @@ func CostFuncConfigJsonToConfig(cfc *smgjson.CostFuncConfigJson) CostfuncConfig 
 		return cfg
 	}
 	if cfc.ShardCountCostEnable != nil {
-		cfg.ShardCountCostEnable = *cfc.ShardCountCostEnable
+		cfg.ShardCountCostEnable = common.BoolFromInt8(*cfc.ShardCountCostEnable)
 	}
 	if cfc.ShardCountCostNorm != nil {
 		cfg.ShardCountCostNorm = *cfc.ShardCountCostNorm
@@ -39,7 +42,7 @@ func (cfc *CostfuncConfig) ToJsonObj() *smgjson.CostFuncConfigJson {
 		WorkerMaxAssignments: nil,
 	}
 	if cfc.ShardCountCostEnable {
-		cfg.ShardCountCostEnable = &cfc.ShardCountCostEnable
+		cfg.ShardCountCostEnable = smgjson.NewInt8Pointer(common.Int8FromBool(cfc.ShardCountCostEnable))
 	}
 	if cfc.ShardCountCostNorm > 0 {
 		intVal := int32(cfc.ShardCountCostNorm)
