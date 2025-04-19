@@ -3,6 +3,7 @@ package costfunc
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -40,6 +41,31 @@ func (ss *ShardSnap) Clone() *ShardSnap {
 	return clone
 }
 
+func (ss ShardSnap) CompareWith(other TypeT2) []string {
+	if other, ok := other.(*ShardSnap); ok {
+		return ss.Compare(other)
+	}
+	return []string{"ShardSnap:CompareWith:otherIsNotShardSnap"}
+}
+
+func (ss *ShardSnap) Compare(other *ShardSnap) []string {
+	var diff []string
+	if ss.ShardId != other.ShardId {
+		diff = append(diff, "ShardId")
+	}
+	if len(ss.Replicas) != len(other.Replicas) {
+		diff = append(diff, "ShardSnap:ReplicaCount")
+	}
+	for replicaIdx, replicaSnap := range ss.Replicas {
+		if otherReplicaSnap, ok := other.Replicas[replicaIdx]; !ok {
+			diff = append(diff, "ShardSnap:Replicas:missingFromOther:"+strconv.Itoa(int(replicaIdx)))
+		} else {
+			diff = append(diff, replicaSnap.Compare(otherReplicaSnap)...)
+		}
+	}
+	return diff
+}
+
 /*********************** ReplicaSnap **********************/
 type ReplicaSnap struct {
 	ShardId     data.ShardId
@@ -73,6 +99,30 @@ func (rep *ReplicaSnap) Clone() *ReplicaSnap {
 	return clone
 }
 
+func (rep *ReplicaSnap) Compare(other *ReplicaSnap) []string {
+	var diff []string
+	if rep.ShardId != other.ShardId {
+		diff = append(diff, "ShardId")
+	}
+	if rep.ReplicaIdx != other.ReplicaIdx {
+		diff = append(diff, "ReplicaIdx")
+	}
+	if rep.LameDuck != other.LameDuck {
+		diff = append(diff, "ReplicaSnap:LameDuck:"+string(rep.ShardId))
+	}
+	for assignmentId := range rep.Assignments {
+		if _, ok := other.Assignments[assignmentId]; !ok {
+			diff = append(diff, "ReplicaSnap:Assignments:missingFromOther:"+string(assignmentId))
+		}
+	}
+	for assignmentId := range other.Assignments {
+		if _, ok := rep.Assignments[assignmentId]; !ok {
+			diff = append(diff, "ReplicaSnap:Assignments:missingFromSelf:"+string(assignmentId))
+		}
+	}
+	return diff
+}
+
 /*********************** AssignmentSnap **********************/
 
 // AssignmentSnap: implements TypeT2
@@ -98,6 +148,30 @@ func (asgn *AssignmentSnap) GetReplicaFullId() data.ReplicaFullId {
 	return data.ReplicaFullId{ShardId: asgn.ShardId, ReplicaIdx: asgn.ReplicaIdx}
 }
 
+func (ss AssignmentSnap) CompareWith(other TypeT2) []string {
+	if other, ok := other.(*AssignmentSnap); ok {
+		return ss.Compare(other)
+	}
+	return []string{"AssignmentSnap:CompareWith:otherIsNotAssignmentSnap"}
+}
+
+func (asgn *AssignmentSnap) Compare(other *AssignmentSnap) []string {
+	var diff []string
+	if asgn.ShardId != other.ShardId {
+		diff = append(diff, "ShardId")
+	}
+	if asgn.ReplicaIdx != other.ReplicaIdx {
+		diff = append(diff, "ReplicaIdx")
+	}
+	if asgn.AssignmentId != other.AssignmentId {
+		diff = append(diff, "AssignmentId")
+	}
+	if asgn.WorkerFullId != other.WorkerFullId {
+		diff = append(diff, "WorkerFullId")
+	}
+	return diff
+}
+
 /*********************** WorkerSnap **********************/
 
 // WorkerSnap: implements TypeT2
@@ -115,6 +189,13 @@ func NewWorkerSnap(workerFullId data.WorkerFullId) *WorkerSnap {
 	}
 }
 
+func (ss WorkerSnap) CompareWith(other TypeT2) []string {
+	if other, ok := other.(*WorkerSnap); ok {
+		return ss.Compare(other)
+	}
+	return []string{"WorkerSnap:CompareWith:otherIsNotWorkerSnap"}
+}
+
 func (worker *WorkerSnap) CanAcceptAssignment(shardId data.ShardId) bool {
 	// in case this worker already has this shard (maybe from antoher replica)
 	_, ok := worker.Assignments[shardId]
@@ -130,6 +211,24 @@ func (worker *WorkerSnap) Clone() *WorkerSnap {
 		clone.Assignments[shardId] = assignmentId
 	}
 	return clone
+}
+
+func (worker *WorkerSnap) Compare(other *WorkerSnap) []string {
+	var diff []string
+	if worker.WorkerFullId != other.WorkerFullId {
+		return []string{"WorkerFullId"}
+	}
+	for shardId, assignmentId := range worker.Assignments {
+		if otherAssignmentId, ok := other.Assignments[shardId]; !ok && assignmentId != otherAssignmentId {
+			diff = append(diff, worker.WorkerFullId.String()+":missingFromOther:"+string(shardId)+":"+string(assignmentId))
+		}
+	}
+	for shardId, assignmentId := range other.Assignments {
+		if _, ok := worker.Assignments[shardId]; !ok && assignmentId != worker.Assignments[shardId] {
+			diff = append(diff, worker.WorkerFullId.String()+":missingFromSelf:"+string(shardId)+":"+string(assignmentId))
+		}
+	}
+	return diff
 }
 
 /*********************** Snapshot **********************/
@@ -314,4 +413,18 @@ func (snap *Snapshot) ToShortString() string {
 		replicaCount += len(shardSnap.Replicas)
 	})
 	return fmt.Sprintf("SnapshotId=%s, Cost=%v, shard=%d, worker=%d, replica=%d, assign=%d", snap.SnapshotId, snap.GetCost(), snap.AllShards.Count(), snap.AllWorkers.Count(), replicaCount, snap.AllAssignments.Count())
+}
+
+func (snap *Snapshot) Compare(other *Snapshot) []string {
+	var diff []string
+	if snap.SnapshotId != other.SnapshotId {
+		diff = append(diff, "SnapshotId")
+	}
+	if snap.Costfunc != other.Costfunc {
+		diff = append(diff, "Costfunc")
+	}
+	diff = append(diff, snap.AllShards.Compare(other.AllShards)...)
+	diff = append(diff, snap.AllWorkers.Compare(other.AllWorkers)...)
+	diff = append(diff, snap.AllAssignments.Compare(other.AllAssignments)...)
+	return diff
 }

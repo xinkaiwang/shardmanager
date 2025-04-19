@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // Housekeep1sEvent implements krunloop.IEvent[*ServiceState] interface
@@ -15,7 +16,12 @@ func (te *Housekeep1sEvent) GetName() string {
 }
 
 func (te *Housekeep1sEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.checkWorkerForTimeout(ctx)
+	ke := kcommon.TryCatchRun(ctx, func() {
+		ss.checkWorkerForTimeout(ctx)
+	})
+	if ke != nil {
+		klogging.Error(ctx).With("error", ke).Log("Housekeep1sEvent", "checkWorkerForTimeout failed")
+	}
 	kcommon.ScheduleRun(1000, func() {
 		ss.PostEvent(NewHousekeep1sEvent())
 	})

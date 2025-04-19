@@ -63,6 +63,9 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 9: start housekeeping threads
 	ss.PostEvent(NewHousekeep1sEvent())
 	ss.PostEvent(NewHousekeep5sEvent())
+	kcommon.ScheduleRun(30*1000, func() { // 30s
+		ss.PostEvent(NewHousekeep30sEvent())
+	})
 	ss.PostEvent(NewAcceptEvent())
 
 	// step 10: start

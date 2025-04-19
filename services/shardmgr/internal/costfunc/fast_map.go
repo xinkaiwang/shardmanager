@@ -1,6 +1,10 @@
 package costfunc
 
-import "github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+import (
+	"fmt"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+)
 
 // FastMap 是一个高效的映射结构，支持分层存储和写时复制策略
 //
@@ -30,6 +34,7 @@ import "github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 // 任何实现此接口的类型都可以用作 FastMap 的值类型
 type TypeT2 interface {
 	IsValueTypeT2()
+	CompareWith(other TypeT2) []string
 }
 
 type FastMap[T1 comparable, T2 TypeT2] struct {
@@ -192,4 +197,28 @@ func (fm *FastMap[T1, T2]) Compact() *FastMap[T1, T2] {
 	}
 
 	return result
+}
+
+func (fm *FastMap[T1, T2]) Compare(other *FastMap[T1, T2]) []string {
+	if fm == other {
+		return nil
+	}
+	if fm.Count() != other.Count() {
+		return []string{"count not equal"}
+	}
+	diff := make([]string, 0)
+	fm.VisitAll(func(k T1, v *T2) {
+		otherV, ok := other.Get(k)
+		if !ok {
+			diff = append(diff, "MissingInOther:"+fmt.Sprint(k))
+		}
+		diff = append(diff, (*v).CompareWith(*otherV)...)
+	})
+	other.VisitAll(func(k T1, v *T2) {
+		_, ok := fm.Get(k)
+		if !ok {
+			diff = append(diff, "MissingInThis:"+fmt.Sprint(k))
+		}
+	})
+	return diff
 }

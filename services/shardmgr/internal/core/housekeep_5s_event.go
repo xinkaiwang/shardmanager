@@ -9,7 +9,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
-// Housekeep1sEvent implements krunloop.IEvent[*ServiceState] interface
+// Housekeep5sEvent implements krunloop.IEvent[*ServiceState] interface
 type Housekeep5sEvent struct {
 }
 
@@ -18,8 +18,13 @@ func (te *Housekeep5sEvent) GetName() string {
 }
 
 func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.checkWorkerTombStone(ctx)
-	ss.checkShardTombStone(ctx)
+	ke := kcommon.TryCatchRun(ctx, func() {
+		ss.checkWorkerTombStone(ctx)
+		ss.checkShardTombStone(ctx)
+	})
+	if ke != nil {
+		klogging.Error(ctx).With("error", ke).Log("Housekeep5sEvent", "checkWorkerTombStone failed")
+	}
 	kcommon.ScheduleRun(5*1000, func() { // 5s
 		ss.PostEvent(NewHousekeep5sEvent())
 	})

@@ -14,6 +14,14 @@ type benchValue struct {
 
 func (bv benchValue) IsValueTypeT2() {}
 
+func (tv benchValue) CompareWith(other TypeT2) []string {
+	oth := other.(*benchValue)
+	if tv.data != oth.data {
+		return []string{tv.data, oth.data}
+	}
+	return nil
+}
+
 // 添加全局的isZeroValue函数，用于基准测试
 // 这个函数与FastMap.isZeroValue方法功能相同，但作为全局函数存在
 func isZeroValue[T TypeT2](v T) bool {

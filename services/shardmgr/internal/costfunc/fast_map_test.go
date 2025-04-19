@@ -10,6 +10,14 @@ type testValue struct {
 	data string
 }
 
+func (tv testValue) CompareWith(other TypeT2) []string {
+	oth := other.(*testValue)
+	if tv.data != oth.data {
+		return []string{tv.data, oth.data}
+	}
+	return nil
+}
+
 // IsValueTypeT2 实现 TypeT2 接口
 func (tv testValue) IsValueTypeT2() {}
 

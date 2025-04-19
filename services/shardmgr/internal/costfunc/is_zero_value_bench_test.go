@@ -12,6 +12,14 @@ type benchZeroValue struct {
 
 func (bv benchZeroValue) IsValueTypeT2() {}
 
+func (tv benchZeroValue) CompareWith(other TypeT2) []string {
+	oth := other.(*benchZeroValue)
+	if tv.data != oth.data {
+		return []string{tv.data, oth.data}
+	}
+	return nil
+}
+
 // 使用 reflect.ValueOf(v).IsZero() 的实现
 func isZeroValueUsingIsZero[T TypeT2](v T) bool {
 	return reflect.ValueOf(v).IsZero()
