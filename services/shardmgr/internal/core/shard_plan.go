@@ -58,7 +58,7 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).With("unchanged", unchanged).With("dirty", dirty).Log("syncShardPlan", "done")
 	if dirty != 0 {
 		ss.FlushShardState(ctx, updated, inserted, deleted)
-		ss.reCreateSnapshotBatchManager.TrySchedule(ctx)
+		ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
 	}
 }
 

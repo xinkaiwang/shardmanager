@@ -15,6 +15,7 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 		shardSnap := costfunc.NewShardSnap(shardId)
 		for replicaIdx, replicaState := range shardState.Replicas {
 			replicaSnap := costfunc.NewReplicaSnap(shardId, replicaIdx)
+			replicaSnap.LameDuck = replicaState.LameDuck
 			for assignmentId := range replicaState.Assignments {
 				replicaSnap.Assignments[assignmentId] = common.Unit{}
 			}

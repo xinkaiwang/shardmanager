@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
@@ -87,6 +88,125 @@ func ActionFromJson(actionJson *smgjson.ActionJson) *Action {
 		ActionStage:          actionJson.Stage,
 	}
 	return action
+}
+
+func (action *Action) ApplyToSnapshot(snapshot *Snapshot, mode ApplyMode) {
+	switch action.ActionType {
+	case smgjson.AT_AddShard:
+		action.applyAddShard(snapshot, mode)
+	case smgjson.AT_DropShard:
+		action.applyDropShard(snapshot, mode)
+	case smgjson.AT_RemoveFromRoutingAndSleep, smgjson.AT_AddToRouting: // nothing to do
+		break
+	default:
+		klogging.Fatal(context.Background()).With("actionType", action.ActionType).Log("UnknownActionType", "")
+	}
+}
+
+func (action *Action) applyAddShard(snapshot *Snapshot, mode ApplyMode) {
+	workerState, ok := snapshot.AllWorkers.Get(action.To)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("WorkerNotFound", "worker not found").With("workerId", action.To)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	shardState, ok := snapshot.AllShards.Get(action.ShardId)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("ShardNotFound", "shard not found").With("shardId", action.ShardId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	replicaState, ok := shardState.Replicas[action.ReplicaIdx]
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", action.ShardId).With("replicaIdx", action.ReplicaIdx)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	// when reach here, the destWorker/shard/replica confirmed exist
+	workerState.Assignments[action.ShardId] = action.AssignmentId
+	replicaState.Assignments[action.AssignmentId] = common.Unit{}
+	snapshot.AllAssignments.Set(action.AssignmentId, &AssignmentSnap{
+		ShardId:      action.ShardId,
+		ReplicaIdx:   action.ReplicaIdx,
+		AssignmentId: action.AssignmentId,
+		WorkerFullId: action.To,
+	})
+}
+
+func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
+	workerState, ok := snapshot.AllWorkers.Get(action.From)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("WorkerNotFound", "worker not found").With("workerId", action.To)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	assignmentId, ok := workerState.Assignments[action.ShardId]
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("AssignmentNotFound", "assignment not found").With("shardId", action.ShardId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	if assignmentId != action.AssignmentId {
+		if mode == AM_Strict {
+			ke := kerror.Create("AssignmentIdMismatch", "assignment id mismatch").With("shardId", action.ShardId).With("assignmentId", assignmentId).With("expectedAssignmentId", action.AssignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	shardState, ok := snapshot.AllShards.Get(action.ShardId)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("ShardNotFound", "shard not found").With("shardId", action.ShardId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	replicaState, ok := shardState.Replicas[action.ReplicaIdx]
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", action.ShardId).With("replicaIdx", action.ReplicaIdx)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+		}
+	}
+	// when reach here, the srcWorker/assignment/shard/replica confirmed exist
+	delete(workerState.Assignments, action.ShardId)
+	delete(replicaState.Assignments, action.AssignmentId)
+	snapshot.AllAssignments.Delete(action.AssignmentId)
 }
 
 type Move interface {

@@ -130,7 +130,7 @@ func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.
 	// routing table
 	ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
 	// trigger snapshot recreate
-	ss.reCreateSnapshotBatchManager.TrySchedule(ctx)
+	ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "FlushWorkerState:"+reason)
 }
 
 // in case of worker not found, we return nil

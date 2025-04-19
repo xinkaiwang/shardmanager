@@ -15,6 +15,7 @@ type BatchManager struct {
 	maxDelayMs int
 	name       string
 	isInFlight bool // true means the event is already being scheduled
+	reasons    []string
 	fn         func(context.Context, *ServiceState)
 }
 
@@ -27,19 +28,20 @@ func NewBatchManager(parent krunloop.EventPoster[*ServiceState], maxDelayMs int,
 	}
 }
 
-func (bm *BatchManager) TrySchedule(ctx context.Context) {
+func (bm *BatchManager) TrySchedule(ctx context.Context, reasons ...string) {
 	var needSchedule bool
 	bm.mutex.Lock()
 	if !bm.isInFlight {
 		bm.isInFlight = true
 		needSchedule = true
 	}
+	bm.reasons = append(bm.reasons, reasons...)
 	bm.mutex.Unlock()
 	scheduled := "scheduled"
 	if !needSchedule {
 		scheduled = "merged"
 	}
-	klogging.Info(ctx).With("name", bm.name).With("result", scheduled).Log("BatchManager", "in-bound")
+	klogging.Info(ctx).With("name", bm.name).With("result", scheduled).With("reason", reasons).Log("BatchManager", "in-bound")
 	if !needSchedule {
 		return
 	}
@@ -64,10 +66,13 @@ func (bpe *BatchProcessEvent) GetName() string {
 }
 
 func (bpe *BatchProcessEvent) Process(ctx context.Context, ss *ServiceState) {
+	var reasons []string
 	bpe.parent.mutex.Lock()
 	bpe.parent.isInFlight = false
+	reasons = bpe.parent.reasons
+	bpe.parent.reasons = nil
 	bpe.parent.mutex.Unlock()
 
-	klogging.Info(ctx).With("name", bpe.parent.name).Log("BatchManager", "out-bound")
+	klogging.Info(ctx).With("name", bpe.parent.name).With("reason", reasons).Log("BatchManager", "out-bound")
 	bpe.parent.fn(ctx, ss)
 }

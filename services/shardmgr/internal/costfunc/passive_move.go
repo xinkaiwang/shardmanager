@@ -8,8 +8,11 @@ import (
 type ApplyMode string
 
 const (
-	AM_Strict  ApplyMode = "strict"
-	AM_Relaxed ApplyMode = "relaxed"
+	// strict vs. ralaxed:
+	// example: if move is "Worker1.Assignment1 -> nil (unassign)", and the worker1 does not have assignment1, strict mode will panic, relaxed mode will ignore this operation.
+
+	AM_Strict  ApplyMode = "strict"  // strict mode, we will panic if the move is not valid
+	AM_Relaxed ApplyMode = "relaxed" // relaxed mode, we will ignore the move if it is not valid
 )
 
 // PassiveMove: something that has already happened. We need to update the system state to reflect that. for example, a worker has been deleted or added.

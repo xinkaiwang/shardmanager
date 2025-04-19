@@ -1,7 +1,6 @@
 package core
 
 import (
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -51,37 +50,7 @@ func MoveStateFromJson(msj *smgjson.MoveStateJson) *MoveState {
 }
 
 func (ms *MoveState) ApplyRemainingActions(snapshot *costfunc.Snapshot, mode costfunc.ApplyMode) {
-	var action *costfunc.Action
 	for i := ms.CurrentAction; i < len(ms.Actions); i++ {
-		action = ms.Actions[i]
-		// apply action to snapshot
-		switch action.ActionType {
-		case smgjson.AT_AddShard:
-			ms.applyAddShardToSnapshot(snapshot, action, mode)
-		case smgjson.AT_DropShard:
-			ms.applyDropShardToSnapshot(snapshot, action, mode)
-		case smgjson.AT_RemoveFromRoutingAndSleep, smgjson.AT_AddToRouting: // nothing to do
-			continue
-		default:
-			ke := kerror.Create("UnsupportedAction", "unsupported action type="+string(action.ActionType))
-			panic(ke)
-		}
+		ms.Actions[i].ApplyToSnapshot(snapshot, mode)
 	}
-}
-
-func (ms *MoveState) applyAddShardToSnapshot(snapshot *costfunc.Snapshot, action *costfunc.Action, mode costfunc.ApplyMode) {
-	// _, ok := snapshot.AllWorkers.Get(action.To)
-	// if ok {
-	// 	if mode == costfunc.AM_Strict {
-	// 		ke := kerror.Create("ShardAlreadyExists", "shard already exists in snapshot")
-	// 		panic(ke)
-	// 	}
-	// 	return // already exists
-	// }
-}
-
-func (ms *MoveState) applyDropShardToSnapshot(snapshot *costfunc.Snapshot, action *costfunc.Action, mode costfunc.ApplyMode) {
-	// TODO
-	ke := kerror.Create("UnsupportedAction", "unsupported action type="+string(action.ActionType))
-	panic(ke)
 }

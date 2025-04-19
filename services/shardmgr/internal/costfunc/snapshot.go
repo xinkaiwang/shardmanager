@@ -63,6 +63,7 @@ func (rep *ReplicaSnap) Clone() *ReplicaSnap {
 	clone := &ReplicaSnap{
 		ShardId:     rep.ShardId,
 		ReplicaIdx:  rep.ReplicaIdx,
+		LameDuck:    rep.LameDuck,
 		Assignments: make(map[data.AssignmentId]common.Unit),
 	}
 	for assignmentId := range rep.Assignments {
