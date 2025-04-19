@@ -32,30 +32,35 @@ func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.S
 
 	stop := false
 	for i := 0; i < cfg.ExplorePerRun && !stop; i++ {
-		var assign *costfunc.AssignmentSnap
-		{
-			// step 2: which assign?
-			// candidate assign list
-			candidateAssignment := []*costfunc.AssignmentSnap{}
-			snapshot.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, asgnSnap *costfunc.AssignmentSnap) {
-				candidateAssignment = append(candidateAssignment, asgnSnap)
-			})
-			if len(candidateAssignment) == 0 {
-				continue
+		ke := kcommon.TryCatchRun(ctx, func() {
+			var assign *costfunc.AssignmentSnap
+			{
+				// step 2: which assign?
+				// candidate assign list
+				candidateAssignment := []*costfunc.AssignmentSnap{}
+				snapshot.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, asgnSnap *costfunc.AssignmentSnap) {
+					candidateAssignment = append(candidateAssignment, asgnSnap)
+				})
+				if len(candidateAssignment) == 0 {
+					return
+				}
+				rnd := kcommon.RandomInt(ctx, len(candidateAssignment))
+				assign = candidateAssignment[rnd]
 			}
-			rnd := kcommon.RandomInt(ctx, len(candidateAssignment))
-			assign = candidateAssignment[rnd]
-		}
-		newSnap := snapshot.Clone()
-		newSnap.Unassign(assign.WorkerFullId, assign.ShardId, assign.ReplicaIdx, assign.AssignmentId)
-		newCost := newSnap.GetCost()
-		if newCost.IsLowerThan(bestCost) {
-			bestCost = newCost
-			bestMove = &costfunc.UnassignMove{
-				Worker:       assign.WorkerFullId,
-				Replica:      assign.GetReplicaFullId(),
-				AssignmentId: assign.AssignmentId,
+			newSnap := snapshot.Clone()
+			newSnap.Unassign(assign.WorkerFullId, assign.ShardId, assign.ReplicaIdx, assign.AssignmentId, costfunc.AM_Strict)
+			newCost := newSnap.GetCost()
+			if newCost.IsLowerThan(bestCost) {
+				bestCost = newCost
+				bestMove = &costfunc.UnassignMove{
+					Worker:       assign.WorkerFullId,
+					Replica:      assign.GetReplicaFullId(),
+					AssignmentId: assign.AssignmentId,
+				}
 			}
+		})
+		if ke != nil {
+			klogging.Warning(ctx).WithError(ke).Log("UnsssignSolverTryCatch", "error in unassign solver loop, ignore this iteration")
 		}
 	}
 	if bestMove == nil {

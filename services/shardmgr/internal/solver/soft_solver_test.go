@@ -86,8 +86,8 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 	// 将两个分片都分配给 worker1
 	assign1 := data.AssignmentId("assign1")
 	assign2 := data.AssignmentId("assign2")
-	snapshot.Assign(shard1, 0, assign1, worker1)
-	snapshot.Assign(shard2, 0, assign2, worker1)
+	snapshot.Assign(shard1, 0, assign1, worker1, costfunc.AM_Strict)
+	snapshot.Assign(shard2, 0, assign2, worker1, costfunc.AM_Strict)
 
 	// 创建并配置求解器
 	solver := NewSoftSolver()
@@ -111,7 +111,7 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 
 		// 应用移动方案
 		snapshotCopy := snapshot.Clone()
-		move.Apply(snapshotCopy)
+		move.Apply(snapshotCopy, costfunc.AM_Strict)
 
 		// 验证移动后的状态
 		worker1Snap, _ := snapshotCopy.AllWorkers.Get(worker1)

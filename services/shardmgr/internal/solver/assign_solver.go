@@ -42,48 +42,54 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 
 	stop := false
 	for i := 0; i < asCfg.ExplorePerRun && !stop; i++ {
-		var replicaCandidate data.ReplicaFullId
-		{
-			// step 2: which shard?
-			// candidate replica list
-			candidateReplicas := []data.ReplicaFullId{}
-			snapshot.AllShards.VisitAll(func(shardId data.ShardId, shard *costfunc.ShardSnap) {
-				for _, replica := range shard.Replicas {
-					if len(replica.Assignments) > 0 {
-						continue
+		ke := kcommon.TryCatchRun(ctx, func() {
+			var replicaCandidate data.ReplicaFullId
+			{
+				// step 2: which shard?
+				// candidate replica list
+				candidateReplicas := []data.ReplicaFullId{}
+				snapshot.AllShards.VisitAll(func(shardId data.ShardId, shard *costfunc.ShardSnap) {
+					for _, replica := range shard.Replicas {
+						if len(replica.Assignments) > 0 {
+							continue
+						}
+						candidateReplicas = append(candidateReplicas, replica.GetReplicaFullId())
 					}
-					candidateReplicas = append(candidateReplicas, replica.GetReplicaFullId())
+				})
+				if len(candidateReplicas) == 0 {
+					// no replica needs new assignment
+					stop = true
+					return
 				}
-			})
-			if len(candidateReplicas) == 0 {
-				// no replica needs new assignment
-				return nil
+				rnd := kcommon.RandomInt(ctx, len(candidateReplicas))
+				replicaCandidate = candidateReplicas[rnd]
 			}
-			rnd := kcommon.RandomInt(ctx, len(candidateReplicas))
-			replicaCandidate = candidateReplicas[rnd]
-		}
-		var destWorkerId data.WorkerFullId
-		{
-			// step 3: which dest worker?
-			rnd := kcommon.RandomInt(ctx, len(candidateWorkers))
-			destWorkerId = candidateWorkers[rnd]
-		}
-		// step 4: is this move better?
-		// make a copy of the snapshot
-		newSnapshot := snapshot.Clone()
-		// remove the assignment from the source worker
-		move := &costfunc.AssignMove{
-			Replica:      replicaCandidate,
-			AssignmentId: data.AssignmentId(kcommon.RandomString(ctx, 8)),
-			Worker:       destWorkerId,
-		}
-		move.Apply(newSnapshot)
-		// calculate the cost of the new snapshot
-		// newCost := costProvider.CalCost(newSnapshot)
-		newCost := newSnapshot.GetCost()
-		if newCost.IsLowerThan(bestCost) {
-			bestCost = newCost
-			bestMove = move
+			var destWorkerId data.WorkerFullId
+			{
+				// step 3: which dest worker?
+				rnd := kcommon.RandomInt(ctx, len(candidateWorkers))
+				destWorkerId = candidateWorkers[rnd]
+			}
+			// step 4: is this move better?
+			// make a copy of the snapshot
+			newSnapshot := snapshot.Clone()
+			// remove the assignment from the source worker
+			move := &costfunc.AssignMove{
+				Replica:      replicaCandidate,
+				AssignmentId: data.AssignmentId(kcommon.RandomString(ctx, 8)),
+				Worker:       destWorkerId,
+			}
+			move.Apply(newSnapshot, costfunc.AM_Strict)
+			// calculate the cost of the new snapshot
+			// newCost := costProvider.CalCost(newSnapshot)
+			newCost := newSnapshot.GetCost()
+			if newCost.IsLowerThan(bestCost) {
+				bestCost = newCost
+				bestMove = move
+			}
+		})
+		if ke != nil {
+			klogging.Warning(ctx).WithError(ke).Log("AssignSolverTryCatch", "error in assign solver loop, ignore this iteration")
 		}
 	}
 	if bestMove == nil {

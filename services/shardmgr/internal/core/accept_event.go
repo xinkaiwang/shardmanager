@@ -42,7 +42,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 			// re-evaluate the proposal gain (based on the new snapshot)
 			ke := kcommon.TryCatchRun(ctx, func() {
 				currentCost := ss.SnapshotFuture.GetCost()
-				newCost := ss.SnapshotFuture.Clone().ApplyMove(proposal.Move).GetCost()
+				newCost := ss.SnapshotFuture.Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
 				gain := currentCost.Substract(newCost)
 				proposal.Gain = gain
 				proposal.BasedOn = ss.SnapshotFuture.SnapshotId
@@ -54,7 +54,9 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 			}
 			continue
 		}
-		// check 2: is this proposal's gain high enough (hard score)?
+		// check 2: is this proposal still valid?
+
+		// check 3: is this proposal's gain high enough (hard score)?
 		gain := proposal.GetEfficiency()
 		if gain.HardScore > 0 {
 			ss.DoAcceptProposal(ctx, proposal)
@@ -63,7 +65,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 			ss.DynamicThreshold.UpdateThreshold(now, proposal.ProposalSize)
 			continue
 		}
-		// check 3: is this proposal's gain high enough (soft score)?
+		// check 4: is this proposal's gain high enough (soft score)?
 		threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
 		if gain.SoftScore > threshold {
 			ss.DoAcceptProposal(ctx, proposal)

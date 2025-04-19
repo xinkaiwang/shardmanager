@@ -121,7 +121,7 @@ func TestSnapshot(t *testing.T) {
 
 		// 测试 Assign 方法
 		assignmentId := data.AssignmentId("assign1")
-		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId)
+		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId, AM_Strict)
 
 		// 验证分配是否成功
 		assignmentSnap, exists := snapshot.AllAssignments.Get(assignmentId)
@@ -130,7 +130,7 @@ func TestSnapshot(t *testing.T) {
 		assert.Equal(t, replicaIdx, assignmentSnap.ReplicaIdx)
 
 		// 测试 Unassign 方法
-		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId)
+		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId, AM_Strict)
 
 		// 验证取消分配是否成功
 		_, exists = snapshot.AllAssignments.Get(assignmentId)
@@ -167,7 +167,7 @@ func TestSnapshot(t *testing.T) {
 		// 执行一系列分配和取消分配操作
 		// 1. 将 shard1:replica0 分配给 worker1
 		assign1 := data.AssignmentId("assign1")
-		snapshot.Assign(shard1, 0, assign1, worker1)
+		snapshot.Assign(shard1, 0, assign1, worker1, AM_Strict)
 
 		// 验证分配状态
 		worker1Snap, _ = snapshot.AllWorkers.Get(worker1)
@@ -178,7 +178,7 @@ func TestSnapshot(t *testing.T) {
 
 		// 2. 将 shard1:replica1 分配给 worker2
 		assign2 := data.AssignmentId("assign2")
-		snapshot.Assign(shard1, 1, assign2, worker2)
+		snapshot.Assign(shard1, 1, assign2, worker2, AM_Strict)
 
 		// 验证两个分配都存在
 		worker2Snap, _ = snapshot.AllWorkers.Get(worker2)
@@ -188,9 +188,9 @@ func TestSnapshot(t *testing.T) {
 		assert.Contains(t, shard1Snap.Replicas[1].Assignments, assign2)
 
 		// 3. 取消 worker1 的分配，并将 shard2:replica0 分配给它
-		snapshot.Unassign(worker1, shard1, 0, assign1)
+		snapshot.Unassign(worker1, shard1, 0, assign1, AM_Strict)
 		assign3 := data.AssignmentId("assign3")
-		snapshot.Assign(shard2, 0, assign3, worker1)
+		snapshot.Assign(shard2, 0, assign3, worker1, AM_Strict)
 
 		// 验证状态变化
 		worker1Snap, _ = snapshot.AllWorkers.Get(worker1)
@@ -209,7 +209,7 @@ func TestSnapshot(t *testing.T) {
 
 		cloned := snapshot.Clone()
 		assign4 := data.AssignmentId("assign4")
-		cloned.Assign(shard2, 1, assign4, worker2)
+		cloned.Assign(shard2, 1, assign4, worker2, AM_Strict)
 
 		// 验证原始快照未被修改
 		_, exists := snapshot.AllAssignments.Get(assign4)
@@ -237,7 +237,7 @@ func TestSnapshotErrorCases(t *testing.T) {
 
 	// 测试分配不存在的 shard
 	assert.Panics(t, func() {
-		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId)
+		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId, AM_Strict)
 	})
 
 	// 添加 shard 但不添加 replica
@@ -246,17 +246,17 @@ func TestSnapshotErrorCases(t *testing.T) {
 
 	// 测试分配不存在的 replica
 	assert.Panics(t, func() {
-		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId)
+		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId, AM_Strict)
 	})
 
 	// 测试分配给不存在的 worker
 	shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
 	assert.Panics(t, func() {
-		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId)
+		snapshot.Assign(shardId, replicaIdx, assignmentId, workerFullId, AM_Strict)
 	})
 
 	// 测试取消不存在的分配
 	assert.Panics(t, func() {
-		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId)
+		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId, AM_Strict)
 	})
 }

@@ -211,7 +211,7 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 
 type Move interface {
 	GetSignature() string
-	Apply(snapshot *Snapshot)
+	Apply(snapshot *Snapshot, mode ApplyMode)
 	GetActions(cfg config.ShardConfig) []*Action
 }
 
@@ -253,9 +253,9 @@ func (move *SimpleMove) GetSignature() string {
 	return move.Replica.String() + "/" + move.Src.String() + "/" + move.Dst.String()
 }
 
-func (move *SimpleMove) Apply(snapshot *Snapshot) {
-	snapshot.Unassign(move.Src, move.Replica.ShardId, move.Replica.ReplicaIdx, move.SrcAssignmentId)
-	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.DestAssignmentId, move.Dst)
+func (move *SimpleMove) Apply(snapshot *Snapshot, mode ApplyMode) {
+	snapshot.Unassign(move.Src, move.Replica.ShardId, move.Replica.ReplicaIdx, move.SrcAssignmentId, mode)
+	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.DestAssignmentId, move.Dst, mode)
 }
 
 func (move *SimpleMove) GetActions(cfg config.ShardConfig) []*Action {
@@ -359,8 +359,8 @@ func (move *AssignMove) GetSignature() string {
 	return move.Replica.String() + "/" + move.Worker.String()
 }
 
-func (move *AssignMove) Apply(snapshot *Snapshot) {
-	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId, move.Worker)
+func (move *AssignMove) Apply(snapshot *Snapshot, mode ApplyMode) {
+	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId, move.Worker, mode)
 }
 
 func (move *AssignMove) GetActions(cfg config.ShardConfig) []*Action {
@@ -404,8 +404,8 @@ func (move *UnassignMove) GetSignature() string {
 	return move.Worker.String() + "/" + move.Replica.String()
 }
 
-func (move *UnassignMove) Apply(snapshot *Snapshot) {
-	snapshot.Unassign(move.Worker, move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId)
+func (move *UnassignMove) Apply(snapshot *Snapshot, mode ApplyMode) {
+	snapshot.Unassign(move.Worker, move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId, mode)
 }
 
 func (move *UnassignMove) GetActions(cfg config.ShardConfig) []*Action {

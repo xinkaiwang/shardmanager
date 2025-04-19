@@ -6,6 +6,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -190,16 +191,39 @@ func (snap *Snapshot) CompactAndFreeze() *Snapshot {
 	return snap.Freeze()
 }
 
-func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, workerFullId data.WorkerFullId) {
+func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, workerFullId data.WorkerFullId, mode ApplyMode) {
 	shardSnap, ok := snap.AllShards.Get(shardId)
 	if !ok {
-		ke := kerror.Create("ShardNotFound", "shard not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
-		panic(ke)
+		if mode == AM_Strict {
+			ke := kerror.Create("ShardNotFound", "shard not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
 	}
 	replicaSnap, ok := shardSnap.Replicas[replicaIdx]
 	if !ok {
-		ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
-		panic(ke)
+		if mode == AM_Strict {
+			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
+	}
+	workerSnap, ok := snap.AllWorkers.Get(workerFullId)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("WorkerNotFound", "worker not found").With("workerFullId", workerFullId).With
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
 	}
 	// update shardSnap
 	newReplicaSnap := replicaSnap.Clone()
@@ -208,11 +232,6 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 	newShardSnap.Replicas[replicaIdx] = newReplicaSnap
 	snap.AllShards.Set(shardId, newShardSnap)
 	// update workerSnap
-	workerSnap, ok := snap.AllWorkers.Get(workerFullId)
-	if !ok {
-		ke := kerror.Create("WorkerNotFound", "worker not found").With("workerFullId", workerFullId).With
-		panic(ke)
-	}
 	newWorkerSnap := workerSnap.Clone()
 	newWorkerSnap.Assignments[shardId] = assignmentId
 	snap.AllWorkers.Set(workerFullId, newWorkerSnap)
@@ -221,27 +240,45 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 	snap.AllAssignments.Set(assignmentId, newAssignmentSnap)
 }
 
-func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId) {
+func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, mode ApplyMode) {
 	// update workerSnap
 	workerSnap, ok := snap.AllWorkers.Get(workerFullId)
 	if !ok {
-		ke := kerror.Create("WorkerNotFound", "worker not found").With("workerFullId", workerFullId).With
-		panic(ke)
+		if mode == AM_Strict {
+			ke := kerror.Create("WorkerNotFound", "worker not found").With("workerFullId", workerFullId).With
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
+	}
+	shardSnap, ok := snap.AllShards.Get(shardId)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("ShardNotFound", "shard not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
+	}
+	replicaSnap, ok := shardSnap.Replicas[replicaIdx]
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
 	}
 	newWorkerSnap := workerSnap.Clone()
 	delete(newWorkerSnap.Assignments, shardId)
 	snap.AllWorkers.Set(workerFullId, newWorkerSnap)
 	// update shardSnap
-	shardSnap, ok := snap.AllShards.Get(shardId)
-	if !ok {
-		ke := kerror.Create("ShardNotFound", "shard not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
-		panic(ke)
-	}
-	replicaSnap, ok := shardSnap.Replicas[replicaIdx]
-	if !ok {
-		ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
-		panic(ke)
-	}
 	newReplicaSnap := replicaSnap.Clone()
 	delete(newReplicaSnap.Assignments, assignmentId)
 	newShardSnap := shardSnap.Clone()
@@ -251,12 +288,12 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 	snap.AllAssignments.Delete(assignmentId)
 }
 
-func (snap *Snapshot) ApplyMove(move Move) *Snapshot {
+func (snap *Snapshot) ApplyMove(move Move, mode ApplyMode) *Snapshot {
 	if snap.Frozen {
 		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
 		panic(ke)
 	}
-	move.Apply(snap)
+	move.Apply(snap, mode)
 	return snap
 }
 
