@@ -32,9 +32,9 @@ func NewReplicaStateByJson(parent *ShardState, replicaStateJson *smgjson.Replica
 		Assignments: make(map[data.AssignmentId]common.Unit),
 	}
 
-	for _, assignId := range replicaStateJson.Assignments {
-		replicaState.Assignments[data.AssignmentId(assignId)] = common.Unit{}
-	}
+	// for _, assignId := range replicaStateJson.Assignments {
+	// 	replicaState.Assignments[data.AssignmentId(assignId)] = common.Unit{}
+	// }
 	return replicaState
 }
 
@@ -45,9 +45,9 @@ func (rs *ReplicaState) ToJson() *smgjson.ReplicaStateJson {
 		idx := int32(rs.ReplicaIdx)
 		obj.ReplicaIdx = idx
 	}
-	for assignId := range rs.Assignments {
-		obj.Assignments = append(obj.Assignments, string(assignId))
-	}
+	// for assignId := range rs.Assignments {
+	// 	obj.Assignments = append(obj.Assignments, string(assignId))
+	// }
 	return obj
 }
 

@@ -64,14 +64,14 @@ func NewShardStateByJson(ctx context.Context, ss *ServiceState, shardStateJson *
 	for i, replicaJson := range shardStateJson.Resplicas {
 		replica := NewReplicaStateByJson(shardState, replicaJson)
 		shardState.Replicas[data.ReplicaIdx(i)] = replica
-		for _, assignId := range replicaJson.Assignments {
-			_, ok := ss.AllAssignments[data.AssignmentId(assignId)]
-			if !ok {
-				klogging.Warning(ctx).With("shardId", shardState.ShardId).With("replicaIdx", i).With("assignId", assignId).Log("NewShardStateByJson", "assignment not found")
-				continue
-			}
-			replica.Assignments[data.AssignmentId(assignId)] = common.Unit{}
-		}
+		// for _, assignId := range replicaJson.Assignments {
+		// 	_, ok := ss.AllAssignments[data.AssignmentId(assignId)]
+		// 	if !ok {
+		// 		klogging.Fatal(ctx).With("shardId", shardState.ShardId).With("replicaIdx", i).With("assignId", assignId).Log("NewShardStateByJson", "assignment not found")
+		// 		continue
+		// 	}
+		// 	replica.Assignments[data.AssignmentId(assignId)] = common.Unit{}
+		// }
 	}
 	return shardState
 }

@@ -84,6 +84,20 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 
 		ss.AllShards[data.ShardId(shardState.ShardId)] = shardState
 	}
+	// populate assignments in replicas
+	for assignId, assignment := range ss.AllAssignments {
+		shardState, ok := ss.AllShards[assignment.ShardId]
+		if !ok {
+			klogging.Fatal(ctx).With("assignmentId", assignId).With("shardId", assignment.ShardId).Log("LoadAllShardState", "shard not found")
+			continue
+		}
+		replicaState, ok := shardState.Replicas[assignment.ReplicaIdx]
+		if !ok {
+			klogging.Fatal(ctx).With("assignmentId", assignId).With("shardId", assignment.ShardId).With("replicaIdx", assignment.ReplicaIdx).Log("LoadAllShardState", "replica not found")
+			continue
+		}
+		replicaState.Assignments[assignId] = common.Unit{}
+	}
 }
 
 func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
@@ -136,6 +150,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 		shardSnap := costfunc.NewShardSnap(shard.ShardId)
 		for replicaIdx, replica := range shard.Replicas {
 			replicaSnap := costfunc.NewReplicaSnap(shard.ShardId, replicaIdx)
+			replicaSnap.LameDuck = replica.LameDuck
 			shardSnap.Replicas[replicaIdx] = replicaSnap
 			for assignmentId := range replica.Assignments {
 				replicaSnap.Assignments[assignmentId] = common.Unit{}
@@ -158,5 +173,5 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 		}
 		snapshot.AllWorkers.Set(workerId, workerSnap)
 	}
-	return snapshot.Freeze()
+	return snapshot.CompactAndFreeze()
 }

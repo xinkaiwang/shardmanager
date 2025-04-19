@@ -182,6 +182,13 @@ func (snap *Snapshot) Freeze() *Snapshot {
 	return snap
 }
 
+func (snap *Snapshot) CompactAndFreeze() *Snapshot {
+	snap.AllShards = snap.AllShards.Compact()
+	snap.AllWorkers = snap.AllWorkers.Compact()
+	snap.AllAssignments = snap.AllAssignments.Compact()
+	return snap.Freeze()
+}
+
 func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, workerFullId data.WorkerFullId) {
 	shardSnap, ok := snap.AllShards.Get(shardId)
 	if !ok {

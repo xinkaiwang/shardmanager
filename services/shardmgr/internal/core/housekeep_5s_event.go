@@ -6,6 +6,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
 // Housekeep1sEvent implements krunloop.IEvent[*ServiceState] interface
@@ -17,7 +18,7 @@ func (te *Housekeep5sEvent) GetName() string {
 }
 
 func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
-	// ss.checkWorkerTombStone(ctx)
+	ss.checkWorkerTombStone(ctx)
 	ss.checkShardTombStone(ctx)
 	kcommon.ScheduleRun(5*1000, func() { // 5s
 		ss.PostEvent(NewHousekeep5sEvent())
@@ -26,6 +27,18 @@ func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
 
 func NewHousekeep5sEvent() *Housekeep5sEvent {
 	return &Housekeep5sEvent{}
+}
+
+func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
+	for workerFullId, workerState := range ss.AllWorkers {
+		if workerState.State == data.WS_Offline_dead {
+			delete(ss.AllWorkers, workerFullId)
+			ss.storeProvider.StoreWorkerState(workerFullId, nil)
+			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
+			ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
+			klogging.Info(ctx).With("workerFullId", workerFullId).Log("checkWorkerTombStone", "delete workerState")
+		}
+	}
 }
 
 func (ss *ServiceState) checkShardTombStone(ctx context.Context) {

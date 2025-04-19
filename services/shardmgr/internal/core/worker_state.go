@@ -246,9 +246,8 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 	case data.WS_Offline_draining_hat:
 		fallthrough
 	case data.WS_Offline_draining_complete:
-		// this should never happen
-		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
-			Log("onEphNodeLost", "worker eph already lost")
+		ws.State = data.WS_Offline_dead
+		dirty.AddDirtyFlag("WorkerState")
 	case data.WS_Offline_dead:
 		// nothing to do
 	}

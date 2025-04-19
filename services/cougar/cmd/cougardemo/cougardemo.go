@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougar"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/unicorn/data"
@@ -38,7 +39,12 @@ func main() {
 			} else if action == cougar.CA_RemoveShard {
 				// fmt.Printf("Removing shard %s\n", shardId)
 				cougarInstance.VisitState(func(state *cougar.CougarState) string {
-					shard := state.AllShards[shardId]
+					shard, ok := state.AllShards[shardId]
+					if !ok {
+						// 如果 shard 不存在，则直接返回
+						klogging.Warning(ctx).With("shardId", shardId).Log("shard not found", "")
+						return "ShardNotFound"
+					}
 					shard.CurrentConfirmedState = cougarjson.CAS_Dropped
 					fmt.Printf("Removed shard %s\n", shardId)
 					return "RemovedSucc"
