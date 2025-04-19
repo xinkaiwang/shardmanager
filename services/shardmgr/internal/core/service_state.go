@@ -114,23 +114,51 @@ func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
 	}
 }
 
+type FlushScope int // bitmask
+const (
+	FS_None             FlushScope = 0
+	FS_WorkerState      FlushScope = 1 << 0
+	FS_Pilot            FlushScope = 1 << 1
+	FS_Routing          FlushScope = 1 << 2
+	FS_RecreateSnapshot FlushScope = 1 << 3
+	FS_Most             FlushScope = FS_WorkerState | FS_Pilot | FS_Routing
+	FS_All              FlushScope = FS_WorkerState | FS_Pilot | FS_Routing | FS_RecreateSnapshot
+)
+
 // FlushWorkerState: call this to flush all the in-memory state to the store
-func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.WorkerFullId, workerState *WorkerState, reason string) {
+func (ss *ServiceState) FlushWorkerState(ctx context.Context, workerFullId data.WorkerFullId, workerState *WorkerState, scope FlushScope, reason string) {
 	if workerState == nil {
-		ss.storeProvider.StoreWorkerState(workerFullId, nil)
-		ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
-		ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
+		if scope&FS_WorkerState != 0 {
+			ss.storeProvider.StoreWorkerState(workerFullId, nil)
+		}
+		if scope&FS_Pilot != 0 {
+			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
+		}
+		if scope&FS_Routing != 0 {
+			ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
+		}
+		if scope&FS_RecreateSnapshot != 0 {
+			ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "FlushWorkerState:"+reason)
+		}
 		return
 	}
 	// workerStateJson
-	workerStateJson := workerState.ToWorkerStateJson(ctx, ss, reason)
-	ss.storeProvider.StoreWorkerState(workerFullId, workerStateJson)
+	if scope&FS_WorkerState != 0 {
+		workerStateJson := workerState.ToWorkerStateJson(ctx, ss, reason)
+		ss.storeProvider.StoreWorkerState(workerFullId, workerStateJson)
+	}
 	// pilot
-	ss.pilotProvider.StorePilotNode(ctx, workerFullId, workerState.ToPilotNode(ctx, ss, reason))
+	if scope&FS_Pilot != 0 {
+		ss.pilotProvider.StorePilotNode(ctx, workerFullId, workerState.ToPilotNode(ctx, ss, reason))
+	}
 	// routing table
-	ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
-	// trigger snapshot recreate
-	ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "FlushWorkerState:"+reason)
+	if scope&FS_Routing != 0 {
+		ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, workerState.ToRoutingEntry(ctx, ss, reason))
+	}
+	// // trigger snapshot recreate
+	if scope&FS_RecreateSnapshot != 0 {
+		ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "FlushWorkerState:"+reason) // TODO: most of workerState change should not trigger snapshot recreate
+	}
 }
 
 // in case of worker not found, we return nil

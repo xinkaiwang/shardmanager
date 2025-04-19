@@ -81,7 +81,7 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 				return
 			}
 			assign.ShouldInRoutingTable = false
-			ss.FlushWorkerState(ctx, workerFullId, ws, "removeFromRouting")
+			ss.FlushWorkerState(ctx, workerFullId, ws, FS_WorkerState|FS_Routing, "removeFromRouting")
 		})
 		if !succ {
 			panic(ke)
@@ -118,7 +118,7 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 				return
 			}
 			assign.ShouldInRoutingTable = true
-			ss.FlushWorkerState(ctx, workerFullId, ws, "addToRouting")
+			ss.FlushWorkerState(ctx, workerFullId, ws, FS_WorkerState|FS_Routing, "addToRouting")
 			status = AS_Completed
 		})
 		action.ActionStage = smgjson.AS_Completed
@@ -180,7 +180,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			replicaState.Assignments[action.AssignmentId] = common.Unit{}
 			workerState.Assignments[action.AssignmentId] = common.Unit{}
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
-			ss.FlushWorkerState(ctx, workerFullId, workerState, "addShard")
+			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "addShard")
 			signalBox = workerState.SignalBox
 			status = AS_Wait
 			klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).Log("actionAddShard", "add shard to worker")
@@ -292,7 +292,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			}
 			assign.ShouldInPilot = false
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
-			ss.FlushWorkerState(ctx, workerFullId, workerState, "dropShard")
+			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "dropShard")
 			signalBox = workerState.SignalBox
 			status = AS_Wait
 		})

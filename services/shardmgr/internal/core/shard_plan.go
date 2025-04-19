@@ -95,7 +95,7 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 			shardPlan := smgjson.ParseShardPlan(item.Value)
 			krunloop.VisitResource(sp.parent, func(ss *ServiceState) {
 				ss.stagingShardPlan = shardPlan
-				ss.syncShardsBatchManager.TrySchedule(ctx)
+				ss.syncShardsBatchManager.TrySchedule(ctx, "ShardPlanWatcher")
 			})
 		}
 	}

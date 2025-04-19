@@ -151,7 +151,7 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 		workerState := NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
 		workerState.updateWorkerByEph(ctx, workerEph)
 		ss.AllWorkers[workerFullId] = workerState
-		ss.FlushWorkerState(ctx, workerFullId, workerState, "NewWorker")
+		ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
 	}
 }
 
@@ -179,7 +179,7 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
 				workerState.updateWorkerByEph(ctx, workerEph)
 				ss.AllWorkers[workerFullId] = workerState
-				ss.FlushWorkerState(ctx, workerFullId, workerState, "NewWorker")
+				ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
 			}
 		} else {
 			if workerEph == nil {
@@ -256,7 +256,7 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		Log("onEphNodeLostDone", "worker eph lost")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, reason)
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, reason)
 		ws.signalAll(ctx, "onEphNodeLost:"+reason)
 	}
 }
@@ -296,7 +296,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		Log("onEphNodeUpdateDone", "workerEph updated finished")
 	if dirty.IsDirty() {
 		reason := dirty.String()
-		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, reason)
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, reason)
 		ws.signalAll(ctx, "onEphNodeUpdate:"+reason)
 	}
 }
@@ -417,11 +417,9 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 	}
 	if dirty.IsDirty() {
 		if needsDelete {
-			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), nil, dirty.String())
-			// ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), nil)
+			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), nil, FS_Most, dirty.String())
 		} else {
-			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, dirty.String())
-			// ss.StoreProvider.StoreWorkerState(ws.GetWorkerFullId(ss), ws.ToWorkerStateJson(ctx, ss, dirty.String()))
+			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, dirty.String())
 		}
 	}
 	return

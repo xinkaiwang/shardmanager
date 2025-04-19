@@ -95,10 +95,7 @@ func (ss *ServiceState) StagingWorkerEph(ctx context.Context, workerId data.Work
 		Log("stagingWorkerEph", "开始处理worker eph")
 
 	defer func() {
-		ss.syncWorkerBatchManager.TrySchedule(ctx)
-		// klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-		// 	With("dirtyCount", len(ss.EphDirty)).
-		// 	Log("stagingWorkerEph", "已安排BatchManager")
+		ss.syncWorkerBatchManager.TrySchedule(ctx, "StagingWorkerEph")
 	}()
 
 	if workerEph == nil {

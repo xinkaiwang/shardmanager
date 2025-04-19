@@ -46,7 +46,10 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	// step 6: sync workerEph to workerState
 	ss.firstDigestStagingWorkerEph(ctx)
 
-	// step 7: start listening to shard plan changes/worker eph changes/service config changes
+	// step 7: current snapshot and future snapshot
+	ss.ReCreateSnapshot(ctx)
+
+	// step 8: start listening to shard plan changes/worker eph changes/service config changes
 	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision+1) // +1 to skip the current revision
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision+1)
 	ss.ServiceConfigWatcher = NewServiceConfigWatcher(ctx, ss, currentServiceConfigRevision+1)
@@ -54,11 +57,8 @@ func (ss *ServiceState) Init(ctx context.Context) {
 		solver.GetCurrentSolverConfigProvider().OnSolverConfigChange(sc)
 	})
 	ss.ServiceConfigWatcher.ShardConfigListener = append(ss.ServiceConfigWatcher.ShardConfigListener, func(sc *config.ShardConfig) {
-		ss.syncShardsBatchManager.TrySchedule(ctx)
+		ss.syncShardsBatchManager.TrySchedule(ctx, "ShardConfigWatcher")
 	})
-
-	// step 8: current snapshot and future snapshot
-	ss.ReCreateSnapshot(ctx)
 
 	// step 9: start housekeeping threads
 	ss.PostEvent(NewHousekeep1sEvent())
