@@ -1,10 +1,14 @@
 package smgjson
 
-import "github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+import (
+	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+)
 
 type AssignmentStateJson struct {
-	ShardId    data.ShardId    `json:"sid"`
-	ReplicaIdx data.ReplicaIdx `json:"rid,omitempty"`
+	ShardId     data.ShardId                     `json:"sid"`
+	ReplicaIdx  data.ReplicaIdx                  `json:"rid,omitempty"`
+	TargetState cougarjson.CougarAssignmentState `json:"target_state,omitempty"`
 }
 
 func NewAssignmentStateJson(shardId data.ShardId, replicaIdx data.ReplicaIdx) *AssignmentStateJson {

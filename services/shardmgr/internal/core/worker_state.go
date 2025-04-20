@@ -75,6 +75,7 @@ func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerSta
 	for assignId, assignmentJson := range workerStateJson.Assignments {
 		assignmentId := data.AssignmentId(assignId)
 		assignmentState := NewAssignmentState(assignmentId, assignmentJson.ShardId, assignmentJson.ReplicaIdx, workerState.GetWorkerFullId())
+		assignmentState.TargetState = assignmentJson.TargetState
 		workerState.Assignments[assignmentId] = common.Unit{}
 		ss.AllAssignments[assignmentId] = assignmentState
 	}
@@ -99,10 +100,8 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 				Log("ToWorkerStateJson", "assignment not found")
 			continue
 		}
-		assignJson := &smgjson.AssignmentStateJson{
-			ShardId:    assignState.ShardId,
-			ReplicaIdx: assignState.ReplicaIdx,
-		}
+		assignJson := smgjson.NewAssignmentStateJson(assignState.ShardId, assignState.ReplicaIdx)
+		assignJson.TargetState = assignState.TargetState
 		obj.Assignments[assignmentId] = assignJson
 	}
 	return obj

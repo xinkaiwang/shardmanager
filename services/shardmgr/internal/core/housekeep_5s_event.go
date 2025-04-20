@@ -6,6 +6,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
@@ -58,6 +59,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 					// delete this replica
 					// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
 					delete(shard.Replicas, replica.ReplicaIdx)
+					ss.hardDeleteReplicaFromSnapshot(ctx, shard.ShardId, replica.ReplicaIdx) // don't forget to delete from (current) snapshot
 					dirtyFlag.AddDirtyFlag("hardDeleteReplica" + strconv.Itoa(int(replica.ReplicaIdx)))
 				}
 			}
@@ -72,7 +74,25 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			shard.LastUpdateTimeMs = kcommon.GetWallTimeMs()
 			shard.LastUpdateReason = dirtyFlag.String()
 			ss.storeProvider.StoreShardState(shard.ShardId, shard.ToJson())
+
 			klogging.Info(ctx).With("shardId", shard.ShardId).With("updateReason", shard.LastUpdateReason).Log("checkShardTombStone", "update shardState")
 		}
 	}
+}
+
+func (ss *ServiceState) hardDeleteReplicaFromSnapshot(ctx context.Context, shardId data.ShardId, replicaIdx data.ReplicaIdx) {
+	fn := func(snapshot *costfunc.Snapshot) *costfunc.Snapshot {
+		newSnapshot := snapshot.Clone()
+		shardSnap, ok := newSnapshot.AllShards.Get(shardId)
+		if !ok {
+			klogging.Fatal(ctx).With("shardId", shardId).Log("checkShardTombStone", "shard not found in snapshot")
+		}
+		newShardSnap := shardSnap.Clone()
+		delete(newShardSnap.Replicas, replicaIdx)
+		newSnapshot.AllShards.Set(shardId, newShardSnap)
+		ss.SnapshotCurrent = newSnapshot.Freeze()
+		return newSnapshot
+	}
+	ss.SnapshotCurrent = fn(ss.SnapshotCurrent)
+	ss.SnapshotFuture = fn(ss.SnapshotFuture)
 }
