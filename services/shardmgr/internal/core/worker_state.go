@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -76,6 +75,7 @@ func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerSta
 		assignmentId := data.AssignmentId(assignId)
 		assignmentState := NewAssignmentState(assignmentId, assignmentJson.ShardId, assignmentJson.ReplicaIdx, workerState.GetWorkerFullId())
 		assignmentState.TargetState = assignmentJson.TargetState
+		assignmentState.CurrentConfirmedState = assignmentJson.TargetState
 		workerState.Assignments[assignmentId] = common.Unit{}
 		ss.AllAssignments[assignmentId] = assignmentState
 	}
@@ -102,6 +102,7 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 		}
 		assignJson := smgjson.NewAssignmentStateJson(assignState.ShardId, assignState.ReplicaIdx)
 		assignJson.TargetState = assignState.TargetState
+		assignJson.CurrentState = assignState.CurrentConfirmedState
 		obj.Assignments[assignmentId] = assignJson
 	}
 	return obj
@@ -158,7 +159,7 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 // syncs from eph staging to worker state, should batch as much as possible
 func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 	// klogging.Info(ctx).With("dirtyCount", len(ss.EphDirty)).
-	// 	Log("syncEphStagingToWorkerState", "开始同步worker eph到worker state")
+	// 	Log("digestStagingWorkerEph", "开始同步worker eph到worker state")
 	dirtyFlag := NewDirtyFlag()
 	// only updates those have dirty flag
 	for workerFullId := range ss.EphDirty {
@@ -168,7 +169,7 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
 			With("hasEph", workerEph != nil).
 			With("hasState", workerState != nil).
-			Log("syncEphStagingToWorkerState", "处理worker")
+			Log("digestStagingWorkerEph", "处理worker")
 
 		if workerState == nil {
 			if workerEph == nil {
@@ -277,10 +278,7 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
 	dirty := NewDirtyFlag()
 	dict := ws.collectCurrentAssignments(ss)
-	updateCount := ws.applyNewEph(ctx, ss, workerEph, dict)
-	if updateCount > 0 {
-		dirty.AddDirtyFlag("asign" + strconv.Itoa(updateCount))
-	}
+	dirty.AddDirtyFlags(ws.applyNewEph(ctx, ss, workerEph, dict))
 	switch ws.State {
 	case data.WS_Online_healthy:
 		fallthrough
@@ -329,32 +327,33 @@ func (ws *WorkerState) collectCurrentAssignments(ss *ServiceState) map[data.Assi
 	return dict
 }
 
-func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson, dict map[data.AssignmentId]*AssignmentState) int {
-	updateCount := 0
+func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson, dict map[data.AssignmentId]*AssignmentState) *DirtyFlag {
+	dirtyFlag := NewDirtyFlag()
+	// full compare A) dict (current) vs B) workerEph.Assignments (new)
 	for _, assignmentJson := range workerEph.Assignments {
-		dirty := false
 		assignmentId := data.AssignmentId(assignmentJson.AssignmentId)
 		assignState, ok := dict[assignmentId]
 		if !ok {
+			// case 1: need add?
+			// how can this possible? assignment should added by minion before pilot/eph node have it.
+			// in this case we ignore it.
 			continue
 		}
 		delete(dict, assignmentId)
+		// case 2: need update
 		if assignState.CurrentConfirmedState != assignmentJson.State {
 			assignState.CurrentConfirmedState = assignmentJson.State
-			dirty = true
-		}
-		if dirty {
-			updateCount++
+			dirtyFlag.AddDirtyFlag("updateAssign:" + string(assignState.AssignmentId) + ":" + string(assignState.CurrentConfirmedState))
 		}
 	}
-	// all remaining assignments are dropped from eph
+	// case 3: need delete
 	for _, assignState := range dict {
 		if assignState.CurrentConfirmedState != cougarjson.CAS_Dropped {
 			assignState.CurrentConfirmedState = cougarjson.CAS_Dropped
-			updateCount++
+			dirtyFlag.AddDirtyFlag("unassign:" + string(assignState.AssignmentId) + ":" + string(assignState.CurrentConfirmedState))
 		}
 	}
-	return updateCount
+	return dirtyFlag
 }
 
 func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {

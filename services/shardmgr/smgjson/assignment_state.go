@@ -6,9 +6,10 @@ import (
 )
 
 type AssignmentStateJson struct {
-	ShardId     data.ShardId                     `json:"sid"`
-	ReplicaIdx  data.ReplicaIdx                  `json:"rid,omitempty"`
-	TargetState cougarjson.CougarAssignmentState `json:"target_state,omitempty"`
+	ShardId      data.ShardId                     `json:"sid"`
+	ReplicaIdx   data.ReplicaIdx                  `json:"rid,omitempty"`
+	CurrentState cougarjson.CougarAssignmentState `json:"current_state,omitempty"`
+	TargetState  cougarjson.CougarAssignmentState `json:"target_state,omitempty"`
 }
 
 func NewAssignmentStateJson(shardId data.ShardId, replicaIdx data.ReplicaIdx) *AssignmentStateJson {

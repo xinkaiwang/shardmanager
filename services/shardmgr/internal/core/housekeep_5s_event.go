@@ -60,7 +60,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 					// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
 					delete(shard.Replicas, replica.ReplicaIdx)
 					ss.hardDeleteReplicaFromSnapshot(ctx, shard.ShardId, replica.ReplicaIdx) // don't forget to delete from (current) snapshot
-					dirtyFlag.AddDirtyFlag("hardDeleteReplica" + strconv.Itoa(int(replica.ReplicaIdx)))
+					dirtyFlag.AddDirtyFlag("hardDeleteReplica:" + string(shard.ShardId) + ":" + strconv.Itoa(int(replica.ReplicaIdx)))
 				}
 			}
 		}
