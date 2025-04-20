@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -10,7 +9,6 @@ import (
 )
 
 type BatchManager struct {
-	mutex      sync.Mutex
 	parent     krunloop.EventPoster[*ServiceState]
 	maxDelayMs int
 	name       string
@@ -29,14 +27,19 @@ func NewBatchManager(parent krunloop.EventPoster[*ServiceState], maxDelayMs int,
 }
 
 func (bm *BatchManager) TrySchedule(ctx context.Context, reasons ...string) {
+	krunloop.VisitResource(bm.parent, func(ss *ServiceState) {
+		bm.TryScheduleInternal(ctx, reasons...)
+	})
+}
+
+// TryScheduleInternal must be called from inside runloop
+func (bm *BatchManager) TryScheduleInternal(ctx context.Context, reasons ...string) {
 	var needSchedule bool
-	bm.mutex.Lock()
 	if !bm.isInFlight {
 		bm.isInFlight = true
 		needSchedule = true
 	}
 	bm.reasons = append(bm.reasons, reasons...)
-	bm.mutex.Unlock()
 	scheduled := "scheduled"
 	if !needSchedule {
 		scheduled = "merged"
@@ -67,11 +70,9 @@ func (bpe *BatchProcessEvent) GetName() string {
 
 func (bpe *BatchProcessEvent) Process(ctx context.Context, ss *ServiceState) {
 	var reasons []string
-	bpe.parent.mutex.Lock()
 	bpe.parent.isInFlight = false
 	reasons = bpe.parent.reasons
 	bpe.parent.reasons = nil
-	bpe.parent.mutex.Unlock()
 
 	klogging.Info(ctx).With("name", bpe.parent.name).With("reason", reasons).Log("BatchManager", "out-bound")
 	bpe.parent.fn(ctx, ss)

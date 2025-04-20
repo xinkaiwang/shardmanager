@@ -37,9 +37,9 @@ const (
 	AS_Completed  ActionStage = "completed"
 )
 
-func MoveStateJsonParse(data []byte) *MoveStateJson {
+func MoveStateJsonParse(data string) *MoveStateJson {
 	var state MoveStateJson
-	err := json.Unmarshal(data, &state)
+	err := json.Unmarshal([]byte(data), &state)
 	if err != nil {
 		ke := kerror.Wrap(err, "UnmarshalError", "failed to unmarshal MoveStateJson", false)
 		panic(ke)

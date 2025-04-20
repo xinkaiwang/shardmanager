@@ -42,8 +42,8 @@ func (ss *ShardSnap) Clone() *ShardSnap {
 }
 
 func (ss ShardSnap) CompareWith(other TypeT2) []string {
-	if other, ok := other.(*ShardSnap); ok {
-		return ss.Compare(other)
+	if other, ok := other.(ShardSnap); ok {
+		return ss.Compare(&other)
 	}
 	return []string{"ShardSnap:CompareWith:otherIsNotShardSnap"}
 }
@@ -149,8 +149,8 @@ func (asgn *AssignmentSnap) GetReplicaFullId() data.ReplicaFullId {
 }
 
 func (ss AssignmentSnap) CompareWith(other TypeT2) []string {
-	if other, ok := other.(*AssignmentSnap); ok {
-		return ss.Compare(other)
+	if other, ok := other.(AssignmentSnap); ok {
+		return ss.Compare(&other)
 	}
 	return []string{"AssignmentSnap:CompareWith:otherIsNotAssignmentSnap"}
 }
@@ -190,8 +190,8 @@ func NewWorkerSnap(workerFullId data.WorkerFullId) *WorkerSnap {
 }
 
 func (ss WorkerSnap) CompareWith(other TypeT2) []string {
-	if other, ok := other.(*WorkerSnap); ok {
-		return ss.Compare(other)
+	if other, ok := other.(WorkerSnap); ok {
+		return ss.Compare(&other)
 	}
 	return []string{"WorkerSnap:CompareWith:otherIsNotWorkerSnap"}
 }

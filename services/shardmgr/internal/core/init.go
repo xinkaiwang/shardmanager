@@ -6,6 +6,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
@@ -30,6 +31,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.LoadAllWorkerState(ctx) // (from /smg/worker_state/ to ss.AllWorkers and ss.AllAssignments)
 	// step 3: load all shard state (note: we need to load workerStates first, because workerState will populate assignments)
 	ss.LoadAllShardState(ctx) // (from /smg/shard_state/ to ss.AllShards)
+	ss.LoadAllMoves(ctx)      // (from /smg/move_state/ to ss.AllMoves)
 	ss.ShadowState.InitDone()
 	ss.PrintAllShards(ctx)
 	ss.PrintAllWorkers(ctx)
@@ -123,6 +125,18 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 	}
 }
 
+func (ss *ServiceState) LoadAllMoves(ctx context.Context) {
+	pathPrefix := ss.PathManager.GetMoveStatePrefix()
+	// load all from etcd
+	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
+	for _, item := range list {
+		moveStateJson := smgjson.MoveStateJsonParse(item.Value)
+		moveState := MoveStateFromJson(moveStateJson)
+		minion := NewActionMinion(ctx, ss, moveState)
+		ss.AllMoves[moveState.ProposalId] = minion
+	}
+}
+
 func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.ShardLineJson, etcdprov.EtcdRevision) {
 	path := ss.PathManager.GetShardPlanPath()
 	item := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path)
@@ -155,20 +169,35 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 			replicaSnap := costfunc.NewReplicaSnap(shard.ShardId, replicaIdx)
 			replicaSnap.LameDuck = replica.LameDuck
 			shardSnap.Replicas[replicaIdx] = replicaSnap
-			for assignmentId := range replica.Assignments {
-				replicaSnap.Assignments[assignmentId] = common.Unit{}
+			for assignId := range replica.Assignments {
+				assignmentState, ok := ss.AllAssignments[assignId]
+				if !ok {
+					ke := kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", assignId).With("shardId", shard.ShardId)
+					panic(ke)
+				}
+				if !shouldAssignIncludeInSnapshot(assignmentState) {
+					continue
+				}
+				replicaSnap.Assignments[assignId] = common.Unit{}
 			}
 		}
 		snapshot.AllShards.Set(data.ShardId(shard.ShardId), shardSnap)
 	}
 	// all worker/assignments
 	for workerId, worker := range ss.AllWorkers {
+		if !shouldWorkerIncludeInSnapshot(worker) {
+			continue
+		}
 		workerSnap := costfunc.NewWorkerSnap(workerId)
 		for assignId := range worker.Assignments {
 			assignmentState, ok := ss.AllAssignments[assignId]
 			if !ok {
 				ke := kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", assignId).With("workerId", workerId)
 				panic(ke)
+			}
+			if !shouldAssignIncludeInSnapshot(assignmentState) {
+				// snapshot only include those assignment in ready state
+				continue
 			}
 			workerSnap.Assignments[assignmentState.ShardId] = assignId
 			assignmentSnap := costfunc.NewAssignmentSnap(assignmentState.ShardId, assignmentState.ReplicaIdx, assignId, workerId)
@@ -177,4 +206,22 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 		snapshot.AllWorkers.Set(workerId, workerSnap)
 	}
 	return snapshot.CompactAndFreeze()
+}
+
+func shouldWorkerIncludeInSnapshot(workerState *WorkerState) bool {
+	switch workerState.State {
+	case data.WS_Online_healthy, data.WS_Online_shutdown_req, data.WS_Online_shutdown_hat, data.WS_Online_shutdown_permit:
+		return true
+	case data.WS_Offline_graceful_period, data.WS_Offline_draining_candidate, data.WS_Offline_draining_hat, data.WS_Offline_draining_complete:
+		return true
+	case data.WS_Deleted, data.WS_Unknown, data.WS_Offline_dead:
+		return false
+	default:
+		klogging.Fatal(context.Background()).With("workerState", workerState).Log("shouldWorkerIncludeInSnapshot", "unknown worker state")
+	}
+	return false
+}
+
+func shouldAssignIncludeInSnapshot(assignmentState *AssignmentState) bool {
+	return assignmentState.CurrentConfirmedState == cougarjson.CAS_Ready
 }

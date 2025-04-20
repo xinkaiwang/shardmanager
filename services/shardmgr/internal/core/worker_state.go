@@ -160,7 +160,7 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 	// klogging.Info(ctx).With("dirtyCount", len(ss.EphDirty)).
 	// 	Log("syncEphStagingToWorkerState", "开始同步worker eph到worker state")
-
+	dirtyFlag := NewDirtyFlag()
 	// only updates those have dirty flag
 	for workerFullId := range ss.EphDirty {
 		workerEph := ss.EphWorkerStaging[workerFullId.WorkerId][workerFullId.SessionId]
@@ -180,16 +180,28 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 				workerState.updateWorkerByEph(ctx, workerEph)
 				ss.AllWorkers[workerFullId] = workerState
 				ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
+				// add this new worker in current/future snapshot
+				workerSnap := costfunc.NewWorkerSnap(workerState.GetWorkerFullId())
+				ss.snapshotOperationManager.TrySchedule(ctx, func(snapshot *costfunc.Snapshot) {
+					snapshot.AllWorkers.Set(workerFullId, workerSnap)
+				}, "AddWorkerToSnapshot")
+				// newCurrent := ss.SnapshotCurrent.Clone()
+				// newCurrent.AllWorkers.Set(workerFullId, workerSnap)
+				// ss.SnapshotCurrent = newCurrent.Freeze()
+				// newFuture := ss.SnapshotFuture.Clone()
+				// newFuture.AllWorkers.Set(workerFullId, workerSnap)
+				// ss.SnapshotFuture = newFuture.Freeze()
+
+				// dirtyFlag
+				dirtyFlag.AddDirtyFlag("NewWorker:" + workerFullId.String())
 			}
 		} else {
 			if workerEph == nil {
 				// Worker Event: Eph node lost, worker becomes offline
-
-				workerState.onEphNodeLost(ctx, ss)
+				dirtyFlag.AddDirtyFlags(workerState.onEphNodeLost(ctx, ss))
 			} else {
 				// Worker Event: Eph node updated
-
-				workerState.onEphNodeUpdate(ctx, ss, workerEph)
+				dirtyFlag.AddDirtyFlags(workerState.onEphNodeUpdate(ctx, ss, workerEph))
 			}
 		}
 	}
@@ -217,7 +229,7 @@ func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
 }
 
 // onEphNodeLost: must be called in runloop
-func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
+func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *DirtyFlag {
 	var dirty DirtyFlag
 	switch ws.State {
 	case data.WS_Online_healthy:
@@ -259,10 +271,11 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) {
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, reason)
 		ws.signalAll(ctx, "onEphNodeLost:"+reason)
 	}
+	return &dirty
 }
 
 // onEphNodeUpdate: must be called in runloop
-func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson) {
+func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
 	dirty := NewDirtyFlag()
 	dict := ws.collectCurrentAssignments(ss)
 	updateCount := ws.applyNewEph(ctx, ss, workerEph, dict)
@@ -299,6 +312,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, reason)
 		ws.signalAll(ctx, "onEphNodeUpdate:"+reason)
 	}
+	return dirty
 }
 
 func (ws *WorkerState) collectCurrentAssignments(ss *ServiceState) map[data.AssignmentId]*AssignmentState {

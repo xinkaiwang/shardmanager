@@ -85,8 +85,7 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 	threshold := ss.DynamicThreshold.GetCurrentThreshold(kcommon.GetWallTimeMs())
 	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("currentThreadshold", threshold).Log("AcceptEvent", "接受提案")
 	moveState := NewMoveStateFromProposal(ss, proposal)
-	minion := NewActionMinion(ss, moveState)
+	minion := NewActionMinion(ctx, ss, moveState)
 	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson("accepted"))
 	ss.AllMoves[proposal.ProposalId] = minion
-	go minion.Run(ctx, ss)
 }

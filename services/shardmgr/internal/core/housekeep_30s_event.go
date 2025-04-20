@@ -51,7 +51,7 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	}
 	ss.SnapshotCurrent = newSnapshotCurrent
 	ss.SnapshotFuture = newSnapshotFuture
-	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString()).With("future", newSnapshotFuture).Log("annualCheckSnapshot", "done")
+	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString()).With("future", newSnapshotFuture.ToShortString()).Log("annualCheckSnapshot", "done")
 }
 
 // return list of differences

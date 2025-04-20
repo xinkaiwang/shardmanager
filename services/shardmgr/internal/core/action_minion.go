@@ -17,11 +17,13 @@ type ActionMinion struct {
 	moveState *MoveState
 }
 
-func NewActionMinion(ss *ServiceState, moveState *MoveState) *ActionMinion {
-	return &ActionMinion{
+func NewActionMinion(ctx context.Context, ss *ServiceState, moveState *MoveState) *ActionMinion {
+	minion := &ActionMinion{
 		ss:        ss,
 		moveState: moveState,
 	}
+	go minion.Run(ctx, ss)
+	return minion
 }
 
 func (am *ActionMinion) Run(ctx context.Context, ss *ServiceState) {
