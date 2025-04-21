@@ -8,6 +8,13 @@ type Cost struct {
 	SoftScore float64
 }
 
+func NewCost(hardScore int32, softScore float64) Cost {
+	return Cost{
+		HardScore: hardScore,
+		SoftScore: softScore,
+	}
+}
+
 func (c Cost) IsLowerThan(other Cost) bool {
 	if c.HardScore < other.HardScore {
 		return true

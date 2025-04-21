@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
@@ -28,7 +29,7 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 	setup := NewFakeTimeTestSetup(t)
 	// 更新 ServiceConfig 中的 OfflineGracePeriodSec 为 10 秒
 	gracePeriodSec := int32(10)
-	setup.SetupBasicConfig(ctx, WithOfflineGracePeriodSec(gracePeriodSec))
+	setup.SetupBasicConfig(ctx, config.WithOfflineGracePeriodSec(gracePeriodSec))
 	fakeTime := setup.FakeTime
 	t.Logf("测试环境已配置")
 
@@ -132,7 +133,7 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 	setup := NewFakeTimeTestSetup(t)
 	// 更新 ServiceConfig 中的 OfflineGracePeriodSec 为 10 秒
 	gracePeriodSec := int32(10)
-	setup.SetupBasicConfig(ctx, WithOfflineGracePeriodSec(gracePeriodSec))
+	setup.SetupBasicConfig(ctx, config.WithOfflineGracePeriodSec(gracePeriodSec))
 	fakeTime := setup.FakeTime
 	t.Logf("测试环境已配置")
 
@@ -183,7 +184,7 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 
 		{
 			// 25 秒后应该变为 WS_Unknow (已删除)
-			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, workerFullId, func(pilot *WorkerState) bool { return pilot == nil }, 30*1000, 1000)
+			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, workerFullId, func(pilot *WorkerState) (bool, string) { return pilot == nil, "" }, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "worker state 状态已变为 WS_Unknown elapsedMs=%d", elapsedMs)
 		}
 		{

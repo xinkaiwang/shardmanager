@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -74,15 +75,14 @@ func NewFakeTimeTestSetup(t *testing.T) *FakeTimeTestSetup {
 	return setup
 }
 
-// SetupBasicConfig 设置基本配置
-func (setup *FakeTimeTestSetup) SetupBasicConfig(ctx context.Context, options ...smgjson.ServiceConfigOption) {
-	// 准备服务信息
-	serviceInfo := smgjson.CreateTestServiceInfo(setup.StatefulType)
-	setup.FakeEtcd.Set(ctx, "/smg/config/service_info.json", serviceInfo.ToJson())
+func (setup *FakeTimeTestSetup) SetupBasicConfig(ctx context.Context, options ...config.ServiceConfigOption) {
+	cfg := config.CreateTestServiceConfig(options...)
+	setup.FakeEtcd.Set(ctx, "/smg/config/service_config.json", cfg.ToJsonObj().ToJson())
+}
 
-	// 准备服务配置
-	serviceConfig := smgjson.CreateTestServiceConfigWithOptions(options...)
-	setup.FakeEtcd.Set(ctx, "/smg/config/service_config.json", serviceConfig.ToJson())
+func (setup *FakeTimeTestSetup) SetShardPlan(ctx context.Context, shardPlan []string) {
+	shardPlanStr := strings.Join(shardPlan, "\n")
+	setup.FakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
 }
 
 func (setup *FakeTimeTestSetup) RunWith(fn func()) {
@@ -248,23 +248,42 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 	return false, elapsedMs
 }
 
-func (setup *FakeTimeTestSetup) WaitUntilWorkerStateEnum(t *testing.T, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum, maxWaitMs int, intervalMs int) (bool, int64) {
-	return setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) bool {
-		return ws != nil && ws.State == expectedState
-	}, maxWaitMs, intervalMs)
-}
-
-func (setup *FakeTimeTestSetup) WaitUntilWorkerState(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *WorkerState) bool, maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilSs(t *testing.T, fn func(ss *ServiceState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
+		var reason string
+		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
+			result, reason = fn(ss)
+		})
+		return result, reason
+	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+func (setup *FakeTimeTestSetup) WaitUntilWorkerState(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *WorkerState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		var result bool
+		var reason string
 		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
 			worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
 
-			result = fn(worker)
+			result, reason = fn(worker)
 		})
-		return result, ""
+		return result, reason
 	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
+}
+
+func (setup *FakeTimeTestSetup) WaitUntilWorkerStateEnum(t *testing.T, workerFullId data.WorkerFullId, expectedState data.WorkerStateEnum, maxWaitMs int, intervalMs int) (bool, int64) {
+	return setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) (bool, string) {
+		if ws == nil {
+			return false, "worker state is nil"
+		}
+		if ws.State != expectedState {
+			return false, fmt.Sprintf("worker state is %s, expected %s", ws.State, expectedState)
+		}
+		return true, ""
+	}, maxWaitMs, intervalMs)
 }
 
 func (setup *FakeTimeTestSetup) WaitUntilWorkerFullState(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *WorkerState, assigns map[data.AssignmentId]*AssignmentState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
