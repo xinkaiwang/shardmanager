@@ -1,21 +1,11 @@
 package config
 
 import (
-	"encoding/json"
-
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 func ParseServiceConfigFromJson(data string) *ServiceConfig {
-	si := &smgjson.ServiceConfigJson{}
-	if data != "" {
-		err := json.Unmarshal([]byte(data), si)
-		if err != nil {
-			ke := kerror.Wrap(err, "UnmarshalError", "failed to unmarshal ServiceConfigJson", false).With("data", data)
-			panic(ke)
-		}
-	}
+	si := smgjson.ParseServiceConfigFromJson(data)
 	return ServiceConfigFromJson(si)
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -82,6 +83,7 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
 				return
 			}
+			// update routing table
 			assign.ShouldInRoutingTable = false
 			ss.FlushWorkerState(ctx, workerFullId, ws, FS_WorkerState|FS_Routing, "removeFromRouting")
 		})
@@ -119,6 +121,7 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
+			// update routing table
 			assign.ShouldInRoutingTable = true
 			ss.FlushWorkerState(ctx, workerFullId, ws, FS_WorkerState|FS_Routing, "addToRouting")
 			status = AS_Completed
@@ -183,6 +186,15 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			workerState.Assignments[action.AssignmentId] = common.Unit{}
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "addShard")
+			// remove from current snapshot
+			ke = kcommon.TryCatchRun(ctx, func() {
+				ss.SnapshotCurrent = action.ApplyToSnapshot(ss.SnapshotCurrent.Clone(), costfunc.AM_Strict).Freeze()
+			})
+			if ke != nil {
+				status = AS_Failed
+				return
+			}
+			// wait on signal box
 			signalBox = workerState.SignalBox
 			status = AS_Wait
 			klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).Log("actionAddShard", "add shard to worker")
@@ -295,6 +307,15 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			assign.ShouldInPilot = false
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "dropShard")
+			// remove from current snapshot
+			ke = kcommon.TryCatchRun(ctx, func() {
+				ss.SnapshotCurrent = action.ApplyToSnapshot(ss.SnapshotCurrent.Clone(), costfunc.AM_Strict).Freeze()
+			})
+			if ke != nil {
+				status = AS_Failed
+				return
+			}
+			// wait on signal box
 			signalBox = workerState.SignalBox
 			status = AS_Wait
 		})

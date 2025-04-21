@@ -40,6 +40,10 @@ func (c Cost) Substract(other Cost) Gain {
 	}
 }
 
+func (c Cost) String() string {
+	return fmt.Sprintf("{%d, %.3f}", c.HardScore, c.SoftScore)
+}
+
 // Gain: evaluates the benifit of a move. positive number means good move, the larger the better.
 // Note: a good move is a move that reduces the cost.
 type Gain struct {

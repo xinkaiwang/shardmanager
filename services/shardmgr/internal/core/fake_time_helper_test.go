@@ -80,10 +80,32 @@ func (setup *FakeTimeTestSetup) SetupBasicConfig(ctx context.Context, options ..
 	setup.FakeEtcd.Set(ctx, "/smg/config/service_config.json", cfg.ToJsonObj().ToJson())
 }
 
+func (setup *FakeTimeTestSetup) UpdateServiceConfig(options ...config.ServiceConfigOption) {
+	item := setup.FakeEtcd.Get(setup.ctx, "/smg/config/service_config.json")
+	serviceConfigJson := smgjson.ParseServiceConfigFromJson(item.Value)
+	cfg := config.ServiceConfigFromJson(serviceConfigJson)
+	for _, opt := range options {
+		opt(cfg)
+	}
+	setup.FakeEtcd.Set(setup.ctx, "/smg/config/service_config.json", cfg.ToJsonObj().ToJson())
+}
+
 func (setup *FakeTimeTestSetup) SetShardPlan(ctx context.Context, shardPlan []string) {
 	shardPlanStr := strings.Join(shardPlan, "\n")
 	setup.FakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
 }
+
+// func (setup *FakeTimeTestSetup) UpdateEphNode(ctx context.Context, workerFullId data.WorkerFullId, fn func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson) {
+// 	path := setup.ServiceState.PathManager.FmtWorkerEphPath(workerFullId)
+// 	item := setup.FakeEtcd.Get(ctx, path)
+// 	if item.Value == "" {
+// 		fn(nil)
+// 		return
+// 	}
+// 	ephNode := cougarjson.WorkerEphJsonFromJson(item.Value)
+// 	newEphNode := fn(ephNode)
+// 	setup.FakeEtcd.Set(ctx, path, newEphNode.ToJson())
+// }
 
 func (setup *FakeTimeTestSetup) RunWith(fn func()) {
 	etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
@@ -131,20 +153,34 @@ func (setup *FakeTimeTestSetup) PrintAll(ctx context.Context) {
 }
 
 /******************************* safeAccessServiceState *******************************/
-// 安全地访问 ServiceState 内部状态（同步方式）
-func safeAccessServiceState(ss *ServiceState, fn func(*ServiceState)) {
+
+func (setup *FakeTimeTestSetup) safeAccessServiceState(fn func(*ServiceState)) {
 	// 创建同步通道
 	completed := make(chan struct{})
-
 	// 创建一个事件并加入队列
-	ss.PostEvent(NewServiceStateAccessEvent(func(ss *ServiceState) {
+	setup.ServiceState.PostEvent(NewServiceStateAccessEvent(func(ss *ServiceState) {
 		fn(ss)
 		close(completed)
 	}))
-
 	// 等待事件处理完成
 	<-completed
 }
+
+// /******************************* safeAccessServiceState *******************************/
+// // 安全地访问 ServiceState 内部状态（同步方式）
+// func safeAccessServiceState(ss *ServiceState, fn func(*ServiceState)) {
+// 	// 创建同步通道
+// 	completed := make(chan struct{})
+
+// 	// 创建一个事件并加入队列
+// 	ss.PostEvent(NewServiceStateAccessEvent(func(ss *ServiceState) {
+// 		fn(ss)
+// 		close(completed)
+// 	}))
+
+// 	// 等待事件处理完成
+// 	<-completed
+// }
 
 // serviceStateAccessEvent 是一个用于访问 ServiceState 的事件
 type serviceStateAccessEvent struct {
@@ -252,7 +288,7 @@ func (setup *FakeTimeTestSetup) WaitUntilSs(t *testing.T, fn func(ss *ServiceSta
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
 		var reason string
-		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
+		setup.safeAccessServiceState(func(ss *ServiceState) {
 			result, reason = fn(ss)
 		})
 		return result, reason
@@ -264,7 +300,7 @@ func (setup *FakeTimeTestSetup) WaitUntilWorkerState(t *testing.T, workerFullId 
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
 		var reason string
-		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
+		setup.safeAccessServiceState(func(ss *ServiceState) {
 			worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
 
 			result, reason = fn(worker)
@@ -290,7 +326,7 @@ func (setup *FakeTimeTestSetup) WaitUntilWorkerFullState(t *testing.T, workerFul
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
 		var reason string
-		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
+		setup.safeAccessServiceState(func(ss *ServiceState) {
 			worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
 			dict := map[data.AssignmentId]*AssignmentState{}
 			for assignId := range worker.Assignments {
@@ -306,7 +342,7 @@ func (setup *FakeTimeTestSetup) WaitUntilWorkerFullState(t *testing.T, workerFul
 func (setup *FakeTimeTestSetup) WaitUntilShardCount(t *testing.T, expectedShardCount int, maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var count int
-		safeAccessServiceState(setup.ServiceState, func(ss *ServiceState) {
+		setup.safeAccessServiceState(func(ss *ServiceState) {
 			count = len(ss.AllShards)
 		})
 		return count == expectedShardCount, strconv.Itoa(count)
@@ -361,12 +397,12 @@ func (setup *FakeTimeTestSetup) WaitUntilSnapshot(t *testing.T, fn func(snapshot
 }
 
 // verifyAllShards 验证所有分片的状态
-func verifyAllShardState(t *testing.T, ss *ServiceState, expectedStates map[data.ShardId]ExpectedShardState) []string {
+func (setup *FakeTimeTestSetup) verifyAllShardState(t *testing.T, expectedStates map[data.ShardId]ExpectedShardState) []string {
 	var allPassed []string
 	ctx := context.Background()
 
 	// 创建事件来安全访问 ServiceState
-	safeAccessServiceState(ss, func(ss *ServiceState) {
+	setup.safeAccessServiceState(func(ss *ServiceState) {
 		// 首先输出当前所有分片状态，方便调试
 		klogging.Info(ctx).With("totalShards", len(ss.AllShards)).With("expectedShards", len(expectedStates)).Log("VerifyShardState", "当前分片状态")
 		for shardId, shard := range ss.AllShards {
@@ -429,7 +465,7 @@ func verifyAllShardsInStorage(t *testing.T, setup *FakeTimeTestSetup, expectedSt
 
 /******************************* UpdateEphNode *******************************/
 
-func (setup *FakeTimeTestSetup) UpdateEphNode(t *testing.T, workerFullId data.WorkerFullId, fn func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson) {
+func (setup *FakeTimeTestSetup) UpdateEphNode(workerFullId data.WorkerFullId, fn func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson) {
 	path := setup.ServiceState.PathManager.FmtWorkerEphPath(workerFullId)
 	item := setup.FakeEtcd.Get(setup.ctx, path)
 	if item.Value == "" {

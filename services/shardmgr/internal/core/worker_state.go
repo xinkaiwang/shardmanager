@@ -39,11 +39,11 @@ type WorkerState struct {
 
 	Assignments map[data.AssignmentId]common.Unit
 
-	NotifyReason              string
-	SignalBox                 *SignalBox
-	WorkerInfo                smgjson.WorkerInfoJson
-	WorkerReportedAssignments map[data.AssignmentId]common.Unit
-	StatefulType              data.StatefulType
+	NotifyReason string
+	SignalBox    *SignalBox
+	WorkerInfo   smgjson.WorkerInfoJson
+	// WorkerReportedAssignments map[data.AssignmentId]common.Unit
+	StatefulType data.StatefulType
 }
 
 func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId, statefulType data.StatefulType) *WorkerState {
@@ -53,11 +53,11 @@ func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId, statefulTy
 		State:              data.WS_Online_healthy,
 		ShutdownRequesting: false,
 		// ShutdownPermited:          false,
-		Assignments:               make(map[data.AssignmentId]common.Unit),
-		SignalBox:                 NewSignalBox(),
-		WorkerInfo:                smgjson.WorkerInfoJson{},
-		WorkerReportedAssignments: make(map[data.AssignmentId]common.Unit),
-		StatefulType:              statefulType,
+		Assignments: make(map[data.AssignmentId]common.Unit),
+		SignalBox:   NewSignalBox(),
+		WorkerInfo:  smgjson.WorkerInfoJson{},
+		// WorkerReportedAssignments: make(map[data.AssignmentId]common.Unit),
+		StatefulType: statefulType,
 	}
 }
 
@@ -149,7 +149,7 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 	for workerFullId, workerEph := range workers {
 		// add
 		workerState := NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
-		workerState.updateWorkerByEph(ctx, workerEph)
+		workerState.applyNewEph(ctx, workerEph, map[data.AssignmentId]*AssignmentState{})
 		ss.AllWorkers[workerFullId] = workerState
 		ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
 	}
@@ -177,7 +177,7 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 			} else {
 				// Worker Event: Eph node created, worker becomes online
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
-				workerState.updateWorkerByEph(ctx, workerEph)
+				workerState.applyNewEph(ctx, workerEph, map[data.AssignmentId]*AssignmentState{})
 				ss.AllWorkers[workerFullId] = workerState
 				ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
 				// add this new worker in current/future snapshot
@@ -277,8 +277,6 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 // onEphNodeUpdate: must be called in runloop
 func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
 	dirty := NewDirtyFlag()
-	dict := ws.collectCurrentAssignments(ss)
-	dirty.AddDirtyFlags(ws.applyNewEph(ctx, ss, workerEph, dict))
 	switch ws.State {
 	case data.WS_Online_healthy:
 		fallthrough
@@ -287,7 +285,8 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	case data.WS_Online_shutdown_hat:
 		fallthrough
 	case data.WS_Online_shutdown_permit:
-		dirty.AddDirtyFlags(ws.updateWorkerByEph(ctx, workerEph))
+		dict := ws.collectCurrentAssignments(ss)
+		dirty.AddDirtyFlags(ws.applyNewEph(ctx, workerEph, dict))
 	case data.WS_Offline_graceful_period:
 		fallthrough
 	case data.WS_Offline_draining_candidate:
@@ -312,6 +311,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	return dirty
 }
 
+// collectCurrentAssignments: collect current assignments from AllAssignments, fatal if not found
 func (ws *WorkerState) collectCurrentAssignments(ss *ServiceState) map[data.AssignmentId]*AssignmentState {
 	dict := make(map[data.AssignmentId]*AssignmentState)
 	for assignmentId := range ws.Assignments {
@@ -327,8 +327,14 @@ func (ws *WorkerState) collectCurrentAssignments(ss *ServiceState) map[data.Assi
 	return dict
 }
 
-func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson, dict map[data.AssignmentId]*AssignmentState) *DirtyFlag {
+func (ws *WorkerState) applyNewEph(ctx context.Context, workerEph *cougarjson.WorkerEphJson, dict map[data.AssignmentId]*AssignmentState) *DirtyFlag {
 	dirtyFlag := NewDirtyFlag()
+	// WorkerInfo
+	newWorkerInfo := smgjson.WorkerInfoFromWorkerEph(workerEph)
+	if !ws.WorkerInfo.Equals(&newWorkerInfo) {
+		ws.WorkerInfo = newWorkerInfo
+		dirtyFlag.AddDirtyFlag("WorkerInfo")
+	}
 	// full compare A) dict (current) vs B) workerEph.Assignments (new)
 	for _, assignmentJson := range workerEph.Assignments {
 		assignmentId := data.AssignmentId(assignmentJson.AssignmentId)
@@ -353,6 +359,16 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 			dirtyFlag.AddDirtyFlag("unassign:" + string(assignState.AssignmentId) + ":" + string(assignState.CurrentConfirmedState))
 		}
 	}
+	// request shutdown
+	if !ws.ShutdownRequesting {
+		if common.BoolFromInt8(workerEph.ReqShutDown) {
+			ws.ShutdownRequesting = true
+			dirtyFlag.AddDirtyFlag("ReqShutdown")
+			ws.State = data.WS_Online_shutdown_req
+			dirtyFlag.AddDirtyFlag("WorkerState")
+		}
+	}
+
 	return dirtyFlag
 }
 
@@ -437,47 +453,47 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 	return
 }
 
-// return true if dirty
-func (ws *WorkerState) updateWorkerByEph(ctx context.Context, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
-	dirty := NewDirtyFlag()
-	// WorkerInfo
-	newWorkerInfo := smgjson.WorkerInfoFromWorkerEph(workerEph)
-	if !ws.WorkerInfo.Equals(&newWorkerInfo) {
-		ws.WorkerInfo = newWorkerInfo
-		dirty.AddDirtyFlag("WorkerInfo")
-	}
-	// Assignments
-	newReportedAssign := make(map[data.AssignmentId]common.Unit)
-	for _, assignment := range workerEph.Assignments {
-		newReportedAssign[data.AssignmentId(assignment.AssignmentId)] = common.Unit{}
-	}
-	if !assignMapEquals(ws.WorkerReportedAssignments, newReportedAssign) {
-		ws.WorkerReportedAssignments = newReportedAssign
-		dirty.AddDirtyFlag("Assign")
-	}
-	// request shutdown
-	if !ws.ShutdownRequesting {
-		if common.BoolFromInt8(workerEph.ReqShutDown) {
-			ws.ShutdownRequesting = true
-			dirty.AddDirtyFlag("ReqShutdown")
-			ws.State = data.WS_Online_shutdown_req
-			dirty.AddDirtyFlag("WorkerState")
-		}
-	}
-	return dirty
-}
+// // return true if dirty
+// func (ws *WorkerState) updateWorkerByEph(ctx context.Context, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
+// 	dirty := NewDirtyFlag()
+// 	// // WorkerInfo
+// 	// newWorkerInfo := smgjson.WorkerInfoFromWorkerEph(workerEph)
+// 	// if !ws.WorkerInfo.Equals(&newWorkerInfo) {
+// 	// 	ws.WorkerInfo = newWorkerInfo
+// 	// 	dirty.AddDirtyFlag("WorkerInfo")
+// 	// }
+// 	// // Assignments
+// 	// newReportedAssign := make(map[data.AssignmentId]common.Unit)
+// 	// for _, assignment := range workerEph.Assignments {
+// 	// 	newReportedAssign[data.AssignmentId(assignment.AssignmentId)] = common.Unit{}
+// 	// }
+// 	// if !assignMapEquals(ws.WorkerReportedAssignments, newReportedAssign) {
+// 	// 	ws.WorkerReportedAssignments = newReportedAssign
+// 	// 	dirty.AddDirtyFlag("Assign")
+// 	// }
+// 	// // request shutdown
+// 	// if !ws.ShutdownRequesting {
+// 	// 	if common.BoolFromInt8(workerEph.ReqShutDown) {
+// 	// 		ws.ShutdownRequesting = true
+// 	// 		dirty.AddDirtyFlag("ReqShutdown")
+// 	// 		ws.State = data.WS_Online_shutdown_req
+// 	// 		dirty.AddDirtyFlag("WorkerState")
+// 	// 	}
+// 	// }
+// 	return dirty
+// }
 
-func assignMapEquals(map1 map[data.AssignmentId]common.Unit, map2 map[data.AssignmentId]common.Unit) bool {
-	if len(map1) != len(map2) {
-		return false
-	}
-	for key := range map1 {
-		if _, ok := map2[key]; !ok {
-			return false
-		}
-	}
-	return true
-}
+// func assignMapEquals(map1 map[data.AssignmentId]common.Unit, map2 map[data.AssignmentId]common.Unit) bool {
+// 	if len(map1) != len(map2) {
+// 		return false
+// 	}
+// 	for key := range map1 {
+// 		if _, ok := map2[key]; !ok {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
 
 type DirtyFlag struct {
 	flags []string

@@ -5,8 +5,14 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
+)
+
+var (
+	acceptSoftGainMetrics = kmetrics.CreateKmetric(context.Background(), "accept_soft_gain", "soft gain of accepted proposals", []string{"solver"})
+	acceptHardGainMetrics = kmetrics.CreateKmetric(context.Background(), "accept_hard_gain", "hard gain of accepted proposals", []string{"solver"})
 )
 
 // AcceptEvent implements krunloop.IEvent[*ServiceState] interface
@@ -29,8 +35,8 @@ func (te *AcceptEvent) Process(ctx context.Context, ss *ServiceState) {
 }
 
 func (ss *ServiceState) TryAccept(ctx context.Context) {
-	var accpeted []*costfunc.Proposal
-	var totalImpact costfunc.Gain
+	// var accpeted []*costfunc.Proposal
+	// var totalImpact costfunc.Gain
 	now := kcommon.GetWallTimeMs()
 	for {
 		if ss.ProposalQueue.IsEmpty() {
@@ -60,32 +66,47 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		gain := proposal.GetEfficiency()
 		if gain.HardScore > 0 {
 			ss.DoAcceptProposal(ctx, proposal)
-			accpeted = append(accpeted, proposal)
-			totalImpact = totalImpact.Add(proposal.Gain)
-			ss.DynamicThreshold.UpdateThreshold(now, proposal.ProposalSize)
+			// accpeted = append(accpeted, proposal)
+			// totalImpact = totalImpact.Add(proposal.Gain)
 			continue
 		}
 		// check 4: is this proposal's gain high enough (soft score)?
 		threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
 		if gain.SoftScore > threshold {
 			ss.DoAcceptProposal(ctx, proposal)
-			accpeted = append(accpeted, proposal)
-			totalImpact = totalImpact.Add(proposal.Gain)
-			ss.DynamicThreshold.UpdateThreshold(now, proposal.ProposalSize)
+			// accpeted = append(accpeted, proposal)
+			// totalImpact = totalImpact.Add(proposal.Gain)
 			continue
 		} else {
 			// top proposal is not good enough, so we need to wait for a while
 			break
 		}
 	}
-	ss.AcceptedCount += len(accpeted)
+	// ss.AcceptedCount += len(accpeted)
 }
 
 func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc.Proposal) {
-	threshold := ss.DynamicThreshold.GetCurrentThreshold(kcommon.GetWallTimeMs())
+	now := kcommon.GetWallTimeMs()
+	threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
 	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Signature).With("currentThreadshold", threshold).Log("AcceptEvent", "接受提案")
+	ss.AcceptedCount++
+	acceptSoftGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.SoftScore))
+	acceptHardGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.HardScore))
+
 	moveState := NewMoveStateFromProposal(ss, proposal)
 	minion := NewActionMinion(ctx, ss, moveState)
 	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson("accepted"))
+	ss.DynamicThreshold.UpdateThreshold(now, proposal.ProposalSize)
 	ss.AllMoves[proposal.ProposalId] = minion
+
+	// apply this move to future snapshot
+	ke := kcommon.TryCatchRun(ctx, func() {
+		newFuture := ss.SnapshotFuture.Clone()
+		newFuture.ApplyMove(proposal.Move, costfunc.AM_Strict)
+		ss.SnapshotFuture = newFuture.Freeze()
+	})
+	if ke != nil {
+		// this should not happen, but just in case
+		klogging.Fatal(ctx).WithError(ke).Log("AcceptEvent", "error in applying move to future snapshot")
+	}
 }

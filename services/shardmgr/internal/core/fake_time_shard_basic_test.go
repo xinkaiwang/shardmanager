@@ -55,7 +55,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "验证初始状态...")
 		{
 			var initialCount int
-			safeAccessServiceState(ss, func(ss *ServiceState) {
+			setup.safeAccessServiceState(func(ss *ServiceState) {
 				initialCount = len(ss.AllShards)
 			})
 			klogging.Info(ctx).With("initialCount", initialCount).Log("DynamicShardPlanUpdate", "初始状态")
@@ -81,7 +81,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 			"shard-b": {LameDuck: false},
 			"shard-c": {LameDuck: false},
 		}
-		errors1 := verifyAllShardState(t, ss, expectedStates1)
+		errors1 := setup.verifyAllShardState(t, expectedStates1)
 		assert.Empty(t, errors1, "第一次更新后分片状态验证失败: %v", errors1)
 
 		// 确保状态已持久化
@@ -112,7 +112,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 			"shard-c": {LameDuck: true},  // 被移除的分片，标记为lameDuck
 			"shard-d": {LameDuck: false}, // 新增的分片
 		}
-		errors2 := verifyAllShardState(t, ss, expectedStates2)
+		errors2 := setup.verifyAllShardState(t, expectedStates2)
 		assert.Empty(t, errors2, "第二次更新后分片状态验证失败: %v", errors2)
 
 		// 确保状态已持久化
@@ -122,7 +122,7 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		assert.Empty(t, errors2storage, "第二次更新后分片状态持久化验证失败: %v", errors2storage)
 
 		// 输出最终状态以供参考
-		safeAccessServiceState(ss, func(ss *ServiceState) {
+		setup.safeAccessServiceState(func(ss *ServiceState) {
 			klogging.Info(ctx).With("shardCount", len(ss.AllShards)).Log("DynamicShardPlanUpdate", "最终状态")
 			for shardId, shard := range ss.AllShards {
 				klogging.Info(ctx).With("shardId", shardId).With("lameDuck", shard.LameDuck).Log("DynamicShardPlanUpdate", "分片状态")
@@ -192,7 +192,7 @@ func TestServiceState_ShadowStateWrite(t *testing.T) {
 		// 4. 验证分片内存状态
 		t.Logf("验证分片内存状态...")
 		// 使用safeAccessServiceState安全访问ServiceState内部状态
-		safeAccessServiceState(ss, func(ss *ServiceState) {
+		setup.safeAccessServiceState(func(ss *ServiceState) {
 			// 验证分片数量
 			assert.Equal(t, 3, len(ss.AllShards), "内存中应有3个分片")
 
@@ -339,7 +339,7 @@ func TestServiceState_PreexistingShardState(t *testing.T) {
 			// "shard-5": {LameDuck: true},  // 不在计划中，应被修复为 lameDuck 状态
 		}
 
-		allErrors := verifyAllShardState(t, ss, expectedShardStates)
+		allErrors := setup.verifyAllShardState(t, expectedShardStates)
 		assert.Equal(t, 0, len(allErrors), "分片状态验证应该全部通过，错误: %v", allErrors)
 		t.Logf("分片状态验证完成: 所有分片状态符合预期")
 
@@ -380,7 +380,7 @@ func TestServiceState_PreexistingShardState(t *testing.T) {
 		}
 
 		{
-			allErrors = verifyAllShardState(t, ss, updatedExpectedStates)
+			allErrors = setup.verifyAllShardState(t, updatedExpectedStates)
 			assert.Equal(t, 0, len(allErrors), "更新后的分片状态验证应该全部通过，错误: %v", allErrors)
 			t.Logf("更新后的分片状态验证完成: 所有分片状态符合预期")
 		}
@@ -452,7 +452,7 @@ func TestShardBasic_ConsistencyCheck(t *testing.T) {
 			"shard-3": {LameDuck: false},
 		}
 		{
-			allPassed := verifyAllShardState(t, ss, expectedShardStates)
+			allPassed := setup.verifyAllShardState(t, expectedShardStates)
 			assert.Equal(t, 0, len(allPassed), "分片状态验证应该全部通过, result=%v", allPassed)
 			t.Logf("分片状态验证完成: 所有分片状态符合预期")
 		}
@@ -564,14 +564,14 @@ func TestShardBasic_ConflictResolution(t *testing.T) {
 
 		// 验证所有分片状态是否正确
 		{
-			allPassed := verifyAllShardState(t, ss, expectedShardStates)
+			allPassed := setup.verifyAllShardState(t, expectedShardStates)
 			assert.Equal(t, 0, len(allPassed), "分片状态验证应该全部通过（所有分片都应为非lameDuck）, result=%v", allPassed)
 			t.Logf("分片状态验证完成: 所有分片状态符合预期")
 
 			// 特别验证shard-2是否被调整为非lameDuck
 			var shard2State *ShardState
 			var found bool
-			safeAccessServiceState(ss, func(ss *ServiceState) {
+			setup.safeAccessServiceState(func(ss *ServiceState) {
 				shard2State, found = ss.AllShards["shard-2"]
 			})
 			assert.True(t, found, "应能找到shard-2")
@@ -689,7 +689,7 @@ func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 				"shard-3": {LameDuck: false}, // 在计划内
 				"shard-4": {LameDuck: false}, // 在计划内
 			}
-			allPassed := verifyAllShardState(t, ss, initialExpectedStates)
+			allPassed := setup.verifyAllShardState(t, initialExpectedStates)
 			assert.Equal(t, 0, len(allPassed), "初始分片状态验证应该全部通过, result=%v", allPassed)
 			t.Logf("初始分片状态验证完成: 所有分片状态符合预期")
 		}
@@ -711,7 +711,7 @@ func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 		t.Logf("等待分片状态根据新计划更新...")
 		{
 			waitSucc, elapsedMs := WaitUntil(t, func() (bool, string) {
-				results := verifyAllShardState(t, ss, updatedExpectedStates)
+				results := setup.verifyAllShardState(t, updatedExpectedStates)
 				return len(results) == 0, strings.Join(results, ",")
 			}, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前根据新计划更新所有分片状态, 耗时=%dms", elapsedMs)
@@ -722,7 +722,7 @@ func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 		{
 			var shard2State, shard4State *ShardState
 			var found2, found4 bool
-			safeAccessServiceState(ss, func(ss *ServiceState) {
+			setup.safeAccessServiceState(func(ss *ServiceState) {
 				shard2State, found2 = ss.AllShards["shard-2"]
 				shard4State, found4 = ss.AllShards["shard-4"]
 			})

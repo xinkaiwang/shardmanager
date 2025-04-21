@@ -53,6 +53,18 @@ type BaseSolverConfigJson struct {
 	ExplorePerRun *int32 `json:"explore_per_run"`
 }
 
+func ParseServiceConfigFromJson(data string) *ServiceConfigJson {
+	si := &ServiceConfigJson{}
+	if data != "" {
+		err := json.Unmarshal([]byte(data), si)
+		if err != nil {
+			ke := kerror.Wrap(err, "UnmarshalError", "failed to unmarshal ServiceConfigJson", false).With("data", data)
+			panic(ke)
+		}
+	}
+	return si
+}
+
 func (sc *ServiceConfigJson) ToJson() string {
 	data, err := json.Marshal(sc)
 	if err != nil {

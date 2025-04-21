@@ -10,11 +10,11 @@ import (
 // 辅助函数
 
 // getWorkerStateAndPath 获取worker state和路径
-func getWorkerStateAndPath(t *testing.T, ss *ServiceState, workerFullId data.WorkerFullId) (*WorkerState, string) {
+func (setup *FakeTimeTestSetup) getWorkerStateAndPath(t *testing.T, workerFullId data.WorkerFullId) (*WorkerState, string) {
 	var workerState *WorkerState
 	var workerStatePath string
 
-	safeAccessServiceState(ss, func(ss *ServiceState) {
+	setup.safeAccessServiceState(func(ss *ServiceState) {
 		worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
 		assert.True(t, worker != nil, "worker应该已创建")
 		workerState = worker

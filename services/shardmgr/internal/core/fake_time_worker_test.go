@@ -36,12 +36,13 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 	fn := func() {
 		// 创建 ServiceState
 		ss := AssembleSsWithShadowState(ctx, "TestWorkerGracePeriodExpiration")
+		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		{
 			// 验证 ServiceState 中的优雅期配置
 			actrualGracePeriodSec := int32(0)
-			safeAccessServiceState(ss, func(ss *ServiceState) {
+			setup.safeAccessServiceState(func(ss *ServiceState) {
 				actrualGracePeriodSec = ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec
 			})
 			assert.Equal(t, gracePeriodSec, actrualGracePeriodSec, "ServiceState中的优雅期应与配置一致")
@@ -62,7 +63,7 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		}
 
 		// 确认worker初始状态
-		workerState, _ := getWorkerStateAndPath(t, ss, workerFullId)
+		workerState, _ := setup.getWorkerStateAndPath(t, workerFullId)
 		t.Logf("worker初始状态验证完成: State=%v", workerState.State)
 		assert.Equal(t, data.WS_Online_healthy, workerState.State, "初始状态应为健康在线")
 
@@ -336,7 +337,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 
 		// 1. 初始状态下验证ServiceState中没有工作节点
 		{
-			workerCount := safeGetWorkerCount(ss)
+			workerCount := setup.safeGetWorkerCount(ss)
 			assert.Equal(t, 0, workerCount, "初始状态应该没有worker")
 			t.Logf("初始状态验证完成：AllWorkers数量=%d", workerCount)
 		}
@@ -355,7 +356,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 			t.Logf("worker-1状态验证完成: 状态=WS_Online_healthy, 耗时=%dms", elapsedMs)
 
 			// 验证worker数量为1
-			workerCount := safeGetWorkerCount(ss)
+			workerCount := setup.safeGetWorkerCount(ss)
 			assert.Equal(t, 1, workerCount, "此时应该有1个worker")
 		}
 
@@ -375,7 +376,7 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 
 		// 6. 验证ServiceState中现在有两个工作节点
 		{
-			workerCount := safeGetWorkerCount(ss)
+			workerCount := setup.safeGetWorkerCount(ss)
 			assert.Equal(t, 2, workerCount, "此时应该有2个worker")
 			t.Logf("最终状态验证：AllWorkers数量=%d", workerCount)
 		}
@@ -404,9 +405,9 @@ func TestServiceState_WorkerEphToState(t *testing.T) {
 }
 
 // safeGetWorkerCount 安全获取ServiceState中的worker数量
-func safeGetWorkerCount(ss *ServiceState) int {
+func (setup *FakeTimeTestSetup) safeGetWorkerCount(ss *ServiceState) int {
 	var count int
-	safeAccessServiceState(ss, func(ss *ServiceState) {
+	setup.safeAccessServiceState(func(ss *ServiceState) {
 		count = len(ss.AllWorkers)
 	})
 	return count

@@ -90,7 +90,7 @@ func ActionFromJson(actionJson *smgjson.ActionJson) *Action {
 	return action
 }
 
-func (action *Action) ApplyToSnapshot(snapshot *Snapshot, mode ApplyMode) {
+func (action *Action) ApplyToSnapshot(snapshot *Snapshot, mode ApplyMode) *Snapshot {
 	switch action.ActionType {
 	case smgjson.AT_AddShard:
 		action.applyAddShard(snapshot, mode)
@@ -101,6 +101,7 @@ func (action *Action) ApplyToSnapshot(snapshot *Snapshot, mode ApplyMode) {
 	default:
 		klogging.Fatal(context.Background()).With("actionType", action.ActionType).Log("UnknownActionType", "")
 	}
+	return snapshot
 }
 
 func (action *Action) applyAddShard(snapshot *Snapshot, mode ApplyMode) {
