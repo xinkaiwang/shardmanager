@@ -82,13 +82,13 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 		ss.digestStagingWorkerEph(ctx)
 	})
 	ss.reCreateSnapshotBatchManager = NewBatchManager(ss, 10, "reCreateSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
-		ss.ReCreateSnapshot(ctx)
+		ss.ReCreateSnapshot(ctx, "reCreateSnapshotBatch")
 	})
 	ss.syncShardsBatchManager = NewBatchManager(ss, 10, "syncShardPlanBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.digestStagingShardPlan(ctx)
 	})
 	ss.boardcastSnapshotBatchManager = NewBatchManager(ss, 3, "boardcastSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
-		ss.broadcastSnapshot(ctx)
+		ss.broadcastSnapshot(ctx, "boardcastSnapshotBatch")
 	})
 	ss.snapshotOperationManager = NewSnapshotBatchManager(ss)
 	return ss

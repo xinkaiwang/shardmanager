@@ -262,7 +262,7 @@ func (snap *Snapshot) Clone() *Snapshot {
 		panic(ke)
 	}
 	clone := &Snapshot{
-		SnapshotId:     snap.SnapshotId,
+		SnapshotId:     SnapshotId(kcommon.RandomString(context.Background(), 8)),
 		Costfunc:       snap.Costfunc,
 		AllShards:      snap.AllShards.Clone(),
 		AllWorkers:     snap.AllWorkers.Clone(),

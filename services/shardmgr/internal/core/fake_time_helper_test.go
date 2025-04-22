@@ -30,14 +30,16 @@ func resetGlobalState(_ *testing.T) {
 type FakeSnapshotListener struct {
 	CallCount int
 	snapshot  *costfunc.Snapshot
+	Reason    string
 }
 
 func NewFakeSnapshotListener() *FakeSnapshotListener {
 	return &FakeSnapshotListener{}
 }
-func (l *FakeSnapshotListener) OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot) {
+func (l *FakeSnapshotListener) OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot, reason string) {
 	l.CallCount++
 	l.snapshot = snapshot
+	l.Reason = reason
 }
 
 /******************************* FakeTimeTestSetup *******************************/
@@ -393,6 +395,18 @@ func (setup *FakeTimeTestSetup) WaitUntilSnapshot(t *testing.T, fn func(snapshot
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		return fn(setup.FakeSnapshotListener.snapshot)
 	}, maxWaitMs, intervalMs)
+	return ret, elapsedMs
+}
+
+func (setup *FakeTimeTestSetup) WaitUntilSnapshotCurrent(t *testing.T, fn func(snapshot *costfunc.Snapshot) (bool, string)) (bool, int64) {
+	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
+		result := false
+		reason := ""
+		setup.safeAccessServiceState(func(ss *ServiceState) {
+			result, reason = fn(setup.ServiceState.SnapshotCurrent)
+		})
+		return result, reason
+	}, 1000, 10)
 	return ret, elapsedMs
 }
 

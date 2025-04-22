@@ -63,11 +63,11 @@ func compareSnapshot(ctx context.Context, snap1 *costfunc.Snapshot, snap2 *costf
 	return diffs
 }
 
-func (ss *ServiceState) broadcastSnapshot(ctx context.Context) {
+func (ss *ServiceState) broadcastSnapshot(ctx context.Context, reason string) {
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotCurrent)
-		klogging.Info(ctx).With("snapshot", ss.SnapshotCurrent.ToShortString()).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
+		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, reason)
+		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
 	} else {
-		klogging.Info(ctx).With("snapshot", ss.SnapshotCurrent.ToShortString()).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
 	}
 }

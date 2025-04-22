@@ -76,6 +76,7 @@ func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerSta
 		assignmentState := NewAssignmentState(assignmentId, assignmentJson.ShardId, assignmentJson.ReplicaIdx, workerState.GetWorkerFullId())
 		assignmentState.TargetState = assignmentJson.TargetState
 		assignmentState.CurrentConfirmedState = assignmentJson.TargetState
+		assignmentState.ShouldInRoutingTable = common.BoolFromInt8(assignmentJson.InRouting)
 		workerState.Assignments[assignmentId] = common.Unit{}
 		ss.AllAssignments[assignmentId] = assignmentState
 	}
@@ -103,6 +104,7 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 		assignJson := smgjson.NewAssignmentStateJson(assignState.ShardId, assignState.ReplicaIdx)
 		assignJson.TargetState = assignState.TargetState
 		assignJson.CurrentState = assignState.CurrentConfirmedState
+		assignJson.InRouting = common.Int8FromBool(assignState.ShouldInRoutingTable)
 		obj.Assignments[assignmentId] = assignJson
 	}
 	return obj
@@ -215,7 +217,7 @@ func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.Pass
 	ss.SnapshotCurrent = newCurrent
 	ss.SnapshotFuture = newFuture
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture)
+		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, move.Signature())
 	}
 }
 
@@ -568,19 +570,6 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 	return pilotNode
 }
 
-// func (ws *WorkerState) Ase2PilotState(targetState smgjson.AssignmentStateEnum) cougarjson.PilotAssignmentState {
-// 	switch targetState {
-// 	case smgjson.ASE_Unknown:
-// 		return cougarjson.PAS_Unknown
-// 	case smgjson.ASE_Healthy:
-// 		return cougarjson.PAS_Active
-// 	case smgjson.ASE_Dropped:
-// 		return cougarjson.PAS_Completed
-// 	default:
-// 		return cougarjson.PAS_Active
-// 	}
-// }
-
 func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, updateReason string) *unicornjson.WorkerEntryJson {
 	// 创建WorkerEntryJson对象
 	entry := unicornjson.NewWorkerEntryJson(
@@ -600,6 +589,9 @@ func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, upd
 				With("sessionId", ws.SessionId).
 				With("assignmentId", assignmentId).
 				Log("ToRoutingEntry", "assignment not found")
+			continue
+		}
+		if !assign.ShouldInRoutingTable {
 			continue
 		}
 		// 创建AssignmentJson

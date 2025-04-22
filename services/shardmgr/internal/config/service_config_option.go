@@ -32,6 +32,12 @@ func WithSolverConfig(fn func(*SolverConfig)) ServiceConfigOption {
 	}
 }
 
+func WithShardConfig(fn func(*ShardConfig)) ServiceConfigOption {
+	return func(cfg *ServiceConfig) {
+		fn(&cfg.ShardConfig)
+	}
+}
+
 func WithOfflineGracePeriodSec(seconds int32) ServiceConfigOption {
 	return func(cfg *ServiceConfig) {
 		cfg.WorkerConfig.OfflineGracePeriodSec = seconds

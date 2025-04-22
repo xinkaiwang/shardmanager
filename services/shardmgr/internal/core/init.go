@@ -49,7 +49,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.firstDigestStagingWorkerEph(ctx)
 
 	// step 7: current snapshot and future snapshot
-	ss.ReCreateSnapshot(ctx)
+	ss.ReCreateSnapshot(ctx, "ServiceState.Init")
 
 	// step 8: start listening to shard plan changes/worker eph changes/service config changes
 	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision+1) // +1 to skip the current revision
@@ -144,7 +144,7 @@ func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.Sh
 	return list, item.ModRevision
 }
 
-func (ss *ServiceState) ReCreateSnapshot(ctx context.Context) {
+func (ss *ServiceState) ReCreateSnapshot(ctx context.Context, reason string) {
 	ss.SnapshotCurrent = ss.CreateSnapshotFromCurrentState(ctx)
 	ss.SnapshotFuture = ss.SnapshotCurrent.Clone()
 	// apply all panding moves
@@ -153,7 +153,7 @@ func (ss *ServiceState) ReCreateSnapshot(ctx context.Context) {
 	}
 	ss.SnapshotFuture.Freeze()
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture)
+		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, reason)
 		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup.OnSnapshot")
 	} else {
 		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup is nil, skip OnSnapshot")

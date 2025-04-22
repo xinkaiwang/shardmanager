@@ -88,7 +88,8 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 		soft := float64(0)
 		hard := int32(0)
 		snap.AllWorkers.VisitAll(func(workerId data.WorkerFullId, worker *WorkerSnap) {
-			soft += float64(len(worker.Assignments)) / float64(simple.CostfuncCfg.ShardCountCostNorm)
+			workerLoad := float64(len(worker.Assignments)) / float64(simple.CostfuncCfg.ShardCountCostNorm)
+			soft += workerLoad * workerLoad
 			if len(worker.Assignments) > int(simple.CostfuncCfg.WorkerMaxAssignments) {
 				hard++
 			}

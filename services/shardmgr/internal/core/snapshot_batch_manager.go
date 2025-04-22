@@ -34,7 +34,7 @@ func (som *SnapshotOperationManager) onCallback(ctx context.Context, ss *Service
 	ss.SnapshotCurrent = current.CompactAndFreeze()
 	ss.SnapshotFuture = future.CompactAndFreeze()
 	som.operations = nil
-	ss.broadcastSnapshot(ctx)
+	ss.broadcastSnapshot(ctx, "SnapshotOperationManager")
 }
 
 func (som *SnapshotOperationManager) TrySchedule(ctx context.Context, operation func(snapshot *costfunc.Snapshot), reason string) {

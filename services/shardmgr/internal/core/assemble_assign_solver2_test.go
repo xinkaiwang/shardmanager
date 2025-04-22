@@ -12,7 +12,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
-func TestAssembleAssignSolver(t *testing.T) {
+func TestAssembleAssignSolver_2_shards(t *testing.T) {
 	ctx := context.Background()
 
 	// 配置测试环境
@@ -26,8 +26,8 @@ func TestAssembleAssignSolver(t *testing.T) {
 
 	fn := func() {
 		// Step 1: 创建 shardPlan and set into etcd
-		// 添加1个分片 (shard_1, )
-		firstShardPlan := []string{"shard_1"}
+		// 添加2个分片
+		firstShardPlan := []string{"shard_1", "shard_2"}
 		setup.SetShardPlan(ctx, firstShardPlan)
 
 		// Step 2: 创建 ServiceState
@@ -41,7 +41,7 @@ func TestAssembleAssignSolver(t *testing.T) {
 				if ss.SnapshotFuture == nil {
 					return false, "快照不存在"
 				}
-				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(1, 0.0)) {
+				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(2, 0.0)) {
 					return false, "快照不正确"
 				}
 				return true, "" // 快照存在
@@ -65,7 +65,17 @@ func TestAssembleAssignSolver(t *testing.T) {
 		{
 			// 等待接受提议
 			waitSucc, elapsedMs := setup.WaitUntilSs(t, func(ss *ServiceState) (bool, string) {
-				if ss.AcceptedCount == 0 {
+				if ss.AcceptedCount < 1 {
+					return false, "没有接受的提议"
+				}
+				return true, "" // 有接受的提议
+			}, 10*1000, 1000)
+			assert.Equal(t, true, waitSucc, "应该能在超时前创建快照, 耗时=%dms", elapsedMs)
+		}
+		{
+			// 等待接受提议
+			waitSucc, elapsedMs := setup.WaitUntilSs(t, func(ss *ServiceState) (bool, string) {
+				if ss.AcceptedCount < 2 {
 					return false, "没有接受的提议"
 				}
 				return true, "" // 有接受的提议
@@ -90,19 +100,18 @@ func TestAssembleAssignSolver(t *testing.T) {
 			assert.True(t, ok, reason)
 		}
 
-		var pilotAssign *cougarjson.PilotAssignmentJson
+		var pilotAssign1 *cougarjson.PilotAssignmentJson
+		var pilotAssign2 *cougarjson.PilotAssignmentJson
 		{
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
 				if pnj == nil {
 					return false, "没有 pilot 节点"
 				}
-				if len(pnj.Assignments) == 0 {
+				if len(pnj.Assignments) < 2 {
 					return false, "没有 assignment"
 				}
-				if pnj.Assignments[0].ShardId != "shard_1" {
-					return false, "assignment 不正确"
-				}
-				pilotAssign = pnj.Assignments[0]
+				pilotAssign1 = pnj.Assignments[0]
+				pilotAssign2 = pnj.Assignments[1]
 				return true, ""
 			}, 1*1000, 100)
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
@@ -110,7 +119,8 @@ func TestAssembleAssignSolver(t *testing.T) {
 
 		// Step 5: simulate eph node update
 		setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AsginmentId, cougarjson.CAS_Ready))
+			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign1.ShardId, pilotAssign1.ReplicaIdx, pilotAssign1.AsginmentId, cougarjson.CAS_Ready))
+			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AsginmentId, cougarjson.CAS_Ready))
 			wej.LastUpdateAtMs = setup.FakeTime.WallTime
 			wej.LastUpdateReason = "SimulateAddShard"
 			return wej
@@ -124,11 +134,22 @@ func TestAssembleAssignSolver(t *testing.T) {
 				if len(ws.Assignments) == 0 {
 					return false, "没有 assignment"
 				}
-				if assign, ok := assigns[data.AssignmentId(pilotAssign.AsginmentId)]; !ok {
-					return false, "没有 assignment"
-				} else {
-					if assign.CurrentConfirmedState != cougarjson.CAS_Ready {
-						return false, "assignment 状态不正确:" + string(assign.CurrentConfirmedState)
+				{
+					if assign, ok := assigns[data.AssignmentId(pilotAssign1.AsginmentId)]; !ok {
+						return false, "没有 assignment"
+					} else {
+						if assign.CurrentConfirmedState != cougarjson.CAS_Ready {
+							return false, "assignment 状态不正确:" + string(assign.CurrentConfirmedState)
+						}
+					}
+				}
+				{
+					if assign, ok := assigns[data.AssignmentId(pilotAssign2.AsginmentId)]; !ok {
+						return false, "没有 assignment"
+					} else {
+						if assign.CurrentConfirmedState != cougarjson.CAS_Ready {
+							return false, "assignment 状态不正确:" + string(assign.CurrentConfirmedState)
+						}
 					}
 				}
 				return true, ""

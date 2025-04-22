@@ -19,6 +19,7 @@ const (
 // This is different from the active move, which is something we can choose to do or not. For instance, we can choose to assign a shard to a worker or not.
 type PassiveMove interface {
 	Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot
+	Signature() string // for debugging/logging/metrics purpose only
 }
 
 // WorkerDelete implements PassiveMove
@@ -50,6 +51,10 @@ func (move *WorkerDelete) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
 	return snapshot
 }
 
+func (move *WorkerDelete) Signature() string {
+	return "WorkerDelete: " + move.WorkerId.String()
+}
+
 // WorkerAdded implements PassiveMove
 type WorkerAdded struct {
 	WorkerId   data.WorkerFullId
@@ -73,4 +78,8 @@ func (move *WorkerAdded) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
 	}
 	snapshot.AllWorkers.Set(move.WorkerId, move.WorkerSnap.Clone()) // make a copy
 	return snapshot
+}
+
+func (move *WorkerAdded) Signature() string {
+	return "WorkerAdded: " + move.WorkerId.String()
 }

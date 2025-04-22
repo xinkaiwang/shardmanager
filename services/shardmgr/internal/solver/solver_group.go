@@ -12,7 +12,7 @@ import (
 )
 
 type SnapshotListener interface {
-	OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot)
+	OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot, reason string)
 }
 
 // SolverGroup manages multiple SolverDrivers
@@ -40,8 +40,8 @@ func (sa *SolverGroup) AddSolver(ctx context.Context, solver Solver) {
 	sa.SolverDrivers[solverName] = driver
 }
 
-func (sa *SolverGroup) OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot) {
-	klogging.Info(ctx).With("cost", snapshot.GetCost()).With("snapshotId", snapshot.SnapshotId).Log("SolverGroup", "OnSnapshot")
+func (sa *SolverGroup) OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot, reason string) {
+	klogging.Info(ctx).With("cost", snapshot.GetCost()).With("snapshotId", snapshot.SnapshotId).With("reason", reason).Log("SolverGroup", "OnSnapshot")
 	sa.storeSnapshot(snapshot)
 }
 

@@ -12,7 +12,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
-func TestAssembleAssignSolver(t *testing.T) {
+func TestAssembleAssignSolver3(t *testing.T) {
 	ctx := context.Background()
 
 	// 配置测试环境
@@ -21,6 +21,9 @@ func TestAssembleAssignSolver(t *testing.T) {
 		sc.SoftSolverConfig.SolverEnabled = false
 		sc.AssignSolverConfig.SolverEnabled = false
 		sc.UnassignSolverConfig.SolverEnabled = false
+	}), config.WithShardConfig(func(sc *config.ShardConfig) {
+		sc.MinReplicaCount = 2
+		sc.MaxReplicaCount = 2
 	}))
 	klogging.Info(ctx).Log("测试环境已配置", "")
 
@@ -41,7 +44,7 @@ func TestAssembleAssignSolver(t *testing.T) {
 				if ss.SnapshotFuture == nil {
 					return false, "快照不存在"
 				}
-				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(1, 0.0)) {
+				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(2, 0.0)) {
 					return false, "快照不正确"
 				}
 				return true, "" // 快照存在
@@ -152,6 +155,62 @@ func TestAssembleAssignSolver(t *testing.T) {
 				ok = true
 			})
 			assert.True(t, ok, reason)
+		}
+
+		// Step 6: wait for longer time
+		setup.FakeTime.VirtualTimeForward(ctx, 60*1000) // 60s
+
+		{
+			var acceptCount int
+			var cost costfunc.Cost
+			setup.safeAccessServiceState(func(ss *ServiceState) {
+				acceptCount = ss.AcceptedCount
+				cost = ss.SnapshotCurrent.GetCost()
+			})
+			assert.Equal(t, 1, acceptCount, "应该有1个接受的提议")
+			assert.Equal(t, 1, int(cost.HardScore), "快照不正确") // 1个分片, 2个副本, 1个副本没有分配
+		}
+
+		// Setp 7: worker 2
+		workerFullId2, _ := setup.CreateAndSetWorkerEph(t, "worker-2", "session-2", "localhost:8082")
+
+		var pilotAssign2 *cougarjson.PilotAssignmentJson
+		{
+			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId2, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
+				if pnj == nil {
+					return false, "没有 pilot 节点"
+				}
+				if len(pnj.Assignments) == 0 {
+					return false, "没有 assignment"
+				}
+				if pnj.Assignments[0].ShardId != "shard_1" {
+					return false, "assignment 不正确"
+				}
+				pilotAssign2 = pnj.Assignments[0]
+				return true, ""
+			}, 30*1000, 1000)
+			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
+		}
+
+		// Step 8: simulate eph node update
+		setup.UpdateEphNode(workerFullId2, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
+			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AsginmentId, cougarjson.CAS_Ready))
+			wej.LastUpdateAtMs = setup.FakeTime.WallTime
+			wej.LastUpdateReason = "SimulateAddShard"
+			return wej
+		})
+
+		{
+			waitSucc, elapsedMs := setup.WaitUntilSnapshotCurrent(t, func(snapshot *costfunc.Snapshot) (bool, string) {
+				if snapshot == nil {
+					return false, "快照不存在"
+				}
+				if snapshot.GetCost().HardScore != 0 {
+					return false, "快照不正确"
+				}
+				return true, ""
+			})
+			assert.Equal(t, true, waitSucc, "应该能在超时前分配副本, 耗时=%dms", elapsedMs)
 		}
 
 		// assert.Equal(t, true, false, "") // 强制查看测试输出

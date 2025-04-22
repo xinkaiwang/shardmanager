@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -35,7 +36,7 @@ func (te *AcceptEvent) Process(ctx context.Context, ss *ServiceState) {
 }
 
 func (ss *ServiceState) TryAccept(ctx context.Context) {
-	// var accpeted []*costfunc.Proposal
+	var accpeted []*costfunc.Proposal
 	// var totalImpact costfunc.Gain
 	now := kcommon.GetWallTimeMs()
 	for {
@@ -66,7 +67,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		gain := proposal.GetEfficiency()
 		if gain.HardScore > 0 {
 			ss.DoAcceptProposal(ctx, proposal)
-			// accpeted = append(accpeted, proposal)
+			accpeted = append(accpeted, proposal)
 			// totalImpact = totalImpact.Add(proposal.Gain)
 			continue
 		}
@@ -74,7 +75,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
 		if gain.SoftScore > threshold {
 			ss.DoAcceptProposal(ctx, proposal)
-			// accpeted = append(accpeted, proposal)
+			accpeted = append(accpeted, proposal)
 			// totalImpact = totalImpact.Add(proposal.Gain)
 			continue
 		} else {
@@ -83,12 +84,17 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		}
 	}
 	// ss.AcceptedCount += len(accpeted)
+	if len(accpeted) > 0 {
+		future := ss.SnapshotFuture
+		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost().String()).Log("AcceptEvent", "broadcastSnapshot")
+		ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
+	}
 }
 
 func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc.Proposal) {
 	now := kcommon.GetWallTimeMs()
 	threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
-	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Signature).With("currentThreadshold", threshold).Log("AcceptEvent", "接受提案")
+	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Signature).With("currentThreadshold", threshold).With("base", proposal.BasedOn).Log("AcceptEvent", "接受提案")
 	ss.AcceptedCount++
 	acceptSoftGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.SoftScore))
 	acceptHardGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.HardScore))
