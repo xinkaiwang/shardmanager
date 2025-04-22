@@ -398,7 +398,7 @@ func (setup *FakeTimeTestSetup) WaitUntilSnapshot(t *testing.T, fn func(snapshot
 	return ret, elapsedMs
 }
 
-func (setup *FakeTimeTestSetup) WaitUntilSnapshotCurrent(t *testing.T, fn func(snapshot *costfunc.Snapshot) (bool, string)) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilSnapshotCurrent(t *testing.T, fn func(snapshot *costfunc.Snapshot) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		result := false
 		reason := ""
@@ -406,7 +406,7 @@ func (setup *FakeTimeTestSetup) WaitUntilSnapshotCurrent(t *testing.T, fn func(s
 			result, reason = fn(setup.ServiceState.SnapshotCurrent)
 		})
 		return result, reason
-	}, 1000, 10)
+	}, maxWaitMs, intervalMs)
 	return ret, elapsedMs
 }
 

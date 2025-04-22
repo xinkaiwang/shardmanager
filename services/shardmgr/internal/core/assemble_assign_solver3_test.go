@@ -209,7 +209,7 @@ func TestAssembleAssignSolver3(t *testing.T) {
 					return false, "快照不正确"
 				}
 				return true, ""
-			})
+			}, 1*1000, 100)
 			assert.Equal(t, true, waitSucc, "应该能在超时前分配副本, 耗时=%dms", elapsedMs)
 		}
 

@@ -115,6 +115,15 @@ func (obj *PilotAssignmentJson) EqualsTo(other *PilotAssignmentJson) bool {
 	return true
 }
 
+func (obj *PilotAssignmentJson) ToJson() string {
+	bytes, err := json.Marshal(obj)
+	if err != nil {
+		ke := kerror.Wrap(err, "MarshalError", "failed to marshal PilotAssignmentJson", false)
+		panic(ke)
+	}
+	return string(bytes)
+}
+
 // // Define a custom type for State
 // type PilotAssignmentState string
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -37,6 +38,21 @@ func NewHousekeep5sEvent() *Housekeep5sEvent {
 
 func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 	for workerFullId, workerState := range ss.AllWorkers {
+		// check assignments tombstone
+		for assignId := range workerState.Assignments {
+			assignment, ok := ss.AllAssignments[assignId]
+			if !ok {
+				klogging.Fatal(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "assignment not found")
+			}
+			if assignment.TargetState == cougarjson.CAS_Dropped && assignment.CurrentConfirmedState == cougarjson.CAS_Dropped {
+				// delete this assignment
+				delete(workerState.Assignments, assignId)
+				delete(ss.AllAssignments, assignId)
+				delete(ss.AllShards[assignment.ShardId].Replicas[assignment.ReplicaIdx].Assignments, assignId)
+				klogging.Info(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "delete assignment")
+			}
+		}
+		// check worker tombstone
 		if workerState.State == data.WS_Offline_dead {
 			delete(ss.AllWorkers, workerFullId)
 			ss.storeProvider.StoreWorkerState(workerFullId, nil)

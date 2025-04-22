@@ -39,6 +39,9 @@ func (am *ActionMinion) Run(ctx context.Context, ss *ServiceState) {
 		klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion.Run", "done")
 	}
 	ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, nil)
+	ss.VisitServiceState(ctx, func(ss *ServiceState) {
+		delete(ss.AllMoves, am.moveState.ProposalId)
+	})
 }
 
 func (am *ActionMinion) run(ctx context.Context) {
@@ -305,6 +308,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			assign.ShouldInPilot = false
+			assign.TargetState = cougarjson.CAS_Dropped
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "dropShard")
 			// remove from current snapshot
