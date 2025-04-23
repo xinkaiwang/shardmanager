@@ -30,7 +30,7 @@ func NewSignalBox() *SignalBox {
 }
 
 type WorkerState struct {
-	// parent             *ServiceState
+	parent             *ServiceState
 	WorkerId           data.WorkerId
 	SessionId          data.SessionId
 	State              data.WorkerStateEnum
@@ -47,8 +47,9 @@ type WorkerState struct {
 	StatefulType data.StatefulType
 }
 
-func NewWorkerState(workerId data.WorkerId, sessionId data.SessionId, statefulType data.StatefulType) *WorkerState {
+func NewWorkerState(ss *ServiceState, workerId data.WorkerId, sessionId data.SessionId, statefulType data.StatefulType) *WorkerState {
 	return &WorkerState{
+		parent:             ss,
 		WorkerId:           workerId,
 		SessionId:          sessionId,
 		State:              data.WS_Online_healthy,
@@ -151,7 +152,7 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 	// remaining workers are new
 	for workerFullId, workerEph := range workers {
 		// add
-		workerState := NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
+		workerState := NewWorkerState(ss, data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
 		workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
 		ss.AllWorkers[workerFullId] = workerState
 		ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
@@ -179,7 +180,7 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 				// nothing to do
 			} else {
 				// Worker Event: Eph node created, worker becomes online
-				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
+				workerState = NewWorkerState(ss, data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
 				workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
 				ss.AllWorkers[workerFullId] = workerState
 				klogging.Info(ctx).With("workerFullId", workerFullId.String()).Log("digestStagingWorkerEph", "新建 worker state")
@@ -214,21 +215,21 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
 }
 
-func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, moves []costfunc.PassiveMove, mode costfunc.ApplyMode) {
-	newCurrent := ss.SnapshotCurrent.Clone()
-	newFuture := ss.SnapshotFuture.Clone()
-	var reason []string
-	for _, move := range moves {
-		reason = append(reason, move.Signature())
-		newCurrent = move.Apply(newCurrent, mode)
-		newFuture = move.Apply(newFuture, mode)
-	}
-	ss.SnapshotCurrent = newCurrent.Freeze()
-	ss.SnapshotFuture = newFuture.Freeze()
-	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, strings.Join(reason, ","))
-	}
-}
+// func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, moves []costfunc.PassiveMove, mode costfunc.ApplyMode) {
+// 	newCurrent := ss.SnapshotCurrent.Clone()
+// 	newFuture := ss.SnapshotFuture.Clone()
+// 	var reason []string
+// 	for _, move := range moves {
+// 		reason = append(reason, move.Signature())
+// 		newCurrent = move.Apply(newCurrent, mode)
+// 		newFuture = move.Apply(newFuture, mode)
+// 	}
+// 	ss.SnapshotCurrent = newCurrent.Freeze()
+// 	ss.SnapshotFuture = newFuture.Freeze()
+// 	if ss.SolverGroup != nil {
+// 		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, strings.Join(reason, ","))
+// 	}
+// }
 
 func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
 	currentBox := ws.SignalBox
@@ -313,7 +314,12 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		ws.signalAll(ctx, "onEphNodeUpdate:"+reason)
 	}
 	if len(passiveMoves) > 0 {
-		ss.ApplyPassiveMove(ctx, passiveMoves, costfunc.AM_Strict)
+		ss.snapshotOperationManager.TrySchedule(ctx, func(snapshot *costfunc.Snapshot) {
+			for _, move := range passiveMoves {
+				move.Apply(snapshot, costfunc.AM_Strict)
+			}
+		}, "ApplyPassiveMove")
+		// ss.ApplyPassiveMove(ctx, passiveMoves, costfunc.AM_Strict)
 	}
 	return dirtyFlag
 }
@@ -373,7 +379,7 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 			dirtyFlag.AddDirtyFlag("ReqShutdown")
 			ws.State = data.WS_Online_shutdown_req
 			ss.hatTryGet(ctx, ws.GetWorkerFullId())
-			passiveMove := costfunc.NewWorkerStateChange(ws.GetWorkerFullId(), ws.State, ws.HasShutdownHat(ss))
+			passiveMove := costfunc.NewWorkerStateChange(ws.GetWorkerFullId(), ws.State, ws.HasShutdownHat())
 			moves = append(moves, passiveMove)
 		}
 	}
@@ -439,48 +445,6 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 	return
 }
 
-// // return true if dirty
-// func (ws *WorkerState) updateWorkerByEph(ctx context.Context, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
-// 	dirty := NewDirtyFlag()
-// 	// // WorkerInfo
-// 	// newWorkerInfo := smgjson.WorkerInfoFromWorkerEph(workerEph)
-// 	// if !ws.WorkerInfo.Equals(&newWorkerInfo) {
-// 	// 	ws.WorkerInfo = newWorkerInfo
-// 	// 	dirty.AddDirtyFlag("WorkerInfo")
-// 	// }
-// 	// // Assignments
-// 	// newReportedAssign := make(map[data.AssignmentId]common.Unit)
-// 	// for _, assignment := range workerEph.Assignments {
-// 	// 	newReportedAssign[data.AssignmentId(assignment.AssignmentId)] = common.Unit{}
-// 	// }
-// 	// if !assignMapEquals(ws.WorkerReportedAssignments, newReportedAssign) {
-// 	// 	ws.WorkerReportedAssignments = newReportedAssign
-// 	// 	dirty.AddDirtyFlag("Assign")
-// 	// }
-// 	// // request shutdown
-// 	// if !ws.ShutdownRequesting {
-// 	// 	if common.BoolFromInt8(workerEph.ReqShutDown) {
-// 	// 		ws.ShutdownRequesting = true
-// 	// 		dirty.AddDirtyFlag("ReqShutdown")
-// 	// 		ws.State = data.WS_Online_shutdown_req
-// 	// 		dirty.AddDirtyFlag("WorkerState")
-// 	// 	}
-// 	// }
-// 	return dirty
-// }
-
-// func assignMapEquals(map1 map[data.AssignmentId]common.Unit, map2 map[data.AssignmentId]common.Unit) bool {
-// 	if len(map1) != len(map2) {
-// 		return false
-// 	}
-// 	for key := range map1 {
-// 		if _, ok := map2[key]; !ok {
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
-
 type DirtyFlag struct {
 	flags []string
 }
@@ -507,8 +471,8 @@ func (df *DirtyFlag) String() string {
 	return strings.Join(df.flags, ",")
 }
 
-func (ws *WorkerState) HasShutdownHat(ss *ServiceState) bool {
-	_, ok := ss.ShutdownHat[ws.GetWorkerFullId()]
+func (ws *WorkerState) HasShutdownHat() bool {
+	_, ok := ws.parent.ShutdownHat[ws.GetWorkerFullId()]
 	return ok
 }
 
