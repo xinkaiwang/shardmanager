@@ -9,24 +9,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
-// var (
-// 	currentCostFuncProvider CostFuncProvider
-// )
-
-// func GetCurrentCostFuncProvider() CostFuncProvider {
-// 	if currentCostFuncProvider == nil {
-// 		currentCostFuncProvider = NewCostFuncSimpleProvider()
-// 	}
-// 	return currentCostFuncProvider
-// }
-
-// func RunWithCostFuncProvider(provider CostFuncProvider, fn func()) {
-// 	oldProvider := currentCostFuncProvider
-// 	currentCostFuncProvider = provider
-// 	fn()
-// 	currentCostFuncProvider = oldProvider
-// }
-
 type CostFuncProvider interface {
 	CalCost(snap *Snapshot) Cost
 }
@@ -46,30 +28,45 @@ func NewCostFuncSimpleProvider(CostfuncCfg config.CostfuncConfig) *CostFuncSimpl
 func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 	cost := Cost{HardScore: 0, SoftScore: 0}
 
-	// Hard score 1: unassigned replicas each got 1 point
-	// Hard score 2: replicas from same shard should be on different workers
+	// Rule H1: a replica which is unassigned got 2 point
+	// Rule H2: a replicas which is assigned to a "daining" worker got 1 point
+	// Rule H3: replicas from same shard should be on different workers (10 points penaty = illegal)
 	{
 		hard := int32(0)
-		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
-			dict := make(map[data.WorkerFullId]common.Unit)
-			for replicaId, replica := range shard.Replicas {
-				if len(replica.Assignments) == 0 {
-					if !replica.LameDuck {
-						hard++
+		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) { // each shard
+			dict := make(map[data.WorkerFullId]common.Unit)  // for H3
+			for replicaId, replica := range shard.Replicas { // each replica
+				if replica.LameDuck {
+					continue
+				}
+				// this replica is assigned?
+				replicaHasAssignment := false
+				replicaHasHealthyAssignment := false // this replica is assigned to a healthy (not daining) worker
+				for assignmentId := range replica.Assignments {
+					replicaHasAssignment = true
+					assignment, ok := snap.AllAssignments.Get(assignmentId)
+					if !ok {
+						klogging.Fatal(context.Background()).With("shard", shardId).With("replica", replicaId).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "assignment not found")
+						continue
 					}
-				} else {
-					for assignmentId := range replica.Assignments {
-						assignment, ok := snap.AllAssignments.Get(assignmentId)
+					if _, ok := dict[assignment.WorkerFullId]; ok {
+						hard += 10 // illegal (H3)
+					} else {
+						dict[assignment.WorkerFullId] = common.Unit{}
+						worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
 						if !ok {
-							klogging.Fatal(context.Background()).With("shard", shardId).With("replica", replicaId).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "assignment not found")
+							klogging.Fatal(context.Background()).With("shard", shardId).With("replica", replicaId).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "worker not found")
 							continue
 						}
-						if _, ok := dict[assignment.WorkerFullId]; ok {
-							hard++
-						} else {
-							dict[assignment.WorkerFullId] = common.Unit{}
+						if !worker.Draining {
+							replicaHasHealthyAssignment = true
 						}
 					}
+				}
+				if !replicaHasAssignment {
+					hard += 2 // H1
+				} else if !replicaHasHealthyAssignment {
+					hard += 1 // H2
 				}
 			}
 		})

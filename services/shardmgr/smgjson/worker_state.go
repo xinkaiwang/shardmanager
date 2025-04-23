@@ -21,6 +21,7 @@ type WorkerStateJson struct {
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`
 	RequestShutdown  int8   `json:"req_shutdown,omitempty"`
+	Hat              int8   `json:"hat,omitempty"`
 	StatefulType     string `json:"stateful_type,omitempty"` // stateless, ST_MEMORY, ST_HARD_DRIVE
 }
 

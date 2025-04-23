@@ -113,7 +113,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
 		WorkerState := NewWorkerStateFromJson(ss, workerStateJson)
 		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), data.StatefulType(workerStateJson.StatefulType))
-		if WorkerState.HasShutdownHat() {
+		if common.BoolFromInt8(workerStateJson.Hat) {
 			ss.ShutdownHat[workerFullId] = common.Unit{}
 		}
 		ss.ShadowState.InitWorkerState(workerFullId, workerStateJson)
@@ -189,6 +189,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 			continue
 		}
 		workerSnap := costfunc.NewWorkerSnap(workerId)
+		workerSnap.Draining = worker.ShutdownRequesting
 		for assignId := range worker.Assignments {
 			assignmentState, ok := ss.AllAssignments[assignId]
 			if !ok {
@@ -210,9 +211,9 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 
 func shouldWorkerIncludeInSnapshot(workerState *WorkerState) bool {
 	switch workerState.State {
-	case data.WS_Online_healthy, data.WS_Online_shutdown_req, data.WS_Online_shutdown_hat, data.WS_Online_shutdown_permit:
+	case data.WS_Online_healthy, data.WS_Online_shutdown_req, data.WS_Online_shutdown_permit:
 		return true
-	case data.WS_Offline_graceful_period, data.WS_Offline_draining_candidate, data.WS_Offline_draining_hat, data.WS_Offline_draining_complete:
+	case data.WS_Offline_graceful_period, data.WS_Offline_draining_candidate, data.WS_Offline_draining_complete:
 		return true
 	case data.WS_Deleted, data.WS_Unknown, data.WS_Offline_dead:
 		return false

@@ -30,6 +30,7 @@ func NewSignalBox() *SignalBox {
 }
 
 type WorkerState struct {
+	// parent             *ServiceState
 	WorkerId           data.WorkerId
 	SessionId          data.SessionId
 	State              data.WorkerStateEnum
@@ -151,7 +152,7 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 	for workerFullId, workerEph := range workers {
 		// add
 		workerState := NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
-		workerState.applyNewEph(ctx, workerEph, map[data.AssignmentId]*AssignmentState{})
+		workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
 		ss.AllWorkers[workerFullId] = workerState
 		ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
 	}
@@ -179,11 +180,13 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 			} else {
 				// Worker Event: Eph node created, worker becomes online
 				workerState = NewWorkerState(data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
-				workerState.applyNewEph(ctx, workerEph, map[data.AssignmentId]*AssignmentState{})
+				workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
 				ss.AllWorkers[workerFullId] = workerState
+				klogging.Info(ctx).With("workerFullId", workerFullId.String()).Log("digestStagingWorkerEph", "新建 worker state")
 				ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
 				// add this new worker in current/future snapshot
 				workerSnap := costfunc.NewWorkerSnap(workerState.GetWorkerFullId())
+				workerSnap.Draining = workerState.ShutdownRequesting
 				ss.snapshotOperationManager.TrySchedule(ctx, func(snapshot *costfunc.Snapshot) {
 					snapshot.AllWorkers.Set(workerFullId, workerSnap)
 				}, "AddWorkerToSnapshot")
@@ -211,13 +214,19 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
 }
 
-func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, move costfunc.PassiveMove, mode costfunc.ApplyMode) {
-	newCurrent := move.Apply(ss.SnapshotCurrent, mode).Freeze()
-	newFuture := move.Apply(ss.SnapshotFuture, mode).Freeze()
-	ss.SnapshotCurrent = newCurrent
-	ss.SnapshotFuture = newFuture
+func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, moves []costfunc.PassiveMove, mode costfunc.ApplyMode) {
+	newCurrent := ss.SnapshotCurrent.Clone()
+	newFuture := ss.SnapshotFuture.Clone()
+	var reason []string
+	for _, move := range moves {
+		reason = append(reason, move.Signature())
+		newCurrent = move.Apply(newCurrent, mode)
+		newFuture = move.Apply(newFuture, mode)
+	}
+	ss.SnapshotCurrent = newCurrent.Freeze()
+	ss.SnapshotFuture = newFuture.Freeze()
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, move.Signature())
+		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, strings.Join(reason, ","))
 	}
 }
 
@@ -244,10 +253,6 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 		ws.State = data.WS_Offline_graceful_period
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
 		dirty.AddDirtyFlag("WorkerState")
-	case data.WS_Online_shutdown_hat:
-		// Worker Event: Eph node lost, worker becomes offline
-		ws.State = data.WS_Offline_draining_hat
-		dirty.AddDirtyFlag("WorkerState")
 	case data.WS_Online_shutdown_permit:
 		// Worker Event: Eph node lost, worker becomes offline
 		ws.State = data.WS_Offline_draining_complete
@@ -256,8 +261,6 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 	case data.WS_Offline_graceful_period:
 		fallthrough
 	case data.WS_Offline_draining_candidate:
-		fallthrough
-	case data.WS_Offline_draining_hat:
 		fallthrough
 	case data.WS_Offline_draining_complete:
 		ws.State = data.WS_Offline_dead
@@ -278,22 +281,21 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 
 // onEphNodeUpdate: must be called in runloop
 func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson) *DirtyFlag {
-	dirty := NewDirtyFlag()
+	dirtyFlag := NewDirtyFlag()
+	var passiveMoves []costfunc.PassiveMove
 	switch ws.State {
 	case data.WS_Online_healthy:
 		fallthrough
 	case data.WS_Online_shutdown_req:
 		fallthrough
-	case data.WS_Online_shutdown_hat:
-		fallthrough
 	case data.WS_Online_shutdown_permit:
 		dict := ws.collectCurrentAssignments(ss)
-		dirty.AddDirtyFlags(ws.applyNewEph(ctx, workerEph, dict))
+		dirty, moves := ws.applyNewEph(ctx, ss, workerEph, dict)
+		dirtyFlag.AddDirtyFlags(dirty)
+		passiveMoves = append(passiveMoves, moves...)
 	case data.WS_Offline_graceful_period:
 		fallthrough
 	case data.WS_Offline_draining_candidate:
-		fallthrough
-	case data.WS_Offline_draining_hat:
 		fallthrough
 	case data.WS_Offline_draining_complete:
 		fallthrough
@@ -303,14 +305,17 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 			Log("onEphNodeUpdate", "worker eph already lost")
 	}
 	klogging.Info(ctx).With("workerId", ws.WorkerId).
-		With("dirty", dirty.String()).
+		With("dirty", dirtyFlag.String()).
 		Log("onEphNodeUpdateDone", "workerEph updated finished")
-	if dirty.IsDirty() {
-		reason := dirty.String()
+	if dirtyFlag.IsDirty() {
+		reason := dirtyFlag.String()
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, reason)
 		ws.signalAll(ctx, "onEphNodeUpdate:"+reason)
 	}
-	return dirty
+	if len(passiveMoves) > 0 {
+		ss.ApplyPassiveMove(ctx, passiveMoves, costfunc.AM_Strict)
+	}
+	return dirtyFlag
 }
 
 // collectCurrentAssignments: collect current assignments from AllAssignments, fatal if not found
@@ -329,8 +334,8 @@ func (ws *WorkerState) collectCurrentAssignments(ss *ServiceState) map[data.Assi
 	return dict
 }
 
-func (ws *WorkerState) applyNewEph(ctx context.Context, workerEph *cougarjson.WorkerEphJson, dict map[data.AssignmentId]*AssignmentState) *DirtyFlag {
-	dirtyFlag := NewDirtyFlag()
+func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, workerEph *cougarjson.WorkerEphJson, dict map[data.AssignmentId]*AssignmentState) (dirtyFlag *DirtyFlag, moves []costfunc.PassiveMove) {
+	dirtyFlag = NewDirtyFlag()
 	// WorkerInfo
 	newWorkerInfo := smgjson.WorkerInfoFromWorkerEph(workerEph)
 	if !ws.WorkerInfo.Equals(&newWorkerInfo) {
@@ -367,11 +372,13 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, workerEph *cougarjson.Wo
 			ws.ShutdownRequesting = true
 			dirtyFlag.AddDirtyFlag("ReqShutdown")
 			ws.State = data.WS_Online_shutdown_req
-			dirtyFlag.AddDirtyFlag("WorkerState")
+			ss.hatTryGet(ctx, ws.GetWorkerFullId())
+			passiveMove := costfunc.NewWorkerStateChange(ws.GetWorkerFullId(), ws.State, ws.HasShutdownHat(ss))
+			moves = append(moves, passiveMove)
 		}
 	}
 
-	return dirtyFlag
+	return
 }
 
 func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {
@@ -381,24 +388,11 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 	case data.WS_Online_healthy:
 		// nothing to do
 	case data.WS_Online_shutdown_req:
-		// try to get a hat
-		if !ss.hatTryGet(ctx, ws.GetWorkerFullId()) {
-			break
+		// nothing to do
+		if len(ws.Assignments) == 0 {
+			ws.State = data.WS_Online_shutdown_permit
+			dirty.AddDirtyFlag("WorkerState:" + string(ws.State))
 		}
-		// Worker Event: Hat got, worker becomes offline
-		ws.State = data.WS_Online_shutdown_hat
-		dirty.AddDirtyFlag("WorkerState")
-		fallthrough
-	case data.WS_Online_shutdown_hat:
-		// try to see if the worker is already empty (no assignments)
-		if len(ws.Assignments) > 0 {
-			break
-		}
-		// Worker Event: Draining complete, worker becomes offline
-		ws.State = data.WS_Online_shutdown_permit
-		ss.hatReturn(ctx, ws.GetWorkerFullId())
-		dirty.AddDirtyFlag("WorkerState")
-		fallthrough
 	case data.WS_Online_shutdown_permit:
 		// nothing to do
 	case data.WS_Offline_graceful_period:
@@ -410,15 +404,6 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		dirty.AddDirtyFlag("WorkerState")
 		fallthrough
 	case data.WS_Offline_draining_candidate:
-		// try to get the draining hat
-		if !ss.hatTryGet(ctx, ws.GetWorkerFullId()) {
-			break
-		}
-		// Worker Event: Hat applied, worker becomes offline
-		ws.State = data.WS_Offline_draining_hat
-		dirty.AddDirtyFlag("WorkerState")
-		fallthrough
-	case data.WS_Offline_draining_hat:
 		// try to see if the worker is already empty (no assignments)
 		if len(ws.Assignments) > 0 {
 			break
@@ -426,7 +411,6 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		// Worker Event: Draining complete, worker becomes offline
 		ws.State = data.WS_Offline_draining_complete
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
-		ss.hatReturn(ctx, ws.GetWorkerFullId())
 		dirty.AddDirtyFlag("WorkerState")
 		fallthrough
 	case data.WS_Offline_draining_complete:
@@ -523,8 +507,9 @@ func (df *DirtyFlag) String() string {
 	return strings.Join(df.flags, ",")
 }
 
-func (ws *WorkerState) HasShutdownHat() bool {
-	return ws.State == data.WS_Online_shutdown_hat || ws.State == data.WS_Offline_draining_hat
+func (ws *WorkerState) HasShutdownHat(ss *ServiceState) bool {
+	_, ok := ss.ShutdownHat[ws.GetWorkerFullId()]
+	return ok
 }
 
 func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, updateReason string) *cougarjson.PilotNodeJson {

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,7 +67,13 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 		{
 			// 等待 pilot 状态
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
-				return pnj != nil && pnj.ShutdownPermited == 1, "pilot"
+				if pnj == nil {
+					return false, "pilot node nil"
+				}
+				if pnj.ShutdownPermited == 1 {
+					return pnj.ShutdownPermited == 1, "pilot"
+				}
+				return false, "pilot.ShutdownPermited=" + strconv.Itoa(int(pnj.ShutdownPermited))
 			}, 10*1000, 1000)
 			assert.Equal(t, true, waitSucc, "pilot node ShutdownPermited已设置为1 elapsedMs=%d", elapsedMs)
 		}
@@ -80,8 +87,11 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 		{
 			// 等待worker状态
 			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, workerFullId, func(ws *WorkerState) (bool, string) {
-				return ws == nil, "待删除" // worker state 已删除?
-			}, 60*1000, 1000)
+				if ws != nil {
+					return false, "待删除"
+				}
+				return true, "已删除" // worker state 已删除?
+			}, 60*1000, 5*1000)
 			assert.Equal(t, true, waitSucc, "worker state 状态已设置为 WS_Online_shutdown_permit elapsedMs=%d", elapsedMs)
 		}
 		// assert.Equal(t, 0, 1, "测试结束")

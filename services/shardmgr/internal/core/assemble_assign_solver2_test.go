@@ -41,8 +41,8 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 				if ss.SnapshotFuture == nil {
 					return false, "快照不存在"
 				}
-				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(2, 0.0)) {
-					return false, "快照不正确"
+				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
+					return false, "快照不正确" + ss.SnapshotFuture.GetCost().String()
 				}
 				return true, "" // 快照存在
 			}, 1000, 10)

@@ -59,8 +59,24 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
 			ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
 			klogging.Info(ctx).With("workerFullId", workerFullId).Log("checkWorkerTombStone", "delete workerState")
+			continue
 		}
 	}
+}
+func (ss *ServiceState) checkWorkerHats(ctx context.Context) {
+	// for workerFullId, workerState := range ss.AllWorkers {
+	// 	if workerState.IsWaitingForHat() {
+	// 	}
+	// }
+}
+func (ws *WorkerState) IsWaitingForHat() bool {
+	if ws.State == data.WS_Offline_draining_candidate {
+		return true
+	}
+	if ws.State == data.WS_Online_shutdown_req {
+		return true
+	}
+	return false
 }
 
 func (ss *ServiceState) checkShardTombStone(ctx context.Context) {

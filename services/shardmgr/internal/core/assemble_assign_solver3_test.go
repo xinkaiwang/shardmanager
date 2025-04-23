@@ -44,8 +44,8 @@ func TestAssembleAssignSolver3(t *testing.T) {
 				if ss.SnapshotFuture == nil {
 					return false, "快照不存在"
 				}
-				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(2, 0.0)) {
-					return false, "快照不正确"
+				if !ss.SnapshotFuture.GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
+					return false, "快照不正确" + ss.SnapshotFuture.GetCost().String()
 				}
 				return true, "" // 快照存在
 			}, 1000, 10)
@@ -168,7 +168,7 @@ func TestAssembleAssignSolver3(t *testing.T) {
 				cost = ss.SnapshotCurrent.GetCost()
 			})
 			assert.Equal(t, 1, acceptCount, "应该有1个接受的提议")
-			assert.Equal(t, 1, int(cost.HardScore), "快照不正确") // 1个分片, 2个副本, 1个副本没有分配
+			assert.Equal(t, 2, int(cost.HardScore), "快照不正确") // 1个分片, 2个副本, 1个副本没有分配
 		}
 
 		// Setp 7: worker 2

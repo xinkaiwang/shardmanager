@@ -177,6 +177,7 @@ func (asgn *AssignmentSnap) Compare(other *AssignmentSnap) []string {
 // WorkerSnap: implements TypeT2
 type WorkerSnap struct {
 	WorkerFullId data.WorkerFullId
+	Draining     bool
 	Assignments  map[data.ShardId]data.AssignmentId
 }
 

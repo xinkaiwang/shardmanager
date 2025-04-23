@@ -34,6 +34,10 @@ func NewWorkerDelete(workerId data.WorkerFullId) *WorkerDelete {
 }
 
 func (move *WorkerDelete) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
+	if snapshot.Frozen {
+		ke := kerror.Create("WorkerDeleteApplyFailed", "snapshot is frozen")
+		panic(ke)
+	}
 	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
 	if !ok {
 		if mode == AM_Strict {
@@ -82,4 +86,37 @@ func (move *WorkerAdded) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
 
 func (move *WorkerAdded) Signature() string {
 	return "WorkerAdded: " + move.WorkerId.String()
+}
+
+// WorkerStateChange implements PassiveMove
+type WorkerStateChange struct {
+	WorkerId data.WorkerFullId
+	NewState data.WorkerStateEnum
+	HasHat   bool
+}
+
+func NewWorkerStateChange(workerId data.WorkerFullId, newState data.WorkerStateEnum, hat bool) *WorkerStateChange {
+	return &WorkerStateChange{
+		WorkerId: workerId,
+		NewState: newState,
+		HasHat:   hat,
+	}
+}
+
+func (move *WorkerStateChange) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
+	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("WorkerStateChangeFailed", "worker not found in snapshot")
+			panic(ke)
+		}
+		return snapshot
+	}
+	workerSnap.Draining = move.HasHat
+
+	return snapshot
+}
+
+func (move *WorkerStateChange) Signature() string {
+	return "WorkerStateChange: " + move.WorkerId.String() + " -> " + string(move.NewState)
 }

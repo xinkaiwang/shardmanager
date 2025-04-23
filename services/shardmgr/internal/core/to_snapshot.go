@@ -26,6 +26,7 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 	// workers
 	for workerId, workerState := range ss.AllWorkers {
 		workerSnap := costfunc.NewWorkerSnap(workerId)
+		workerSnap.Draining = workerState.ShutdownRequesting
 		for assignmentId := range workerState.Assignments {
 			assignment, ok := ss.AllAssignments[assignmentId]
 			if !ok {

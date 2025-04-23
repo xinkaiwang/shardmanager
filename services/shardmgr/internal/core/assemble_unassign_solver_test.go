@@ -156,9 +156,9 @@ func TestAssembleUnassignSolver(t *testing.T) {
 		{
 			waitSucc, elapsedMs := setup.WaitUntilSs(t, func(ss *ServiceState) (bool, string) {
 				if len(ss.AllAssignments) > 0 {
-					return false, "有未完成的 move"
+					return false, "有未完成的 Assignment"
 				}
-				return true, "move完成" // 没有未完成的 move
+				return true, "Assignments gone" // 没有 assignment
 			}, 10*1000, 1000)
 			assert.Equal(t, true, waitSucc, "应该能在超时前没有 assignment, 耗时=%dms", elapsedMs)
 		}
