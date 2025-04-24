@@ -6,7 +6,7 @@ LDFLAGS := -X github.com/xinkaiwang/shardmanager/services/shardmgr/internal/comm
 
 # Docker 镜像标签
 DOCKER_TAG ?= $(VERSION)
-DOCKER_IMAGE := xinkaiw/etcdmgr
+DOCKER_IMAGE := xinkaiw/shardmgr
 
 # 所有命令行工具
 CMDS := hello
@@ -26,9 +26,9 @@ build: build-cmds build-svcs
 
 # 构建服务
 build-service:
-	@echo "Building etcdmgr service..."
+	@echo "Building shardmgr service..."
 	@mkdir -p bin
-	go build -ldflags "$(LDFLAGS)" -o bin/etcdmgr ./service/etcdmgr
+	go build -ldflags "$(LDFLAGS)" -o bin/shardmgr ./service/shardmgr
 
 # 构建命令行工具
 build-cmds: $(CMDS)
@@ -51,7 +51,11 @@ $(SVCS):
 # Docker 相关目标
 docker-build:
 	@echo "Building Docker image $(DOCKER_IMAGE):$(DOCKER_TAG)..."
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f Dockerfile .
+	cd ../../ && docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-f services/shardmgr/Dockerfile .
 
 docker-push:
 	@echo "Pushing Docker image $(DOCKER_IMAGE):$(DOCKER_TAG)..."
@@ -120,7 +124,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all          - Default target: fmt, lint, build, test"
 	@echo "  build        - Build all components"
-	@echo "  build-service - Build etcdmgr service"
+	@echo "  build-service - Build shardmgr service"
 	@echo "  build-cmds   - Build all command line tools"
 	@echo "  test         - Run tests"
 	@echo "  test-with-log - Run tests and save output to log file"

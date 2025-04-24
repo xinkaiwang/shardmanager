@@ -25,7 +25,7 @@ func NewHandler(app *biz.App) *Handler {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// 包装所有处理器以添加错误处理中间件
 	mux.Handle("/api/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.PingHandler)))
-	mux.Handle("/api/get_status", ErrorHandlingMiddleware(http.HandlerFunc(h.GetStatusHandler)))
+	mux.Handle("/api/get_state", ErrorHandlingMiddleware(http.HandlerFunc(h.GetStateHandler)))
 }
 
 // PingHandler 处理 /api/ping 请求
@@ -63,8 +63,8 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetStatusHandler 处理 /api/get_status 请求
-func (h *Handler) GetStatusHandler(w http.ResponseWriter, r *http.Request) {
+// GetStatusHandler 处理 /api/get_state 请求
+func (h *Handler) GetStateHandler(w http.ResponseWriter, r *http.Request) {
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
