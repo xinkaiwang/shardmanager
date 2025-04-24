@@ -74,6 +74,10 @@ func (action *Action) ToJson() *smgjson.ActionJson {
 	return actionJson
 }
 
+func (action *Action) String() string {
+	return string(action.ActionType)
+}
+
 func ActionFromJson(actionJson *smgjson.ActionJson) *Action {
 	action := &Action{
 		ActionType:           actionJson.ActionType,
@@ -139,8 +143,17 @@ func (action *Action) applyAddShard(snapshot *Snapshot, mode ApplyMode) {
 		}
 	}
 	// when reach here, the destWorker/shard/replica confirmed exist
-	workerState.Assignments[action.ShardId] = action.AssignmentId
-	replicaState.Assignments[action.AssignmentId] = common.Unit{}
+	// copy on write (workerSnap)
+	newWorkerSnap := workerState.Clone()
+	newWorkerSnap.Assignments[action.ShardId] = action.AssignmentId
+	snapshot.AllWorkers.Set(action.To, newWorkerSnap)
+	// copy on write (shardSnap)
+	newReplicaSnap := replicaState.Clone()
+	newReplicaSnap.Assignments[action.AssignmentId] = common.Unit{}
+	newShardSnap := shardState.Clone()
+	newShardSnap.Replicas[action.ReplicaIdx] = newReplicaSnap
+	snapshot.AllShards.Set(action.ShardId, newShardSnap)
+
 	snapshot.AllAssignments.Set(action.AssignmentId, &AssignmentSnap{
 		ShardId:      action.ShardId,
 		ReplicaIdx:   action.ReplicaIdx,
@@ -205,8 +218,16 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 		}
 	}
 	// when reach here, the srcWorker/assignment/shard/replica confirmed exist
-	delete(workerState.Assignments, action.ShardId)
-	delete(replicaState.Assignments, action.AssignmentId)
+	// copy-on-write (workerSnap)
+	newWorkerSnap := workerState.Clone()
+	delete(newWorkerSnap.Assignments, action.ShardId)
+	snapshot.AllWorkers.Set(action.From, newWorkerSnap)
+	// copy-on-write (shardSnap)
+	newReplicaSnap := replicaState.Clone()
+	newShardSnap := shardState.Clone()
+	newShardSnap.Replicas[action.ReplicaIdx] = newReplicaSnap
+	snapshot.AllShards.Set(action.ShardId, newShardSnap)
+	delete(newReplicaSnap.Assignments, action.AssignmentId)
 	snapshot.AllAssignments.Delete(action.AssignmentId)
 }
 

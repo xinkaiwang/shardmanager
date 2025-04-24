@@ -36,21 +36,21 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	// re-create current snapshot from scratch
 	newSnapshotCurrent := ss.CreateSnapshotFromCurrentState(ctx)
 	// re-create future snapshot
-	newSnapshotFuture := ss.SnapshotCurrent.Clone()
+	newSnapshotFuture := newSnapshotCurrent.Clone()
 	for _, minion := range ss.AllMoves {
 		minion.moveState.ApplyRemainingActions(newSnapshotFuture, costfunc.AM_Relaxed)
 	}
 	// compare with existing snapshot
-	diffs := compareSnapshot(ctx, newSnapshotCurrent, ss.SnapshotCurrent)
+	diffs := compareSnapshot(ctx, ss.GetSnapshotCurrent(), newSnapshotCurrent)
 	if len(diffs) > 0 {
-		klogging.Fatal(ctx).With("diffs", diffs).Log("annualCheckSnapshot", "found diffs")
+		klogging.Fatal(ctx).With("diffs", diffs).With("current", ss.SnapshotCurrent.ToJsonString()).With("newCurrent", newSnapshotCurrent.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
 	}
-	diffs = compareSnapshot(ctx, newSnapshotFuture, ss.SnapshotFuture)
+	diffs = compareSnapshot(ctx, ss.SnapshotFuture, newSnapshotFuture)
 	if len(diffs) > 0 {
-		klogging.Fatal(ctx).With("diffs", diffs).Log("annualCheckSnapshot", "found diffs")
+		klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.SnapshotFuture.ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
 	}
-	ss.SnapshotCurrent = newSnapshotCurrent
-	ss.SnapshotFuture = newSnapshotFuture
+	ss.SetSnapshotCurrent(ctx, newSnapshotCurrent.Freeze(), "annualCheckSnapshot")
+	ss.SnapshotFuture = newSnapshotFuture.Freeze()
 	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString()).With("future", newSnapshotFuture.ToShortString()).Log("annualCheckSnapshot", "done")
 }
 

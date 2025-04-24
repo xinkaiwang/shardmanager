@@ -213,12 +213,12 @@ func (dtt *DriverThreadTask) Execute() {
 	startTime := kcommon.GetWallTimeMs()
 	proposal := dtt.parent.parent.solver.FindProposal(dtt.parent.parent.ctx, dtt.parent.parent.parent.loadSnapshot())
 	elapsedMs := kcommon.GetWallTimeMs() - startTime
-	klogging.Info(dtt.ctx).With("solver", dtt.name).With("elapsedMs", elapsedMs).Log("SolverGroup", "Execute")
+	klogging.Verbose(dtt.ctx).With("solver", dtt.name).With("elapsedMs", elapsedMs).Log("SolverGroup", "Execute")
 	if proposal == nil {
 		close(dtt.done)
 		return
 	}
-	klogging.Info(dtt.ctx).With("solver", dtt.name).With("proposalId", proposal.ProposalId).With("signature", proposal.Signature).With("gain", proposal.Gain).With("base", proposal.BasedOn).Log("SolverGroup", "NewProposal")
+	// klogging.Info(dtt.ctx).With("solver", dtt.name).With("proposalId", proposal.ProposalId).With("signature", proposal.Signature).With("gain", proposal.Gain).With("base", proposal.BasedOn).Log("SolverGroup", "NewProposal")
 	result := dtt.parent.parent.parent.enqueueProposals(proposal)
 	if result != common.ER_Enqueued {
 		klogging.Info(dtt.ctx).With("solver", dtt.name).With("result", result).Log("SolverGroup", "EnqueueProposal")

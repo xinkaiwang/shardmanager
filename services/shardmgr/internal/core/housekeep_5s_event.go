@@ -122,9 +122,8 @@ func (ss *ServiceState) hardDeleteReplicaFromSnapshot(ctx context.Context, shard
 		newShardSnap := shardSnap.Clone()
 		delete(newShardSnap.Replicas, replicaIdx)
 		newSnapshot.AllShards.Set(shardId, newShardSnap)
-		ss.SnapshotCurrent = newSnapshot.Freeze()
 		return newSnapshot
 	}
-	ss.SnapshotCurrent = fn(ss.SnapshotCurrent)
+	ss.SetSnapshotCurrent(ctx, fn(ss.GetSnapshotCurrent()), "hardDeleteReplicaFromSnapshot")
 	ss.SnapshotFuture = fn(ss.SnapshotFuture)
 }

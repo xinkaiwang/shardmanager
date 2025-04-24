@@ -189,14 +189,6 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			workerState.Assignments[action.AssignmentId] = common.Unit{}
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "addShard")
-			// remove from current snapshot
-			ke = kcommon.TryCatchRun(ctx, func() {
-				ss.SnapshotCurrent = action.ApplyToSnapshot(ss.SnapshotCurrent.Clone(), costfunc.AM_Strict).Freeze()
-			})
-			if ke != nil {
-				status = AS_Failed
-				return
-			}
 			// wait on signal box
 			signalBox = workerState.SignalBox
 			status = AS_Wait
@@ -243,6 +235,16 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			}
 			if assign.CurrentConfirmedState == cougarjson.CAS_Ready {
 				status = AS_Completed
+				// apply to current snapshot
+				ke = kcommon.TryCatchRun(ctx, func() {
+					newCurrent := action.ApplyToSnapshot(ss.GetSnapshotCurrent().Clone(), costfunc.AM_Strict).Freeze()
+					ss.SetSnapshotCurrent(ctx, newCurrent, "minion.addShard")
+				})
+				if ke != nil {
+					reason = "apply to snapshot failed:" + ke.FullString()
+					status = AS_Failed
+					return
+				}
 				return
 			}
 			reason = "assignment not in ready state"
@@ -311,14 +313,14 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			assign.TargetState = cougarjson.CAS_Dropped
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "dropShard")
-			// remove from current snapshot
-			ke = kcommon.TryCatchRun(ctx, func() {
-				ss.SnapshotCurrent = action.ApplyToSnapshot(ss.SnapshotCurrent.Clone(), costfunc.AM_Strict).Freeze()
-			})
-			if ke != nil {
-				status = AS_Failed
-				return
-			}
+			// // remove from current snapshot
+			// ke = kcommon.TryCatchRun(ctx, func() {
+			// 	ss.SnapshotCurrent = action.ApplyToSnapshot(ss.SnapshotCurrent.Clone(), costfunc.AM_Strict).Freeze()
+			// })
+			// if ke != nil {
+			// 	status = AS_Failed
+			// 	return
+			// }
 			// wait on signal box
 			signalBox = workerState.SignalBox
 			status = AS_Wait
@@ -340,18 +342,31 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			}
 		}
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
+			applyToSnapshot := func() {
+				// remove from current snapshot
+				ke = kcommon.TryCatchRun(ctx, func() {
+					newCurrent := action.ApplyToSnapshot(ss.GetSnapshotCurrent().Clone(), costfunc.AM_Strict).Freeze()
+					ss.SetSnapshotCurrent(ctx, newCurrent, "minion.dropShard")
+				})
+				if ke != nil {
+					status = AS_Failed
+				}
+			}
 			workerState, ok := ss.AllWorkers[action.From]
 			if !ok {
 				status = AS_Completed
+				applyToSnapshot()
 				return
 			}
 			assign, ok := ss.AllAssignments[action.AssignmentId]
 			if !ok {
 				status = AS_Completed
+				applyToSnapshot()
 				return
 			}
 			if assign.CurrentConfirmedState == cougarjson.CAS_Dropped {
 				status = AS_Completed
+				applyToSnapshot()
 				return
 			}
 			signalBox = workerState.SignalBox

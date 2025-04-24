@@ -2,6 +2,7 @@ package costfunc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -66,6 +67,18 @@ func (ss *ShardSnap) Compare(other *ShardSnap) []string {
 	return diff
 }
 
+func (ss *ShardSnap) ToJson() map[string]interface{} {
+	obj := make(map[string]interface{})
+	obj["ShardId"] = ss.ShardId
+	obj["Replicas"] = make([]map[string]interface{}, 0)
+	for replicaIdx, replicaSnap := range ss.Replicas {
+		replicaObj := replicaSnap.ToJson()
+		replicaObj["ReplicaIdx"] = replicaIdx
+		obj["Replicas"] = append(obj["Replicas"].([]map[string]interface{}), replicaObj)
+	}
+	return obj
+}
+
 /*********************** ReplicaSnap **********************/
 type ReplicaSnap struct {
 	ShardId     data.ShardId
@@ -123,6 +136,18 @@ func (rep *ReplicaSnap) Compare(other *ReplicaSnap) []string {
 	return diff
 }
 
+func (rep *ReplicaSnap) ToJson() map[string]interface{} {
+	obj := make(map[string]interface{})
+	obj["ShardId"] = rep.ShardId
+	obj["ReplicaIdx"] = rep.ReplicaIdx
+	obj["LameDuck"] = common.Int8FromBool(rep.LameDuck)
+	obj["Assignments"] = make([]string, 0)
+	for assignmentId := range rep.Assignments {
+		obj["Assignments"] = append(obj["Assignments"].([]string), string(assignmentId))
+	}
+	return obj
+}
+
 /*********************** AssignmentSnap **********************/
 
 // AssignmentSnap: implements TypeT2
@@ -142,6 +167,10 @@ func NewAssignmentSnap(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignm
 		AssignmentId: assignmentId,
 		WorkerFullId: workerFullId,
 	}
+}
+
+func (asgn *AssignmentSnap) String() string {
+	return fmt.Sprintf("AssignmentSnap: %s:%d:%s:%s", asgn.ShardId, asgn.ReplicaIdx, asgn.AssignmentId, asgn.WorkerFullId)
 }
 
 func (asgn *AssignmentSnap) GetReplicaFullId() data.ReplicaFullId {
@@ -170,6 +199,15 @@ func (asgn *AssignmentSnap) Compare(other *AssignmentSnap) []string {
 		diff = append(diff, "WorkerFullId")
 	}
 	return diff
+}
+
+func (asgn *AssignmentSnap) ToJson() map[string]interface{} {
+	obj := make(map[string]interface{})
+	obj["ShardId"] = asgn.ShardId
+	obj["ReplicaIdx"] = asgn.ReplicaIdx
+	obj["AssignmentId"] = asgn.AssignmentId
+	obj["WorkerFullId"] = asgn.WorkerFullId
+	return obj
 }
 
 /*********************** WorkerSnap **********************/
@@ -232,8 +270,29 @@ func (worker *WorkerSnap) Compare(other *WorkerSnap) []string {
 	return diff
 }
 
+func (worker *WorkerSnap) ToJson() map[string]interface{} {
+	obj := make(map[string]interface{})
+	obj["WorkerFullId"] = worker.WorkerFullId
+	obj["Draining"] = common.Int8FromBool(worker.Draining)
+	obj["Assignments"] = make([]map[string]interface{}, 0)
+	for shardId, assignmentId := range worker.Assignments {
+		assignObj := make(map[string]interface{})
+		assignObj["ShardId"] = shardId
+		assignObj["AssignmentId"] = assignmentId
+		obj["Assignments"] = append(obj["Assignments"].([]map[string]interface{}), assignObj)
+	}
+	return obj
+}
+
 /*********************** Snapshot **********************/
 type SnapshotId string
+
+type SnapshotType string
+
+const (
+	ST_Current SnapshotType = "current"
+	ST_Future  SnapshotType = "future"
+)
 
 type Snapshot struct {
 	Frozen         bool // 标记当前实例是否已冻结，冻结后不允许修改
@@ -428,4 +487,35 @@ func (snap *Snapshot) Compare(other *Snapshot) []string {
 	diff = append(diff, snap.AllWorkers.Compare(other.AllWorkers)...)
 	diff = append(diff, snap.AllAssignments.Compare(other.AllAssignments)...)
 	return diff
+}
+
+func (snap *Snapshot) ToJson() map[string]interface{} {
+	obj := make(map[string]interface{})
+	obj["SnapshotId"] = snap.SnapshotId
+	obj["Cost"] = snap.GetCost()
+	obj["Shards"] = make([]map[string]interface{}, 0)
+	snap.AllShards.VisitAll(func(shardId data.ShardId, shardSnap *ShardSnap) {
+		shardObj := shardSnap.ToJson()
+		obj["Shards"] = append(obj["Shards"].([]map[string]interface{}), shardObj)
+	})
+	obj["Workers"] = make([]map[string]interface{}, 0)
+	snap.AllWorkers.VisitAll(func(workerFullId data.WorkerFullId, workerSnap *WorkerSnap) {
+		workerObj := workerSnap.ToJson()
+		obj["Workers"] = append(obj["Workers"].([]map[string]interface{}), workerObj)
+	})
+	obj["Assignments"] = make([]map[string]interface{}, 0)
+	snap.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, assignmentSnap *AssignmentSnap) {
+		assignmentObj := assignmentSnap.ToJson()
+		obj["Assignments"] = append(obj["Assignments"].([]map[string]interface{}), assignmentObj)
+	})
+	return obj
+}
+
+func (snap *Snapshot) ToJsonString() string {
+	obj := snap.ToJson()
+	jsonStr, err := json.Marshal(obj)
+	if err != nil {
+		klogging.Fatal(context.Background()).WithError(err).Log("ToJsonString", "error")
+	}
+	return string(jsonStr)
 }

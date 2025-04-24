@@ -196,3 +196,18 @@ func (ss *ServiceState) PrintAllAssignments(ctx context.Context) {
 		klogging.Info(ctx).With("assignmentId", assignment.AssignmentId).With("shardId", assignment.ShardId).With("replicaIdx", assignment.ReplicaIdx).Log("PrintAllAssignments", "assignment")
 	}
 }
+
+func (ss *ServiceState) SetSnapshotCurrent(ctx context.Context, newSnapshot *costfunc.Snapshot, reason string) {
+	oldId := "none"
+	if ss.SnapshotCurrent != nil {
+		oldId = string(ss.SnapshotCurrent.SnapshotId)
+	}
+	newId := string(newSnapshot.SnapshotId)
+	ss.SnapshotCurrent = newSnapshot
+	klogging.Info(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).With("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotCurrent", "")
+}
+
+func (ss *ServiceState) GetSnapshotCurrent() *costfunc.Snapshot {
+	klogging.Info(context.Background()).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("snapshot", ss.SnapshotCurrent.ToJsonString()).Log("GetSnapshotCurrent", "")
+	return ss.SnapshotCurrent
+}

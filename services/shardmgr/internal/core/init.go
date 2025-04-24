@@ -145,8 +145,8 @@ func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.Sh
 }
 
 func (ss *ServiceState) ReCreateSnapshot(ctx context.Context, reason string) {
-	ss.SnapshotCurrent = ss.CreateSnapshotFromCurrentState(ctx)
-	ss.SnapshotFuture = ss.SnapshotCurrent.Clone()
+	ss.SetSnapshotCurrent(ctx, ss.CreateSnapshotFromCurrentState(ctx), "ReCreateSnapshot")
+	ss.SnapshotFuture = ss.GetSnapshotCurrent().Clone()
 	// apply all panding moves
 	for _, minion := range ss.AllMoves {
 		minion.moveState.ApplyRemainingActions(ss.SnapshotFuture, costfunc.AM_Relaxed)
@@ -175,7 +175,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 					ke := kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", assignId).With("shardId", shard.ShardId)
 					panic(ke)
 				}
-				if !shouldAssignIncludeInSnapshot(assignmentState) {
+				if !shouldAssignIncludeInSnapshot(assignmentState, costfunc.ST_Current) {
 					continue
 				}
 				replicaSnap.Assignments[assignId] = common.Unit{}
@@ -196,7 +196,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 				ke := kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", assignId).With("workerId", workerId)
 				panic(ke)
 			}
-			if !shouldAssignIncludeInSnapshot(assignmentState) {
+			if !shouldAssignIncludeInSnapshot(assignmentState, costfunc.ST_Current) {
 				// snapshot only include those assignment in ready state
 				continue
 			}
@@ -223,6 +223,14 @@ func shouldWorkerIncludeInSnapshot(workerState *WorkerState) bool {
 	return false
 }
 
-func shouldAssignIncludeInSnapshot(assignmentState *AssignmentState) bool {
-	return assignmentState.CurrentConfirmedState == cougarjson.CAS_Ready
+func shouldAssignIncludeInSnapshot(assignmentState *AssignmentState, snapshotType costfunc.SnapshotType) bool {
+	switch snapshotType {
+	case costfunc.ST_Current:
+		return assignmentState.CurrentConfirmedState == cougarjson.CAS_Ready || assignmentState.CurrentConfirmedState == cougarjson.CAS_Dropping
+	case costfunc.ST_Future:
+		return assignmentState.TargetState == cougarjson.CAS_Ready
+	default:
+		ke := kerror.Create("UnknownSnapshotType", "unknown snapshot type").With("snapshotType", snapshotType)
+		panic(ke)
+	}
 }
