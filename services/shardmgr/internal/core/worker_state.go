@@ -290,7 +290,7 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	case data.WS_Online_shutdown_req:
 		fallthrough
 	case data.WS_Online_shutdown_permit:
-		dict := ws.collectCurrentAssignments(ss)
+		dict := ws.CollectCurrentAssignments(ss)
 		dirty, moves := ws.applyNewEph(ctx, ss, workerEph, dict)
 		dirtyFlag.AddDirtyFlags(dirty)
 		passiveMoves = append(passiveMoves, moves...)
@@ -324,8 +324,8 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	return dirtyFlag
 }
 
-// collectCurrentAssignments: collect current assignments from AllAssignments, fatal if not found
-func (ws *WorkerState) collectCurrentAssignments(ss *ServiceState) map[data.AssignmentId]*AssignmentState {
+// CollectCurrentAssignments: collect current assignments from AllAssignments, fatal if not found
+func (ws *WorkerState) CollectCurrentAssignments(ss *ServiceState) map[data.AssignmentId]*AssignmentState {
 	dict := make(map[data.AssignmentId]*AssignmentState)
 	for assignmentId := range ws.Assignments {
 		assignState, ok := ss.AllAssignments[assignmentId]

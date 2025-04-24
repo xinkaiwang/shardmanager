@@ -49,7 +49,7 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	if len(diffs) > 0 {
 		klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.SnapshotFuture.ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
 	}
-	ss.SetSnapshotCurrent(ctx, newSnapshotCurrent.Freeze(), "annualCheckSnapshot")
+	ss.SetSnapshotCurrent(ctx, newSnapshotCurrent, "annualCheckSnapshot")
 	ss.SnapshotFuture = newSnapshotFuture.Freeze()
 	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString()).With("future", newSnapshotFuture.ToShortString()).Log("annualCheckSnapshot", "done")
 }

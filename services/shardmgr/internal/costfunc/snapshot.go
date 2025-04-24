@@ -449,7 +449,7 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 
 func (snap *Snapshot) ApplyMove(move Move, mode ApplyMode) *Snapshot {
 	if snap.Frozen {
-		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
+		ke := kerror.Create("SnapshotAlreadyFrozen", "trying to apply on frozen snapshot").With("snapshotId", snap.SnapshotId)
 		panic(ke)
 	}
 	move.Apply(snap, mode)

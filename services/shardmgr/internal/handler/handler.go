@@ -79,14 +79,14 @@ func (h *Handler) GetStatusHandler(w http.ResponseWriter, r *http.Request) {
 		Log("GetStatusRequest", "received get status request")
 
 	// 处理请求
-	var resp *api.GetStatusResponse
+	var resp *api.GetStateResponse
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.GetStatus", func() {
-		resp = h.app.GetStatus(r.Context())
+		resp = h.app.GetStatus(r.Context(), &api.GetStateRequest{})
 	}, "")
 
 	// 记录响应信息
 	klogging.Info(r.Context()).
-		With("shards_count", len(resp.Shards)).
+		With("worker_count", len(resp.Workers)).
 		Log("GetStatusResponse", "sending get status response")
 
 	// 返回响应
