@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xinkaiwang/shardmanager/services/cougar/etcdprov"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/etcdprov"
 )
 
 func main() {

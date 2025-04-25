@@ -1,6 +1,6 @@
 package cougar
 
-import "github.com/xinkaiwang/shardmanager/services/unicorn/data"
+import "github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 
 type WorkerInfo struct {
 	// WorkerId 是工作节点的唯一标识符, 通常是 hostname，也就是 pod name

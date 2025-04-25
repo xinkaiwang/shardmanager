@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougar"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
-	"github.com/xinkaiwang/shardmanager/services/cougar/cougar"
-	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
-	"github.com/xinkaiwang/shardmanager/services/unicorn/data"
 )
 
 // 版本信息，通过 ldflags 在构建时注入

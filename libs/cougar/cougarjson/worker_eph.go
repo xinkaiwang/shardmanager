@@ -3,8 +3,8 @@ package cougarjson
 import (
 	"encoding/json"
 
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/services/unicorn/data"
 )
 
 // etcd path is "/smg/eph/{worker_id}:{session_id}"

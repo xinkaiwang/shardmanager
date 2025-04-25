@@ -1,8 +1,8 @@
 package cougar
 
 import (
-	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
-	"github.com/xinkaiwang/shardmanager/services/unicorn/data"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 )
 
 type CougarAction string

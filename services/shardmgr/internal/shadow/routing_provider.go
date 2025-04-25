@@ -3,9 +3,9 @@ package shadow
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
-	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
 )
 
 type RoutingProvider interface {

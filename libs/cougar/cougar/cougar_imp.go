@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/etcdprov"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
-	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
-	"github.com/xinkaiwang/shardmanager/services/cougar/etcdprov"
-	"github.com/xinkaiwang/shardmanager/services/unicorn/data"
 )
 
 /********************** CougarImpl **********************/

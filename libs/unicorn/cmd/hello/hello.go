@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/xinkaiwang/shardmanager/services/unicorn/unicornjson"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 )
 
 func main() {

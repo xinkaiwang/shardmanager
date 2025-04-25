@@ -1,7 +1,7 @@
 package smgjson
 
 import (
-	"github.com/xinkaiwang/shardmanager/services/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 

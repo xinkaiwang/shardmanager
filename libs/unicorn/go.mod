@@ -1,4 +1,4 @@
-module github.com/xinkaiwang/shardmanager/services/unicorn
+module github.com/xinkaiwang/shardmanager/libs/unicorn
 
 go 1.21
 
