@@ -13,6 +13,7 @@ type ServiceConfigJson struct {
 	CostFuncCfg            *CostFuncConfigJson         `json:"cost_func_cfg,omitempty"`
 	SolverConfig           *SolverConfigJson           `json:"solver_config,omitempty"`
 	DynamicThresholdConfig *DynamicThresholdConfigJson `json:"dynamic_threshold,omitempty"`
+	FaultToleranceConfig   *FaultToleranceConfigJson   `json:"fault_tolerance,omitempty"`
 }
 
 type ShardConfigJson struct {

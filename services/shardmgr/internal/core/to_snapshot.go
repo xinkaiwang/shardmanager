@@ -5,6 +5,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
 func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
@@ -26,7 +27,7 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 	// workers
 	for workerId, workerState := range ss.AllWorkers {
 		workerSnap := costfunc.NewWorkerSnap(workerId)
-		workerSnap.Draining = workerState.ShutdownRequesting
+		workerSnap.Draining = workerState.IsDaining()
 		for assignmentId := range workerState.Assignments {
 			assignment, ok := ss.AllAssignments[assignmentId]
 			if !ok {
@@ -48,4 +49,17 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 	snapshot.AllAssignments = snapshot.AllAssignments.Compact()
 
 	return snapshot
+}
+
+func (ws *WorkerState) IsDaining() bool {
+	if ws.ShutdownRequesting {
+		return true
+	}
+	if ws.HasShutdownHat() {
+		return true
+	}
+	if ws.State == data.WS_Online_shutdown_permit || ws.State == data.WS_Offline_draining_complete || ws.State == data.WS_Offline_dead || ws.State == data.WS_Deleted {
+		return true
+	}
+	return false
 }

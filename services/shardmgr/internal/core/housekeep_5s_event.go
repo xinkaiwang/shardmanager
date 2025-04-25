@@ -54,7 +54,27 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 		}
 		// check worker tombstone
 		if workerState.State == data.WS_Offline_dead {
+			// delete all assignments (if any) (rare case, since we should have drained them already. The only case we need to do this when DirtyPurge happened)
+			for assignId := range workerState.Assignments {
+				assignment, ok := ss.AllAssignments[assignId]
+				delete(workerState.Assignments, assignId)
+				if !ok {
+					continue
+				}
+				delete(ss.AllAssignments, assignId)
+				shardState, ok := ss.AllShards[assignment.ShardId]
+				if !ok {
+					continue
+				}
+				replicaState, ok := shardState.Replicas[assignment.ReplicaIdx]
+				if !ok {
+					continue
+				}
+				delete(replicaState.Assignments, assignId)
+			}
+			// delete this worker
 			delete(ss.AllWorkers, workerFullId)
+			delete(ss.ShutdownHat, workerFullId)
 			ss.storeProvider.StoreWorkerState(workerFullId, nil)
 			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
 			ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)

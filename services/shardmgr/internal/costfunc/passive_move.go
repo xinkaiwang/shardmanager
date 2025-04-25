@@ -92,14 +92,14 @@ func (move *WorkerAdded) Signature() string {
 type WorkerStateChange struct {
 	WorkerId data.WorkerFullId
 	NewState data.WorkerStateEnum
-	HasHat   bool
+	Draining bool
 }
 
-func NewWorkerStateChange(workerId data.WorkerFullId, newState data.WorkerStateEnum, hat bool) *WorkerStateChange {
+func NewWorkerStateChange(workerId data.WorkerFullId, newState data.WorkerStateEnum, draining bool) *WorkerStateChange {
 	return &WorkerStateChange{
 		WorkerId: workerId,
 		NewState: newState,
-		HasHat:   hat,
+		Draining: draining,
 	}
 }
 
@@ -112,7 +112,24 @@ func (move *WorkerStateChange) Apply(snapshot *Snapshot, mode ApplyMode) *Snapsh
 		}
 		return snapshot
 	}
-	workerSnap.Draining = move.HasHat
+	if move.NewState == data.WS_Deleted || move.NewState == data.WS_Offline_dead {
+		// delete all assignments (rare case)
+		for shardId, assignmentId := range workerSnap.Assignments {
+			snapshot.AllAssignments.Delete(assignmentId)
+			// delete from shard
+			shardSnap, ok := snapshot.AllShards.Get(shardId)
+			if !ok {
+				continue
+			}
+			for _, replicaSnap := range shardSnap.Replicas {
+				delete(replicaSnap.Assignments, assignmentId)
+			}
+		}
+		// delete worker
+		snapshot.AllWorkers.Delete(move.WorkerId)
+		return snapshot
+	}
+	workerSnap.Draining = move.Draining
 
 	return snapshot
 }

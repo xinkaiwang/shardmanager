@@ -312,17 +312,10 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			assign.ShouldInPilot = false
 			assign.TargetState = cougarjson.CAS_Dropped
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
-			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "dropShard")
-			// // remove from current snapshot
-			// ke = kcommon.TryCatchRun(ctx, func() {
-			// 	ss.SnapshotCurrent = action.ApplyToSnapshot(ss.SnapshotCurrent.Clone(), costfunc.AM_Strict).Freeze()
-			// })
-			// if ke != nil {
-			// 	status = AS_Failed
-			// 	return
-			// }
-			// wait on signal box
-			signalBox = workerState.SignalBox
+			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "dropShard")
+			if workerState.IsOnline() {
+				signalBox = workerState.SignalBox
+			}
 			status = AS_Wait
 		})
 		if status == AS_Failed {
@@ -360,6 +353,12 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			}
 			assign, ok := ss.AllAssignments[action.AssignmentId]
 			if !ok {
+				status = AS_Completed
+				applyToSnapshot()
+				return
+			}
+			if !workerState.IsOnline() {
+				assign.CurrentConfirmedState = cougarjson.CAS_Dropped
 				status = AS_Completed
 				applyToSnapshot()
 				return

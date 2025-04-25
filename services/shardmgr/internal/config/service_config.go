@@ -20,6 +20,7 @@ type ServiceConfig struct {
 	CostFuncCfg            CostfuncConfig
 	SolverConfig           SolverConfig
 	DynamicThresholdConfig DynamicThresholdConfig
+	FaultToleranceConfig   FaultToleranceConfig
 }
 
 type ShardConfig struct {
@@ -48,6 +49,11 @@ type SystemLimitConfig struct {
 	MaxHatCountLimit int32
 }
 
+type FaultToleranceConfig struct {
+	GracePeriodSecBeforeDrain      int32 // once lost eph, we will wait this time to see if the eph is back.
+	GracePeriodSecBeforeDirtyPurge int32 // 是在 worker 无法 移除 shard 的情况下，允许 worker 继续存在，不被删除的时间
+}
+
 func ServiceConfigFromJson(si *smgjson.ServiceConfigJson) *ServiceConfig {
 	return &ServiceConfig{
 		ShardConfig:            ShardConfigJsonToConfig(si.ShardConfig),
@@ -56,6 +62,7 @@ func ServiceConfigFromJson(si *smgjson.ServiceConfigJson) *ServiceConfig {
 		CostFuncCfg:            CostFuncConfigJsonToConfig(si.CostFuncCfg),
 		SolverConfig:           SolverConfigJsonToConfig(si.SolverConfig),
 		DynamicThresholdConfig: DynamicThresholdConfigJsonToConfig(si.DynamicThresholdConfig),
+		FaultToleranceConfig:   FaultToleranceConfigJsonToConfig(si.FaultToleranceConfig),
 	}
 }
 
@@ -67,6 +74,7 @@ func (cfg *ServiceConfig) ToJsonObj() *smgjson.ServiceConfigJson {
 		CostFuncCfg:            cfg.CostFuncCfg.ToJsonObj(),
 		SolverConfig:           cfg.SolverConfig.ToJsonObj(),
 		DynamicThresholdConfig: cfg.DynamicThresholdConfig.ToJsonObj(),
+		FaultToleranceConfig:   cfg.FaultToleranceConfig.ToJsonObj(),
 	}
 }
 
@@ -159,6 +167,23 @@ func DynamicThresholdConfigJsonToConfig(sc *smgjson.DynamicThresholdConfigJson) 
 	return cfg
 }
 
+func FaultToleranceConfigJsonToConfig(sc *smgjson.FaultToleranceConfigJson) FaultToleranceConfig {
+	cfg := FaultToleranceConfig{
+		GracePeriodSecBeforeDrain:      0,         // default 0 sec
+		GracePeriodSecBeforeDirtyPurge: 24 * 3600, // default 24h
+	}
+	if sc == nil {
+		return cfg
+	}
+	if sc.GracePeriodSecBeforeDrain != nil {
+		cfg.GracePeriodSecBeforeDrain = *sc.GracePeriodSecBeforeDrain
+	}
+	if sc.GracePeriodSecBeforeDirtyPurge != nil {
+		cfg.GracePeriodSecBeforeDirtyPurge = *sc.GracePeriodSecBeforeDirtyPurge
+	}
+	return cfg
+}
+
 func (cfg *ServiceConfig) ToServiceConfigJson() *smgjson.ServiceConfigJson {
 	return &smgjson.ServiceConfigJson{
 		ShardConfig:            cfg.ShardConfig.ToJsonObj(),
@@ -167,6 +192,7 @@ func (cfg *ServiceConfig) ToServiceConfigJson() *smgjson.ServiceConfigJson {
 		CostFuncCfg:            cfg.CostFuncCfg.ToJsonObj(),
 		SolverConfig:           cfg.SolverConfig.ToJsonObj(),
 		DynamicThresholdConfig: cfg.DynamicThresholdConfig.ToJsonObj(),
+		FaultToleranceConfig:   cfg.FaultToleranceConfig.ToJsonObj(),
 	}
 }
 func (cfg *ShardConfig) ToJsonObj() *smgjson.ShardConfigJson {
@@ -195,5 +221,11 @@ func (cfg *DynamicThresholdConfig) ToJsonObj() *smgjson.DynamicThresholdConfigJs
 		DynamicThresholdMin: &cfg.DynamicThresholdMin,
 		HalfDecayTimeSec:    &cfg.HalfDecayTimeSec,
 		IncreasePerMove:     &cfg.IncreasePerMove,
+	}
+}
+func (cfg *FaultToleranceConfig) ToJsonObj() *smgjson.FaultToleranceConfigJson {
+	return &smgjson.FaultToleranceConfigJson{
+		GracePeriodSecBeforeDrain:      &cfg.GracePeriodSecBeforeDrain,
+		GracePeriodSecBeforeDirtyPurge: &cfg.GracePeriodSecBeforeDirtyPurge,
 	}
 }

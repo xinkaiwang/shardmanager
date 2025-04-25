@@ -29,26 +29,29 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 	setup := NewFakeTimeTestSetup(t)
 	// 更新 ServiceConfig 中的 OfflineGracePeriodSec 为 10 秒
 	gracePeriodSec := int32(10)
-	setup.SetupBasicConfig(ctx, config.WithOfflineGracePeriodSec(gracePeriodSec))
+	setup.SetupBasicConfig(ctx, config.WithFaultToleranceConfig(func(faultConfig *config.FaultToleranceConfig) {
+		faultConfig.GracePeriodSecBeforeDrain = gracePeriodSec
+	}))
 	fakeTime := setup.FakeTime
-	t.Logf("测试环境已配置")
 
 	fn := func() {
 		// 创建 ServiceState
 		ss := AssembleSsWithShadowState(ctx, "TestWorkerGracePeriodExpiration")
 		setup.ServiceState = ss
-		t.Logf("ServiceState已创建: %s", ss.Name)
+		// step 1: 创建 ServiceState
+		klogging.Info(ctx).Log("Step1", "创建 ServiceState")
 
 		{
 			// 验证 ServiceState 中的优雅期配置
 			actrualGracePeriodSec := int32(0)
 			setup.safeAccessServiceState(func(ss *ServiceState) {
-				actrualGracePeriodSec = ss.ServiceConfig.WorkerConfig.OfflineGracePeriodSec
+				actrualGracePeriodSec = ss.ServiceConfig.FaultToleranceConfig.GracePeriodSecBeforeDrain
 			})
 			assert.Equal(t, gracePeriodSec, actrualGracePeriodSec, "ServiceState中的优雅期应与配置一致")
 		}
 
-		// 创建 worker-1 eph
+		// Step 2: 创建 worker-1 eph
+		klogging.Info(ctx).Log("Step2", "创建 worker-1 eph")
 		workerFullId, ephPath := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 		workerStatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
 
@@ -62,7 +65,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 			assert.Equal(t, data.WS_Online_healthy, workerStateEnum, "worker state 已创建")
 		}
 
-		// 确认worker初始状态
+		// Step 3: 确认worker初始状态
+		klogging.Info(ctx).Log("Step3", "确认worker初始状态")
 		workerState, _ := setup.getWorkerStateAndPath(t, workerFullId)
 		t.Logf("worker初始状态验证完成: State=%v", workerState.State)
 		assert.Equal(t, data.WS_Online_healthy, workerState.State, "初始状态应为健康在线")
@@ -72,8 +76,9 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		setup.FakeEtcd.Delete(ctx, ephPath)
 		t.Logf("已删除worker eph节点，等待状态同步")
 
-		// 等待worker状态变为离线优雅期状态
-		t.Logf("等待worker状态从online_healthy变为offline_graceful_period")
+		// Step 4: 等待worker状态变为离线优雅期状态
+		klogging.Info(ctx).Log("Step4", "等待worker状态变为offline_graceful_period状态")
+		// t.Logf("等待worker状态从online_healthy变为offline_graceful_period")
 
 		// 推进0.5秒
 		fakeTime.VirtualTimeForward(ctx, 500)
@@ -84,7 +89,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 			assert.Equal(t, data.WS_Offline_graceful_period, workerStateEnum, "worker状态应变为 WS_Offline_graceful_period")
 		}
 
-		// 推进15秒，确保状态变化 (OfflineGracePeriodSec 为 10 秒)
+		// Step5: 推进15秒，确保状态变化 (OfflineGracePeriodSec 为 10 秒)
+		klogging.Info(ctx).Log("Step5", "推进15秒")
 		fakeTime.VirtualTimeForward(ctx, 15*1000)
 
 		{
@@ -97,7 +103,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 			assert.Equal(t, data.WS_Offline_draining_complete, ws.WorkerState, "worker state 状态已持久化")
 		}
 
-		// 推进25秒，确保状态变化 (DeleteGracePeriodSec 为 20 秒)
+		// Step6: 推进25秒，确保状态变化 (DeleteGracePeriodSec 为 20 秒)
+		klogging.Info(ctx).Log("Step6", "推进25秒")
 		fakeTime.VirtualTimeForward(ctx, 25*1000)
 
 		{

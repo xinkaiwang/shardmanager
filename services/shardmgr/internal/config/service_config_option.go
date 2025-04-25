@@ -44,6 +44,12 @@ func WithOfflineGracePeriodSec(seconds int32) ServiceConfigOption {
 	}
 }
 
+func WithFaultToleranceConfig(fn func(*FaultToleranceConfig)) ServiceConfigOption {
+	return func(cfg *ServiceConfig) {
+		fn(&cfg.FaultToleranceConfig)
+	}
+}
+
 func CreateTestServiceConfig(options ...ServiceConfigOption) *ServiceConfig {
 	cfg := ServiceConfigFromJson(&smgjson.ServiceConfigJson{}) // config (with all default values)
 	for _, option := range options {
