@@ -59,8 +59,8 @@ COPY --from=builder /src/shardmanager/services/etcdmgr/web/dist ./web/dist
 USER appuser
 
 # 设置默认环境变量
-ENV API_PORT=8080 \
-    METRICS_PORT=9090 \
+ENV API_PORT=8081 \
+    METRICS_PORT=9091 \
     LOG_LEVEL=info \
     LOG_FORMAT=json
 
