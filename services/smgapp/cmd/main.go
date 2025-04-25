@@ -88,7 +88,8 @@ func main() {
 
 	// 创建主路由
 	app := biz.NewApp()
-	h := handler.NewHandler(app)
+	cougarApp := biz.NewMyCougarApp()
+	h := handler.NewHandler(app, cougarApp)
 	mainMux := http.NewServeMux()
 	h.RegisterRoutes(mainMux)
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
@@ -14,12 +15,16 @@ import (
 
 // Handler 处理 HTTP 请求
 type Handler struct {
-	app *biz.App
+	app       *biz.App
+	cougurApp *biz.MyCougarApp
 }
 
 // NewHandler 创建一个新的 Handler 实例
-func NewHandler(app *biz.App) *Handler {
-	return &Handler{app: app}
+func NewHandler(app *biz.App, cougurApp *biz.MyCougarApp) *Handler {
+	return &Handler{
+		app:       app,
+		cougurApp: cougurApp,
+	}
 }
 
 // HelloHandler 处理 /hello 请求
@@ -89,6 +94,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/test_kerror", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloKerrorHandler)))
 	mux.Handle("/api/test_error", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloErrorHandler)))
 	mux.Handle("/api/test_panic", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloPanicHandler)))
+	mux.Handle("/smg/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.SmgPingHandler)))
 }
 
 // PingHandler 处理 /api/ping 请求
@@ -160,4 +166,16 @@ func (h *Handler) HelloPanicHandler(w http.ResponseWriter, r *http.Request) {
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.HelloWithPanic", func() {
 		h.app.HelloWithPanic(name)
 	}, "")
+}
+
+func (h *Handler) SmgPingHandler(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		name = "unknown"
+	}
+	// get shardId from header
+	shardId := r.Header.Get("X-Shard-Id")
+	shard := h.cougurApp.GetShard(r.Context(), data.ShardId(shardId))
+	resp := shard.Ping(r.Context(), name)
+	w.Write([]byte(resp))
 }

@@ -178,7 +178,7 @@ func (c *PilotNodeUpdateEvent) GetName() string {
 
 // Process implements krunloop.IEvent interface
 func (c *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) {
-	oldShards := map[data.ShardId]*CougarShard{}
+	oldShards := map[data.ShardId]*ShardInfo{}
 	for shardId, shard := range impl.cougarState.AllShards {
 		oldShards[shardId] = shard
 	}

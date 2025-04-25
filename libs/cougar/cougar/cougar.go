@@ -14,7 +14,7 @@ const (
 	CA_ShutdownPermited CougarAction = "shutdownPermited"
 )
 
-type CougarShard struct {
+type ShardInfo struct {
 	ShardId               data.ShardId
 	ReplicaIdx            data.ReplicaIdx
 	AssignmentId          data.AssignmentId
@@ -23,8 +23,8 @@ type CougarShard struct {
 	Properties            map[string]string
 }
 
-func NewCougarShard(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId) *CougarShard {
-	return &CougarShard{
+func NewCougarShard(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId) *ShardInfo {
+	return &ShardInfo{
 		ShardId:      shardId,
 		ReplicaIdx:   replicaIdx,
 		AssignmentId: assignmentId,
@@ -32,7 +32,7 @@ func NewCougarShard(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignment
 	}
 }
 
-func (s *CougarShard) IncQueryCount(n int) {
+func (s *ShardInfo) ReportQueryCount(n int64) {
 	// TODO
 }
 
@@ -40,12 +40,12 @@ type NotifyChangeFunc func(shardId data.ShardId, action CougarAction)
 
 type CougarState struct {
 	ShutdownPermited bool
-	AllShards        map[data.ShardId]*CougarShard
+	AllShards        map[data.ShardId]*ShardInfo
 }
 
 func NewCougarStates() *CougarState {
 	return &CougarState{
-		AllShards: make(map[data.ShardId]*CougarShard),
+		AllShards: make(map[data.ShardId]*ShardInfo),
 	}
 }
 

@@ -11,13 +11,13 @@ RUN apk add --no-cache git make
 COPY libs/xklib ./libs/xklib/
 
 # 复制服务代码
-COPY services/hellosvc ./services/hellosvc/
+COPY services/smgapp ./services/smgapp/
 
 # 复制 go.mod 和 go.sum
 COPY go.mod go.sum ./
 
 # 进入服务目录构建
-WORKDIR /src/shardmanager/services/hellosvc
+WORKDIR /src/shardmanager/services/smgapp
 RUN make build
 
 # 使用轻量级基础镜像
@@ -38,7 +38,7 @@ RUN adduser -D -u 1000 appuser
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=builder /src/shardmanager/services/hellosvc/bin/hellosvc .
+COPY --from=builder /src/shardmanager/services/smgapp/bin/smgapp .
 
 # 使用非 root 用户运行
 USER appuser
@@ -57,4 +57,4 @@ HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${API_PORT}/api/ping || exit 1
 
 # 运行应用
-CMD ["./hellosvc"] 
+CMD ["./smgapp"] 
