@@ -1,0 +1,33 @@
+2025/02/10 00:35:13 Main server starting on :8080
+2025/02/10 00:35:13 Metrics server starting on :9090
+panic type: string
+level=fatal, event=InvalidPanic, msg=invalid panic with non-error value, panic=this is a non-error panic, stack=github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics.invokeFuncVoid.func1()
+	/Users/xinkai/src/cursor/shardmanager/libs/xklib/kmetrics/decorator.go:41 +0x127
+panic({0x10f69980?, 0x110212a0?})
+	/usr/local/go/src/runtime/panic.go:785 +0x132
+github.com/xinkaiwang/shardmanager/services/hellosvc/internal/biz.(*App).HelloWithPanic(...)
+	/Users/xinkai/src/cursor/shardmanager/services/hellosvc/internal/biz/app.go:34
+github.com/xinkaiwang/shardmanager/services/hellosvc/internal/handler.(*Handler).HelloPanicHandler.func1()
+	/Users/xinkai/src/cursor/shardmanager/services/hellosvc/internal/handler/handler.go:121 +0x27
+github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics.invokeFuncVoid({0x110275c0?, 0xc00012c0f0?}, 0xc0000db948?)
+	/Users/xinkai/src/cursor/shardmanager/libs/xklib/kmetrics/decorator.go:45 +0x68
+github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics.InstrumentSummaryRunVoid({0x110275c0, 0xc00012c0f0}, {0x10e767e3, 0x12}, 0xc0000db9f0, {0x0, 0x0})
+	/Users/xinkai/src/cursor/shardmanager/libs/xklib/kmetrics/decorator.go:56 +0x7b
+github.com/xinkaiwang/shardmanager/services/hellosvc/internal/handler.(*Handler).HelloPanicHandler(0xc0003aa040, {0x11026a50?, 0xc000142000?}, 0xc000136000)
+	/Users/xinkai/src/cursor/shardmanager/services/hellosvc/internal/handler/handler.go:120 +0x185
+net/http.HandlerFunc.ServeHTTP(0xc000120330?, {0x11026a50?, 0xc000142000?}, 0x10e757d2?)
+	/usr/local/go/src/net/http/server.go:2220 +0x29
+github.com/xinkaiwang/shardmanager/services/hellosvc/internal/handler.(*Handler).RegisterRoutes.ErrorHandlingMiddleware.func4({0x11026a50, 0xc000142000}, 0xc000136000)
+	/Users/xinkai/src/cursor/shardmanager/services/hellosvc/internal/handler/middleware.go:58 +0xba
+net/http.HandlerFunc.ServeHTTP(0xc0003ea000?, {0x11026a50?, 0xc000142000?}, 0x10d09936?)
+	/usr/local/go/src/net/http/server.go:2220 +0x29
+net/http.(*ServeMux).ServeHTTP(0x10a9a819?, {0x11026a50, 0xc000142000}, 0xc000136000)
+	/usr/local/go/src/net/http/server.go:2747 +0x1ca
+net/http.serverHandler.ServeHTTP({0xc000120210?}, {0x11026a50?, 0xc000142000?}, 0x6?)
+	/usr/local/go/src/net/http/server.go:3210 +0x8e
+net/http.(*conn).serve(0xc00012e000, {0x11027588, 0xc000394780})
+	/usr/local/go/src/net/http/server.go:2092 +0x5d0
+created by net/http.(*Server).Serve in goroutine 1
+	/usr/local/go/src/net/http/server.go:3360 +0x485
+
+exit status 1
