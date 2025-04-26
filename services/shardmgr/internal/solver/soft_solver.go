@@ -114,6 +114,7 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 	}
 	proposal := costfunc.NewProposal(ctx, "SoftSolver", baseCost.Substract(bestCost), snapshot.SnapshotId)
 	proposal.Move = bestMove
+	proposal.Signature = bestMove.GetSignature()
 	proposal.OnClose = func(reason common.EnqueueResult) {
 		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
 		klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "SoftSolver").Log("ProposalClosed", "")

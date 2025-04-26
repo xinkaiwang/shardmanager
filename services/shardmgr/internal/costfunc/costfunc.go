@@ -36,9 +36,6 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) { // each shard
 			dict := make(map[data.WorkerFullId]common.Unit)  // for H3
 			for replicaId, replica := range shard.Replicas { // each replica
-				if replica.LameDuck {
-					continue
-				}
 				// this replica is assigned?
 				replicaHasAssignment := false
 				replicaHasHealthyAssignment := false // this replica is assigned to a healthy (not daining) worker
@@ -62,6 +59,9 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 							replicaHasHealthyAssignment = true
 						}
 					}
+				}
+				if replica.LameDuck {
+					continue
 				}
 				if !replicaHasAssignment {
 					hard += 2 // H1

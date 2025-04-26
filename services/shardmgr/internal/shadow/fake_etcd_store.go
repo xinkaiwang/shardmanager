@@ -27,6 +27,10 @@ func (store *FakeEtcdStore) GetByKey(key string) string {
 	return store.data[key]
 }
 
+func (store *FakeEtcdStore) Shutdown(ctx context.Context) {
+	klogging.Info(context.Background()).Log("FakeEtcdStore.Shutdown", "关闭FakeEtcdStore")
+}
+
 // Put implements EtcdStore.Put
 func (store *FakeEtcdStore) Put(ctx context.Context, key string, value string, name string) {
 

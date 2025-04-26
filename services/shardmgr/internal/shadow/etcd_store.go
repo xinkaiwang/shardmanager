@@ -123,6 +123,7 @@ func RunWithEtcdStore(store EtcdStore, fn func()) {
 type EtcdStore interface {
 	// Put: put key-value pair to etcd. name is used for logging/metrics purposes only
 	Put(ctx context.Context, key string, value string, name string)
+	Shutdown(ctx context.Context)
 }
 
 type KvItem struct {
@@ -165,6 +166,11 @@ func (store *BufferedEtcdStore) Put(ctx context.Context, key string, value strin
 // BufferedEtcdStore implements CriticalResource
 func (store *BufferedEtcdStore) IsResource() {}
 
+func (store *BufferedEtcdStore) Shutdown(ctx context.Context) {
+	klogging.Info(ctx).Log("BufferedEtcdStoreShutdown", "关闭BufferedEtcdStore")
+	store.runloop.StopAndWaitForExit()
+}
+
 // WriteEvent implements IEvent[*BufferedEtcdStore]
 type WriteEvent struct {
 	Key   string
@@ -201,8 +207,10 @@ func (eve *WriteEvent) Process(ctx context.Context, resource *BufferedEtcdStore)
 func ResetEtcdStore() {
 	storeMutex.Lock()
 	defer storeMutex.Unlock()
-
-	currentEtcdStore = nil
+	if currentEtcdStore != nil {
+		currentEtcdStore.Shutdown(context.Background())
+		currentEtcdStore = nil
+	}
 	storeCreationCount = 0
 	storeAccessCount = 0
 	storeLastAccessCaller = ""

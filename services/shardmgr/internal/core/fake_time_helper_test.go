@@ -25,6 +25,23 @@ func resetGlobalState(_ *testing.T) {
 	etcdprov.ResetEtcdProvider()
 }
 
+// Cleanup 清理测试资源，关闭所有相关goroutine
+func (setup *FakeTimeTestSetup) Cleanup() {
+	// 关闭ServiceState及其相关资源
+	if setup.ServiceState != nil {
+		klogging.Info(context.Background()).Log("TestCleanup", "关闭ServiceState和相关资源")
+
+		// 停止ServiceState
+		setup.ServiceState.StopAndWaitForExit(context.Background())
+	}
+
+	// 确保所有的etcd相关资源都被释放
+	shadow.ResetEtcdStore()
+	etcdprov.ResetEtcdProvider()
+
+	klogging.Info(context.Background()).Log("TestCleanup", "清理完成")
+}
+
 /******************************* SnapshotListener *******************************/
 // FakeSnapshotListener implements solver.SnapshotListener
 type FakeSnapshotListener struct {
@@ -110,10 +127,14 @@ func (setup *FakeTimeTestSetup) SetShardPlan(ctx context.Context, shardPlan []st
 // }
 
 func (setup *FakeTimeTestSetup) RunWith(fn func()) {
+	// 确保测试结束时清理资源
+	defer setup.Cleanup()
+
 	etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
 		shadow.RunWithEtcdStore(setup.FakeStore, func() {
 			kcommon.RunWithTimeProvider(setup.FakeTime, func() {
 				fn()
+				setup.FakeTime.VirtualTimeForward(setup.ctx, 1000)
 			})
 		})
 	})

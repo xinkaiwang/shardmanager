@@ -225,6 +225,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
 		}
 
+		// force print log
+		// assert.Equal(t, true, false, "force print log")
 	}
 
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
