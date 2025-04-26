@@ -6,6 +6,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -15,6 +16,7 @@ import (
 // this will modify AllShards, and call FlushShardState
 func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 	shardPlan := ss.stagingShardPlan
+	var passiveMoves []costfunc.PassiveMove
 
 	// compare with current shard state
 	needRemove := map[data.ShardId]*ShardState{}
@@ -45,6 +47,7 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 			shardState.ReEvaluateReplicaCount()
 			ss.AllShards[shardState.ShardId] = shardState
 			inserted = append(inserted, shardState.ShardId)
+			passiveMoves = append(passiveMoves, costfunc.NewShardStateChange(shardState.ShardId, true))
 		}
 	}
 	// remove shard if not in shardPlan
@@ -59,6 +62,9 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 	if dirty != 0 {
 		ss.FlushShardState(ctx, updated, inserted, deleted)
 		ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
+	}
+	for _, passiveMove := range passiveMoves {
+		ss.snapshotOperationManager.TrySchedule(ctx, passiveMove.Apply, passiveMove.Signature())
 	}
 }
 

@@ -146,18 +146,19 @@ func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.Sh
 
 func (ss *ServiceState) ReCreateSnapshot(ctx context.Context, reason string) {
 	ss.SetSnapshotCurrent(ctx, ss.CreateSnapshotFromCurrentState(ctx), "ReCreateSnapshot")
-	ss.SnapshotFuture = ss.GetSnapshotCurrent().Clone()
+	snapshotFuture := ss.GetSnapshotCurrent().Clone()
 	// apply all panding moves
 	for _, minion := range ss.AllMoves {
-		minion.moveState.ApplyRemainingActions(ss.SnapshotFuture, costfunc.AM_Relaxed)
+		minion.moveState.ApplyRemainingActions(snapshotFuture, costfunc.AM_Relaxed)
 	}
-	ss.SnapshotFuture.Freeze()
+	snapshotFuture.Freeze()
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, reason)
-		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup.OnSnapshot")
+		ss.SolverGroup.OnSnapshot(ctx, snapshotFuture, reason)
+		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup.OnSnapshot")
 	} else {
-		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup is nil, skip OnSnapshot")
 	}
+	ss.SetSnapshotFuture(ctx, snapshotFuture, "ReCreateSnapshot")
 }
 
 func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *costfunc.Snapshot {

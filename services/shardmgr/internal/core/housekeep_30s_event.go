@@ -45,12 +45,12 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	if len(diffs) > 0 {
 		klogging.Fatal(ctx).With("diffs", diffs).With("current", ss.SnapshotCurrent.ToJsonString()).With("newCurrent", newSnapshotCurrent.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
 	}
-	diffs = compareSnapshot(ctx, ss.SnapshotFuture, newSnapshotFuture)
+	diffs = compareSnapshot(ctx, ss.GetSnapshotFuture(), newSnapshotFuture)
 	if len(diffs) > 0 {
-		klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.SnapshotFuture.ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+		klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFuture().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
 	}
 	ss.SetSnapshotCurrent(ctx, newSnapshotCurrent, "annualCheckSnapshot")
-	ss.SnapshotFuture = newSnapshotFuture.Freeze()
+	ss.SetSnapshotFuture(ctx, newSnapshotFuture.Freeze(), "annualCheckSnapshot")
 	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString()).With("future", newSnapshotFuture.ToShortString()).Log("annualCheckSnapshot", "done")
 }
 
@@ -65,9 +65,9 @@ func compareSnapshot(ctx context.Context, snap1 *costfunc.Snapshot, snap2 *costf
 
 func (ss *ServiceState) broadcastSnapshot(ctx context.Context, reason string) {
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, reason)
-		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
+		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFuture(), reason)
+		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFuture().ToShortString()).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
 	} else {
-		klogging.Info(ctx).With("snapshot", ss.SnapshotFuture.ToShortString()).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFuture().ToShortString()).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
 	}
 }

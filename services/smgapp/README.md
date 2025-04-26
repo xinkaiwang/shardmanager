@@ -20,6 +20,8 @@ export METRICS_PORT=9090
 ```
 <succ>
 curl localhost:8080/api/ping
-<fail>
+<fail "shardIdEmpty">
 curl localhost:8080/smg/ping
+<fail ">
+curl localhost:8080/smg/ping -H "X-Shard-Id: shard_1"
 ```

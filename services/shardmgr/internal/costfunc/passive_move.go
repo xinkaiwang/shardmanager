@@ -1,6 +1,8 @@
 package costfunc
 
 import (
+	"strconv"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -18,7 +20,7 @@ const (
 // PassiveMove: something that has already happened. We need to update the system state to reflect that. for example, a worker has been deleted or added.
 // This is different from the active move, which is something we can choose to do or not. For instance, we can choose to assign a shard to a worker or not.
 type PassiveMove interface {
-	Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot
+	Apply(snapshot *Snapshot)
 	Signature() string // for debugging/logging/metrics purpose only
 }
 
@@ -33,18 +35,14 @@ func NewWorkerDelete(workerId data.WorkerFullId) *WorkerDelete {
 	}
 }
 
-func (move *WorkerDelete) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
+func (move *WorkerDelete) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
 		ke := kerror.Create("WorkerDeleteApplyFailed", "snapshot is frozen")
 		panic(ke)
 	}
 	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
 	if !ok {
-		if mode == AM_Strict {
-			ke := kerror.Create("WorkerGoneApplyFailed", "worker not found in snapshot")
-			panic(ke)
-		}
-		return snapshot
+		return
 	}
 	// delete all assignments
 	for _, assignment := range workerSnap.Assignments {
@@ -52,7 +50,6 @@ func (move *WorkerDelete) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
 	}
 	// delete worker
 	snapshot.AllWorkers.Delete(move.WorkerId)
-	return snapshot
 }
 
 func (move *WorkerDelete) Signature() string {
@@ -103,14 +100,10 @@ func NewWorkerStateChange(workerId data.WorkerFullId, newState data.WorkerStateE
 	}
 }
 
-func (move *WorkerStateChange) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
+func (move *WorkerStateChange) Apply(snapshot *Snapshot) {
 	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
 	if !ok {
-		if mode == AM_Strict {
-			ke := kerror.Create("WorkerStateChangeFailed", "worker not found in snapshot")
-			panic(ke)
-		}
-		return snapshot
+		return
 	}
 	if move.NewState == data.WS_Deleted || move.NewState == data.WS_Offline_dead {
 		// delete all assignments (rare case)
@@ -127,13 +120,89 @@ func (move *WorkerStateChange) Apply(snapshot *Snapshot, mode ApplyMode) *Snapsh
 		}
 		// delete worker
 		snapshot.AllWorkers.Delete(move.WorkerId)
-		return snapshot
+		return
 	}
 	workerSnap.Draining = move.Draining
-
-	return snapshot
 }
 
 func (move *WorkerStateChange) Signature() string {
 	return "WorkerStateChange: " + move.WorkerId.String() + " -> " + string(move.NewState)
+}
+
+// ShardStateChange implements PassiveMove
+type ShardStateChange struct {
+	ShardId  data.ShardId
+	NewState bool // true: add, false: delete
+}
+
+func NewShardStateChange(shardId data.ShardId, newState bool) *ShardStateChange {
+	return &ShardStateChange{
+		ShardId:  shardId,
+		NewState: newState,
+	}
+}
+
+func (move *ShardStateChange) Apply(snapshot *Snapshot) {
+	if snapshot.Frozen {
+		ke := kerror.Create("ShardStateChangeApplyFailed", "snapshot is frozen")
+		panic(ke)
+	}
+	_, ok := snapshot.AllShards.Get(move.ShardId)
+	if move.NewState {
+		if ok {
+			return
+		}
+		snapshot.AllShards.Set(move.ShardId, NewShardSnap(move.ShardId))
+	} else {
+		if !ok {
+			return
+		}
+		snapshot.AllShards.Delete(move.ShardId)
+	}
+}
+
+func (move *ShardStateChange) Signature() string {
+	return "ShardStateChange: " + string(move.ShardId) + " -> " + strconv.FormatBool(move.NewState)
+}
+
+// ReplicaStateChange implements PassiveMove
+type ReplicaStateChange struct {
+	ShardId    data.ShardId
+	ReplicaIdx data.ReplicaIdx
+	NewState   bool // true: add, false: delete
+}
+
+func NewReplicaStateChange(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaStateChange {
+	return &ReplicaStateChange{
+		ShardId:    shardId,
+		ReplicaIdx: replicaIdx,
+		NewState:   newState,
+	}
+}
+
+func (move *ReplicaStateChange) Apply(snapshot *Snapshot) {
+	if snapshot.Frozen {
+		ke := kerror.Create("ReplicaStateChangeApplyFailed", "snapshot is frozen")
+		panic(ke)
+	}
+	shardSnap, ok := snapshot.AllShards.Get(move.ShardId)
+	if !ok {
+		ke := kerror.Create("ReplicaStateChangeApplyFailed", "shard not found in snapshot")
+		panic(ke)
+	}
+	shardSnap = shardSnap.Clone()
+	snapshot.AllShards.Set(move.ShardId, shardSnap)
+	_, ok = shardSnap.Replicas[move.ReplicaIdx]
+	if move.NewState {
+		if ok {
+			return
+		}
+		replicaSnap := NewReplicaSnap(move.ShardId, move.ReplicaIdx)
+		shardSnap.Replicas[move.ReplicaIdx] = replicaSnap
+	} else {
+		if !ok {
+			return
+		}
+		delete(shardSnap.Replicas, move.ReplicaIdx)
+	}
 }

@@ -319,12 +319,9 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		ws.signalAll(ctx, "onEphNodeUpdate:"+reason)
 	}
 	if len(passiveMoves) > 0 {
-		ss.snapshotOperationManager.TrySchedule(ctx, func(snapshot *costfunc.Snapshot) {
-			for _, move := range passiveMoves {
-				move.Apply(snapshot, costfunc.AM_Strict)
-			}
-		}, "ApplyPassiveMove")
-		// ss.ApplyPassiveMove(ctx, passiveMoves, costfunc.AM_Strict)
+		for _, move := range passiveMoves {
+			ss.snapshotOperationManager.TrySchedule(ctx, move.Apply, "ApplyPassiveMove")
+		}
 	}
 	return dirtyFlag
 }
@@ -474,9 +471,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		}
 	}
 	for _, move := range passiveMoves {
-		ss.snapshotOperationManager.TrySchedule(ctx, func(snapshot *costfunc.Snapshot) {
-			move.Apply(snapshot, costfunc.AM_Relaxed)
-		}, "ApplyPassiveMove")
+		ss.snapshotOperationManager.TrySchedule(ctx, move.Apply, "ApplyPassiveMove")
 	}
 	return
 }

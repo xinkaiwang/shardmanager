@@ -45,14 +45,14 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		}
 		proposal := ss.ProposalQueue.Pop()
 		// check 1: is proposal.BasedOn is up to date?
-		if proposal.BasedOn != ss.SnapshotFuture.SnapshotId {
+		if proposal.BasedOn != ss.GetSnapshotFuture().SnapshotId {
 			// re-evaluate the proposal gain (based on the new snapshot)
 			ke := kcommon.TryCatchRun(ctx, func() {
-				currentCost := ss.SnapshotFuture.GetCost()
-				newCost := ss.SnapshotFuture.Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
+				currentCost := ss.GetSnapshotFuture().GetCost()
+				newCost := ss.GetSnapshotFuture().Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
 				gain := currentCost.Substract(newCost)
 				proposal.Gain = gain
-				proposal.BasedOn = ss.SnapshotFuture.SnapshotId
+				proposal.BasedOn = ss.GetSnapshotFuture().SnapshotId
 				// add this proposal back to the queue again
 				ss.ProposalQueue.Push(proposal)
 			})
@@ -85,7 +85,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	}
 	// ss.AcceptedCount += len(accpeted)
 	if len(accpeted) > 0 {
-		future := ss.SnapshotFuture
+		future := ss.GetSnapshotFuture()
 		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost().String()).Log("AcceptEvent", "broadcastSnapshot")
 		ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
 	}
@@ -107,9 +107,9 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 
 	// apply this move to future snapshot
 	ke := kcommon.TryCatchRun(ctx, func() {
-		newFuture := ss.SnapshotFuture.Clone()
+		newFuture := ss.GetSnapshotFuture().Clone()
 		newFuture.ApplyMove(proposal.Move, costfunc.AM_Strict)
-		ss.SnapshotFuture = newFuture.Freeze()
+		ss.SetSnapshotFuture(ctx, newFuture.Freeze(), "DoAcceptProposal")
 	})
 	if ke != nil {
 		// this should not happen, but just in case
