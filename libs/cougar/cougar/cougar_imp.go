@@ -123,6 +123,7 @@ func (c *CougarImpl) watchPilotNode(ctx context.Context, ch <-chan etcdprov.Etcd
 				klogging.Warning(ctx).With("pilot_path", c.pilotPath()).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).Log("PilotNodeFeleted", "pilot node deleted")
 				continue
 			}
+			klogging.Info(ctx).With("pilot_path", c.pilotPath()).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).With("pilot", eve.Value).With("rev", eve.ModRevision).Log("PilotNodeUpdated", "pilot node updated")
 			newPilotNode := cougarjson.ParsePilotNodeJson(eve.Value)
 			if newPilotNode == nil {
 				klogging.Warning(ctx).With("pilot_path", c.pilotPath()).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).Log("PilotNodeInvalid", "pilot node is not valid")
@@ -257,6 +258,11 @@ func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) 
 				return "shardAdded"
 			})
 		}(shardInfo)
+	}
+	// shutdown permit?
+	if eve.newPilotNode.ShutdownPermited == 1 && !impl.cougarState.IsShutdownPermited() {
+		klogging.Info(ctx).With("worker_id", impl.workerInfo.WorkerId).With("session_id", impl.workerInfo.SessionId).Log("ShutdownPermited", "shutdown permited")
+		close(impl.cougarState.ShutdownPermited)
 	}
 }
 
