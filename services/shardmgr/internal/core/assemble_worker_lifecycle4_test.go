@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
-	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 )
 
 func TestAssembleWorkerLifeCycle4(t *testing.T) {

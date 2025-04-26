@@ -6,11 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
-	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 )
 
 // TestWorkerGracePeriodExpiration 测试 worker 优雅期过期后的状态变化

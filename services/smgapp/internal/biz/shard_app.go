@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougar"
-	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarapp"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -27,7 +26,7 @@ func NewMyCougarApp() *MyCougarApp {
 }
 
 // AddShard implements cougarapp.CougarApp interface
-func (app *MyCougarApp) AddShard(ctx context.Context, shardInfo *cougar.ShardInfo) cougarapp.AppShard {
+func (app *MyCougarApp) AddShard(ctx context.Context, shardInfo *cougar.ShardInfo, chDone chan struct{}) cougar.AppShard {
 	klogging.Info(ctx).With("shardId", shardInfo.ShardId).Log("MyCougarApp", "AddShard")
 	shard := &MyAppShard{
 		shardInfo: shardInfo,
@@ -35,6 +34,7 @@ func (app *MyCougarApp) AddShard(ctx context.Context, shardInfo *cougar.ShardInf
 	app.Mu.Lock()
 	defer app.Mu.Unlock()
 	app.Shards[shardInfo.ShardId] = shard
+	close(chDone)
 	return shard
 }
 
@@ -76,8 +76,9 @@ func NewAppShard(shardInfo *cougar.ShardInfo) *MyAppShard {
 	}
 }
 
-func (shard *MyAppShard) IsReady(ctx context.Context) bool {
-	return true // TODO: implement this
+func (shard *MyAppShard) UpdateShard(ctx context.Context, shardInfo *cougar.ShardInfo) {
+	klogging.Info(ctx).With("shardId", shardInfo.ShardId).Log("MyAppShard", "UpdateShard")
+	shard.shardInfo = shardInfo
 }
 
 func (shard *MyAppShard) GetShardQpm(ctx context.Context) int64 {

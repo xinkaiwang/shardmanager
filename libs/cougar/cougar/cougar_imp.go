@@ -18,21 +18,23 @@ import (
 type CougarImpl struct {
 	etcdEndpoint string
 	etcdSession  etcdprov.EtcdSession
-	notifyChange NotifyChangeFunc
-	workerInfo   *WorkerInfo
-	reqShutDown  bool
-	cougarState  *CougarState
-	runLoop      *krunloop.RunLoop[*CougarImpl]
+	// notifyChange NotifyChangeFunc
+	workerInfo  *WorkerInfo
+	cougarState *CougarState
+	runLoop     *krunloop.RunLoop[*CougarImpl]
+
+	cougarApp CougarApp
 }
 
-func NewCougarImpl(ctx context.Context, etcdEndpoint string, notifyChange NotifyChangeFunc, workerInfo *WorkerInfo) *CougarImpl {
+func NewCougarImpl(ctx context.Context, etcdEndpoint string, workerInfo *WorkerInfo, app CougarApp) *CougarImpl {
 	etcdSession := etcdprov.GetCurrentEtcdProvider(ctx).CreateEtcdSession(ctx)
 	cougarImp := &CougarImpl{
 		etcdEndpoint: etcdEndpoint,
 		etcdSession:  etcdSession,
-		notifyChange: notifyChange,
-		workerInfo:   workerInfo,
-		cougarState:  NewCougarStates(),
+		// notifyChange: notifyChange,
+		workerInfo:  workerInfo,
+		cougarState: NewCougarStates(),
+		cougarApp:   app,
 	}
 	cougarImp.runLoop = krunloop.NewRunLoop(ctx, cougarImp, "cougar")
 	go cougarImp.runLoop.Run(ctx)
@@ -64,16 +66,32 @@ func (c *CougarImpl) VisitState(visitor CougarStateVisitor) {
 	c.runLoop.PostEvent(eve)
 }
 
-// implements Cougar interface
-func (c *CougarImpl) RequestShutdown() {
+func (c *CougarImpl) VisitStateAndWait(visitor CougarStateVisitor) {
+	// create a channel to wait for the event to finish
+	ch := make(chan struct{})
 	eve := NewCougarVisitEvent(func(cougarImpl *CougarImpl) {
-		cougarImpl.reqShutDown = true
-		// update eph node
-		ephNode := cougarImpl.ToEphNode("requestShutdown")
-		ephPath := cougarImpl.ephPath()
-		cougarImpl.etcdSession.PutNode(ephPath, ephNode.ToJson())
+		result := visitor(cougarImpl.cougarState)
+		if result != "" {
+			// update eph node
+			ephNode := cougarImpl.ToEphNode(result)
+			ephPath := cougarImpl.ephPath()
+			cougarImpl.etcdSession.PutNode(ephPath, ephNode.ToJson())
+		}
+		close(ch)
 	})
 	c.runLoop.PostEvent(eve)
+	<-ch
+}
+
+// implements Cougar interface
+func (c *CougarImpl) RequestShutdown() chan struct{} {
+	var ch chan struct{}
+	c.VisitStateAndWait(func(state *CougarState) string {
+		state.ShutDownRequest = true
+		ch = state.ShutdownPermited
+		return "requestShutdown"
+	})
+	return ch
 }
 
 // etcd path is "/smg/eph/{worker_id}:{session_id}"
@@ -127,7 +145,7 @@ func (c *CougarImpl) ToEphNode(updateReason string) *cougarjson.WorkerEphJson {
 	ephNode.StatefulType = c.workerInfo.StatefulType
 	ephNode.LastUpdateAtMs = kcommon.GetWallTimeMs()
 	ephNode.LastUpdateReason = updateReason
-	ephNode.ReqShutDown = kcommon.BoolToInt8(c.reqShutDown)
+	ephNode.ReqShutDown = kcommon.BoolToInt8(c.cougarState.ShutDownRequest)
 	for shardId, shard := range c.cougarState.AllShards {
 		ephNode.Assignments = append(ephNode.Assignments, &cougarjson.AssignmentJson{
 			ShardId:      string(shardId),
@@ -177,15 +195,15 @@ func (c *PilotNodeUpdateEvent) GetName() string {
 }
 
 // Process implements krunloop.IEvent interface
-func (c *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) {
+func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) {
 	oldShards := map[data.ShardId]*ShardInfo{}
 	for shardId, shard := range impl.cougarState.AllShards {
 		oldShards[shardId] = shard
 	}
-	var needRemove []data.ShardId
+	// var needRemove []data.ShardId
 	var needUpdate []*cougarjson.PilotAssignmentJson
 	var needAdd []*cougarjson.PilotAssignmentJson
-	newAssignments := c.newPilotNode.Assignments
+	newAssignments := eve.newPilotNode.Assignments
 	// compare old and new assignments
 	for _, newAssignment := range newAssignments {
 		oldAssignment, ok := oldShards[data.ShardId(newAssignment.ShardId)]
@@ -202,38 +220,43 @@ func (c *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) {
 		needAdd = append(needAdd, newAssignment)
 	}
 	// remove remaining assignments
-	for shardId := range oldShards {
-		needRemove = append(needRemove, shardId)
+	for shardId, shardInfo := range oldShards {
+		// callback
+		impl.cougarApp.DropShard(ctx, shardId, shardInfo.ChDropped)
+		go func(shardInfo *ShardInfo) {
+			// wait for callback
+			<-shardInfo.ChDropped
+			impl.VisitState(func(state *CougarState) string {
+				delete(state.AllShards, shardInfo.ShardId)
+				return "shardDropped"
+			})
+		}(shardInfo)
 	}
 
 	// update state
 	for _, newAssignment := range needUpdate {
-		oldAssignment := impl.cougarState.AllShards[data.ShardId(newAssignment.ShardId)]
-		oldAssignment.CurrentConfirmedState = newAssignment.State
-		oldAssignment.Properties = newAssignment.CustomProperties
-	}
-	// remove old assignments
-	for _, shardId := range needRemove {
-		delete(impl.cougarState.AllShards, shardId)
+		shardInfo := impl.cougarState.AllShards[data.ShardId(newAssignment.ShardId)]
+		shardInfo.CurrentConfirmedState = newAssignment.State
+		shardInfo.Properties = newAssignment.CustomProperties
+		// callback
+		shardInfo.AppShard.UpdateShard(ctx, shardInfo)
 	}
 	// add new assignments
 	for _, newAssignment := range needAdd {
-		newShard := NewCougarShard(data.ShardId(newAssignment.ShardId), data.ReplicaIdx(newAssignment.ReplicaIdx), data.AssignmentId(newAssignment.AsginmentId))
-		newShard.CurrentConfirmedState = newAssignment.State
-		newShard.Properties = newAssignment.CustomProperties
-		impl.cougarState.AllShards[data.ShardId(newAssignment.ShardId)] = newShard
-	}
-	// notify change
-	if impl.notifyChange != nil {
-		for _, newAssignment := range needAdd {
-			impl.notifyChange(data.ShardId(newAssignment.ShardId), CA_AddShard)
-		}
-		for _, shardId := range needRemove {
-			impl.notifyChange(shardId, CA_RemoveShard)
-		}
-		for _, newAssignment := range needUpdate {
-			impl.notifyChange(data.ShardId(newAssignment.ShardId), CA_UpdateShard)
-		}
+		shardInfo := NewCougarShardInfo(data.ShardId(newAssignment.ShardId), data.ReplicaIdx(newAssignment.ReplicaIdx), data.AssignmentId(newAssignment.AsginmentId))
+		shardInfo.CurrentConfirmedState = newAssignment.State
+		shardInfo.Properties = newAssignment.CustomProperties
+		// callback
+		shardInfo.AppShard = impl.cougarApp.AddShard(ctx, shardInfo, shardInfo.ChReady)
+		impl.cougarState.AllShards[data.ShardId(newAssignment.ShardId)] = shardInfo
+		go func(shardInfo *ShardInfo) {
+			// wait for callback
+			<-shardInfo.ChReady
+			impl.VisitState(func(state *CougarState) string {
+				shardInfo.CurrentConfirmedState = cougarjson.CAS_Ready
+				return "shardAdded"
+			})
+		}(shardInfo)
 	}
 }
 

@@ -66,6 +66,7 @@ func NewWorkerState(ss *ServiceState, workerId data.WorkerId, sessionId data.Ses
 
 func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerStateJson) *WorkerState {
 	workerState := &WorkerState{
+		parent:      ss,
 		WorkerId:    workerStateJson.WorkerId,
 		SessionId:   workerStateJson.SessionId,
 		State:       workerStateJson.WorkerState,

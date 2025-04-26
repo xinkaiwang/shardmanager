@@ -12,6 +12,10 @@ import (
 	"time"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougar"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/ksysmetrics"
@@ -35,6 +39,17 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
+/*
+export POD_IP=127.0.0.1
+export POD_NAME=worker-1
+export SMG_CAPACITY=1000
+export SMG_STORAGE_SIZE_MB=8000
+export API_PORT=8082
+export METRICS_PORT=9092
+export LOG_LEVEL=info
+export LOG_FORMAT=json
+./bin/smgapp
+*/
 func main() {
 	ctx := context.Background()
 	// 从环境变量读取日志配置
@@ -86,9 +101,24 @@ func main() {
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", pe)
 
+	// workerInfo
+	workerName := os.Getenv("POD_NAME")
+	if workerName == "" {
+		ke := kerror.Create("POD_NAME not set", "")
+		panic(ke)
+	}
+	sessionId := kcommon.RandomString(ctx, 8)
+	address := os.Getenv("POD_IP")
+	capacity := getEnvInt("SMG_CAPACITY", 1000)
+	memorySize := getEnvInt("SMG_STORAGE_SIZE_MB", 8*1000)
+	addrPort := fmt.Sprintf("%s:%d", address, apiPort)
+	workerInfo := cougar.NewWorkerInfo(data.WorkerId(workerName), data.SessionId(sessionId), addrPort, kcommon.GetWallTimeMs(), int32(capacity), int32(memorySize), nil, data.ST_MEMORY)
+	klogging.Info(ctx).With("workerId", workerInfo.WorkerId).With("sessionId", workerInfo.SessionId).With("addressPort", workerInfo.AddressPort).Log("WorkerInfo", "Worker info created")
+
 	// 创建主路由
 	app := biz.NewApp()
 	cougarApp := biz.NewMyCougarApp()
+	cougar := cougar.NewCougarBuilder().WithCougarApp(cougarApp).WithWorkerInfo(workerInfo).Build(ctx)
 	h := handler.NewHandler(app, cougarApp)
 	mainMux := http.NewServeMux()
 	h.RegisterRoutes(mainMux)
@@ -118,6 +148,14 @@ func main() {
 		<-sigChan
 
 		klogging.Info(ctx).Log("ServerShutdown", "Shutting down servers...")
+		// shutdown request
+		chDone := cougar.RequestShutdown()
+		klogging.Info(ctx).Log("ServerShutdown", "Waiting for shutdown permit")
+		start := kcommon.GetWallTimeMs()
+		<-chDone
+		elapsed := kcommon.GetWallTimeMs() - start
+		klogging.Info(ctx).With("elapsedMs", elapsed).Log("ServerShutdown", "Shutdown permit received")
+
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 

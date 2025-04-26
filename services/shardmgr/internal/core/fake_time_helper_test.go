@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
@@ -16,7 +17,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
-	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 )
 
 // 确保全局状态在每个测试之前被正确重置

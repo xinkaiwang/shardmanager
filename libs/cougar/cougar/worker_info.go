@@ -1,6 +1,11 @@
 package cougar
 
-import "github.com/xinkaiwang/shardmanager/libs/unicorn/data"
+import (
+	"encoding/json"
+
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+)
 
 type WorkerInfo struct {
 	// WorkerId 是工作节点的唯一标识符, 通常是 hostname，也就是 pod name
@@ -37,4 +42,13 @@ func NewWorkerInfo(workerId data.WorkerId, sessionId data.SessionId, addressPort
 		Properties:   properties,
 		StatefulType: statefulType,
 	}
+}
+
+func (w *WorkerInfo) ToJson() string {
+	data, err := json.Marshal(w)
+	if err != nil {
+		ke := kerror.Wrap(err, "MarshalError", "failed to marshal WorkerInfo", false)
+		panic(ke)
+	}
+	return string(data)
 }

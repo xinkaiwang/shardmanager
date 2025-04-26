@@ -2,6 +2,15 @@
 
 etcdmgr 是一个用于管理和监控 etcd 键值对的 Web 应用程序。它提供了直观的用户界面和 RESTful API，使您能够轻松地查看、编辑和管理 etcd 中的数据。
 
+```
+export API_PORT=8089
+export METRICS_PORT=9099
+export LOG_LEVEL=info
+export LOG_FORMAT=simple
+export ETCD_ENDPOINTS=localhost:2379
+./bin/etcdmgr
+```
+
 ## 功能特性
 
 - 🌐 现代化的 Web 界面

@@ -8,8 +8,8 @@ import (
 
 type CougarBuilder struct {
 	etcdEndpoint string
-	notifyChange NotifyChangeFunc
 	workerInfo   *WorkerInfo
+	cougarApp    CougarApp
 }
 
 func NewCougarBuilder() *CougarBuilder {
@@ -17,7 +17,7 @@ func NewCougarBuilder() *CougarBuilder {
 }
 
 func (b *CougarBuilder) Build(ctx context.Context) Cougar {
-	return NewCougarImpl(ctx, b.etcdEndpoint, b.notifyChange, b.workerInfo)
+	return NewCougarImpl(ctx, b.etcdEndpoint, b.workerInfo, b.cougarApp)
 }
 
 func (b *CougarBuilder) WithEtcdEndpoint(etcdEndpoing string) *CougarBuilder {
@@ -25,12 +25,12 @@ func (b *CougarBuilder) WithEtcdEndpoint(etcdEndpoing string) *CougarBuilder {
 	return b
 }
 
-func (b *CougarBuilder) WithNotifyShardChange(notifyChange NotifyChangeFunc) *CougarBuilder {
-	b.notifyChange = notifyChange
+func (b *CougarBuilder) WithWorkerInfo(workerInfo *WorkerInfo) *CougarBuilder {
+	b.workerInfo = workerInfo
 	return b
 }
 
-func (b *CougarBuilder) WithWorkerInfo(workerInfo *WorkerInfo) *CougarBuilder {
-	b.workerInfo = workerInfo
+func (b *CougarBuilder) WithCougarApp(cougarApp CougarApp) *CougarBuilder {
+	b.cougarApp = cougarApp
 	return b
 }
