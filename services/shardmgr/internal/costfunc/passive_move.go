@@ -187,7 +187,7 @@ func (move *ReplicaStateChange) Apply(snapshot *Snapshot) {
 	}
 	shardSnap, ok := snapshot.AllShards.Get(move.ShardId)
 	if !ok {
-		ke := kerror.Create("ReplicaStateChangeApplyFailed", "shard not found in snapshot")
+		ke := kerror.Create("ReplicaStateChangeApplyFailed", "shard not found in snapshot").With("shardId", move.ShardId).With("move", move.Signature())
 		panic(ke)
 	}
 	shardSnap = shardSnap.Clone()
@@ -205,4 +205,8 @@ func (move *ReplicaStateChange) Apply(snapshot *Snapshot) {
 		}
 		delete(shardSnap.Replicas, move.ReplicaIdx)
 	}
+}
+
+func (move *ReplicaStateChange) Signature() string {
+	return "ReplicaStateChange: " + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx)) + " -> " + strconv.FormatBool(move.NewState)
 }

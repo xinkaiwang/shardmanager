@@ -331,7 +331,7 @@ func (snap *Snapshot) Clone() *Snapshot {
 	return clone
 }
 
-func (snap *Snapshot) Freeze() *Snapshot {
+func (snap *Snapshot) Freeze() {
 	if snap.Frozen {
 		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
 		panic(ke)
@@ -340,14 +340,14 @@ func (snap *Snapshot) Freeze() *Snapshot {
 	snap.AllWorkers.Freeze()
 	snap.AllAssignments.Freeze()
 	snap.Frozen = true
-	return snap
 }
 
 func (snap *Snapshot) CompactAndFreeze() *Snapshot {
 	snap.AllShards = snap.AllShards.Compact()
 	snap.AllWorkers = snap.AllWorkers.Compact()
 	snap.AllAssignments = snap.AllAssignments.Compact()
-	return snap.Freeze()
+	snap.Freeze()
+	return snap
 }
 
 func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, workerFullId data.WorkerFullId, mode ApplyMode) {

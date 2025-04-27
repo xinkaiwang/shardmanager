@@ -145,8 +145,9 @@ func (ss *ServiceState) LoadCurrentShardPlan(ctx context.Context) ([]*smgjson.Sh
 }
 
 func (ss *ServiceState) ReCreateSnapshot(ctx context.Context, reason string) {
-	ss.SetSnapshotCurrent(ctx, ss.CreateSnapshotFromCurrentState(ctx), "ReCreateSnapshot")
-	snapshotFuture := ss.GetSnapshotCurrent().Clone()
+	current := ss.CreateSnapshotFromCurrentState(ctx)
+	ss.SnapshotCurrent = current
+	snapshotFuture := current.Clone()
 	// apply all panding moves
 	for _, minion := range ss.AllMoves {
 		minion.moveState.ApplyRemainingActions(snapshotFuture, costfunc.AM_Relaxed)

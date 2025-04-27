@@ -23,7 +23,7 @@ state4: ss=CAS_Ready, currentSnapshot=yes, future=yes
 
 4 -> accept (unassign) -> 5
 
-state5: ss=CAS_Ready, currentSnapshot=yes, future=yes
+state5: ss=CAS_Ready, currentSnapshot=yes, future=no
 
 5 -> minion drop_shard -> 6
 

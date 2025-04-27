@@ -122,11 +122,11 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			// shard is tombstone, delete it
 			delete(ss.AllShards, shard.ShardId)
 			ss.storeProvider.StoreShardState(shard.ShardId, nil)
-			klogging.Info(ctx).With("shardId", shard.ShardId).Log("checkShardTombStone", "delete shardState")
+			klogging.Info(ctx).With("shardId", shard.ShardId).Log("hardDeleteShardState", "delete shardState")
 			// delete from snapshot
 			ss.snapshotOperationManager.TrySchedule(ctx, func(snapshot *costfunc.Snapshot) {
 				snapshot.AllShards.Delete(shard.ShardId)
-			}, "checkShardTombStone")
+			}, "hardDeleteShardState")
 		} else if dirtyFlag.IsDirty() {
 			// shard is dirty, update it
 			shard.LastUpdateTimeMs = kcommon.GetWallTimeMs()

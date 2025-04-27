@@ -109,7 +109,8 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 	ke := kcommon.TryCatchRun(ctx, func() {
 		newFuture := ss.GetSnapshotFuture().Clone()
 		newFuture.ApplyMove(proposal.Move, costfunc.AM_Strict)
-		ss.SetSnapshotFuture(ctx, newFuture.Freeze(), "DoAcceptProposal")
+		newFuture.Freeze()
+		ss.SetSnapshotFuture(ctx, newFuture, "DoAcceptProposal")
 	})
 	if ke != nil {
 		// this should not happen, but just in case

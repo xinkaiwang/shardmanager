@@ -142,10 +142,10 @@ func TestAssembleAssignSolver(t *testing.T) {
 			ok := false
 			var reason string
 			setup.safeAccessServiceState(func(ss *ServiceState) {
-				if ss.GetSnapshotCurrent() == nil {
+				if ss.GetSnapshotCurrentForAny() == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotCurrent().GetCost()
+				cost := ss.GetSnapshotCurrentForAny().GetCost()
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}

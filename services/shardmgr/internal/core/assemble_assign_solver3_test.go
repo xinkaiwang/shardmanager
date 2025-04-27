@@ -145,10 +145,10 @@ func TestAssembleAssignSolver3(t *testing.T) {
 			ok := false
 			var reason string
 			setup.safeAccessServiceState(func(ss *ServiceState) {
-				if ss.GetSnapshotCurrent() == nil {
+				if ss.GetSnapshotCurrentForAny() == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotCurrent().GetCost()
+				cost := ss.GetSnapshotCurrentForAny().GetCost()
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}
@@ -165,7 +165,7 @@ func TestAssembleAssignSolver3(t *testing.T) {
 			var cost costfunc.Cost
 			setup.safeAccessServiceState(func(ss *ServiceState) {
 				acceptCount = ss.AcceptedCount
-				cost = ss.GetSnapshotCurrent().GetCost()
+				cost = ss.GetSnapshotCurrentForAny().GetCost()
 			})
 			assert.Equal(t, 1, acceptCount, "应该有1个接受的提议")
 			assert.Equal(t, 2, int(cost.HardScore), "快照不正确") // 1个分片, 2个副本, 1个副本没有分配

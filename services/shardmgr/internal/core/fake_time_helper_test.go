@@ -424,7 +424,7 @@ func (setup *FakeTimeTestSetup) WaitUntilSnapshotCurrent(t *testing.T, fn func(s
 		result := false
 		reason := ""
 		setup.safeAccessServiceState(func(ss *ServiceState) {
-			result, reason = fn(setup.ServiceState.GetSnapshotCurrent())
+			result, reason = fn(setup.ServiceState.GetSnapshotCurrentForAny())
 		})
 		return result, reason
 	}, maxWaitMs, intervalMs)

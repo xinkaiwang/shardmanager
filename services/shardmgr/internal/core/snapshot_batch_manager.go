@@ -25,13 +25,12 @@ func (som *SnapshotOperationManager) onCallback(ctx context.Context, ss *Service
 	if len(som.operations) == 0 {
 		return
 	}
-	current := ss.GetSnapshotCurrent().Clone()
+	current := ss.GetSnapshotCurrentForModify()
 	future := ss.GetSnapshotFuture().Clone()
 	for _, operation := range som.operations {
 		operation(current)
 		operation(future)
 	}
-	ss.SetSnapshotCurrent(ctx, current.CompactAndFreeze(), "SnapshotOperationManager")
 	ss.SetSnapshotFuture(ctx, future.CompactAndFreeze(), "SnapshotOperationManager")
 	som.operations = nil
 	ss.broadcastSnapshot(ctx, "SnapshotOperationManager")
