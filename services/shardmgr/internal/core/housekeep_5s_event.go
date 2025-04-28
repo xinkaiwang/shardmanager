@@ -100,7 +100,6 @@ func (ws *WorkerState) IsWaitingForHat() bool {
 }
 
 func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
-	needBoardCast := false
 	// check shard tombstone
 	for _, shard := range ss.AllShards {
 		dirtyFlag := NewDirtyFlag()
@@ -113,9 +112,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 					// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
 					delete(shard.Replicas, replica.ReplicaIdx)
 					passiveMove := costfunc.NewReplicaStateChange(shard.ShardId, replica.ReplicaIdx, false)
-					ss.ModifySnapshotCurrent(ctx, passiveMove.Apply, "hardDeleteReplica")
-					ss.ModifySnapshotFuture(ctx, passiveMove.Apply, "hardDeleteReplica")
-					needBoardCast = true
+					ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteReplica")
 					dirtyFlag.AddDirtyFlag("hardDeleteReplica:" + string(shard.ShardId) + ":" + strconv.Itoa(int(replica.ReplicaIdx)))
 				}
 			}
@@ -127,9 +124,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			klogging.Info(ctx).With("shardId", shard.ShardId).Log("hardDeleteShardState", "delete shardState")
 			// delete from snapshot
 			passiveMove := costfunc.NewShardStateChange(shard.ShardId, false)
-			ss.ModifySnapshotCurrent(ctx, passiveMove.Apply, "hardDeleteShard")
-			ss.ModifySnapshotFuture(ctx, passiveMove.Apply, "hardDeleteShard")
-			needBoardCast = true
+			ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteShard")
 		} else if dirtyFlag.IsDirty() {
 			// shard is dirty, update it
 			shard.LastUpdateTimeMs = kcommon.GetWallTimeMs()
@@ -138,8 +133,5 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 
 			klogging.Info(ctx).With("shardId", shard.ShardId).With("updateReason", shard.LastUpdateReason).Log("checkShardTombStone", "update shardState")
 		}
-	}
-	if needBoardCast {
-		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, "checkShardTombStone")
 	}
 }

@@ -194,8 +194,7 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 				fn := func(snapshot *costfunc.Snapshot) {
 					snapshot.AllWorkers.Set(workerFullId, workerSnap)
 				}
-				ss.ModifySnapshotCurrent(ctx, fn, "AddWorkerToSnapshot")
-				ss.ModifySnapshotFuture(ctx, fn, "AddWorkerToSnapshot")
+				ss.ModifySnapshot(ctx, fn, "AddWorkerToSnapshot")
 				// dirtyFlag
 				dirtyFlag.AddDirtyFlag("NewWorker:" + workerFullId.String())
 			}
@@ -211,9 +210,6 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 	}
 
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
-	if dirtyFlag.IsDirty() {
-		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, "digestStagingWorkerEph")
-	}
 }
 
 func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
@@ -302,12 +298,8 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	}
 	if len(passiveMoves) > 0 {
 		for _, move := range passiveMoves {
-			ss.ModifySnapshotCurrent(ctx, move.Apply, move.Signature())
-			ss.ModifySnapshotFuture(ctx, move.Apply, move.Signature())
-			// move.Apply(ss.GetSnapshotCurrentForModify(ctx, move.Signature()))
-			// ss.snapshotOperationManager.TrySchedule(ctx, move.Apply, "ApplyPassiveMove")
+			ss.ModifySnapshot(ctx, move.Apply, move.Signature())
 		}
-		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, dirtyFlag.String())
 	}
 	return dirtyFlag
 }
@@ -459,10 +451,8 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, dirty.String())
 	}
 	for _, move := range passiveMoves {
-		ss.ModifySnapshotCurrent(ctx, move.Apply, move.Signature())
-		ss.ModifySnapshotFuture(ctx, move.Apply, move.Signature())
+		ss.ModifySnapshot(ctx, move.Apply, move.Signature())
 	}
-	ss.boardcastSnapshotBatchManager.TrySchedule(ctx, dirty.String())
 
 	return
 }
