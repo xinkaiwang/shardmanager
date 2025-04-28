@@ -54,8 +54,8 @@ type ServiceState struct {
 	WorkerEphWatcher     *WorkerEphWatcher
 	ServiceConfigWatcher *ServiceConfigWatcher
 
-	syncWorkerBatchManager *BatchManager // enqueue when any worker eph changed, dequeue= trigger ss.syncEphStagingToWorkerState()
-	// reCreateSnapshotBatchManager  *BatchManager // enqueue when any workerState/shardState add/remove/etc. dequeue=trigger snapshot recreate
+	syncWorkerBatchManager        *BatchManager // enqueue when any worker eph changed, dequeue= trigger ss.syncEphStagingToWorkerState()
+	reCreateSnapshotBatchManager  *BatchManager // enqueue when any workerState/shardState add/remove/etc. dequeue=trigger snapshot recreate
 	syncShardsBatchManager        *BatchManager // enqueue when 1) shard plan new/changed, 2) shard config changed, etc. dequeue=trigger ss.syncShardPlan()
 	boardcastSnapshotBatchManager *BatchManager // dequeue=trigger snapshot broadcast
 	// snapshotOperationManager      *SnapshotOperationManager // enqueue when any snapshot operation need to apply, dequeue=apply all operations to snapshot as batch, then broadcast snapshot
@@ -81,9 +81,9 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerEphBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.digestStagingWorkerEph(ctx)
 	})
-	// ss.reCreateSnapshotBatchManager = NewBatchManager(ss, 10, "reCreateSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
-	// 	ss.ReCreateSnapshot(ctx, "reCreateSnapshotBatch")
-	// })
+	ss.reCreateSnapshotBatchManager = NewBatchManager(ss, 10, "reCreateSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
+		ss.ReCreateSnapshot(ctx, "reCreateSnapshotBatch")
+	})
 	ss.syncShardsBatchManager = NewBatchManager(ss, 10, "syncShardPlanBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.digestStagingShardPlan(ctx)
 	})
