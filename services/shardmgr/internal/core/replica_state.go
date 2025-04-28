@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -53,4 +55,21 @@ func (rs *ReplicaState) ToJson() *smgjson.ReplicaStateJson {
 
 func (rs *ReplicaState) MarkAsSoftDelete(ctx context.Context) {
 	rs.LameDuck = true
+}
+
+func (rs *ReplicaState) ToSnapshot(ss *ServiceState) *costfunc.ReplicaSnap {
+	obj := costfunc.NewReplicaSnap(rs.ShardId, rs.ReplicaIdx)
+	obj.LameDuck = rs.LameDuck
+	for assignId := range rs.Assignments {
+		assignmentState, ok := ss.AllAssignments[assignId]
+		if !ok {
+			ke := kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", assignId).With("shardId", assignmentState.ShardId).With("replicaIdx", assignmentState.ReplicaIdx).With("workerFullId", assignmentState.WorkerFullId)
+			panic(ke)
+		}
+		if !shouldAssignIncludeInSnapshot(assignmentState, costfunc.ST_Current) {
+			continue
+		}
+		obj.Assignments[assignId] = common.Unit{}
+	}
+	return obj
 }

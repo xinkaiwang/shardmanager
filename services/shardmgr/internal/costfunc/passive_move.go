@@ -131,14 +131,15 @@ func (move *WorkerStateChange) Signature() string {
 
 // ShardStateChange implements PassiveMove
 type ShardStateChange struct {
-	ShardId  data.ShardId
-	NewState bool // true: add, false: delete
+	ShardId   data.ShardId
+	ShardSnap *ShardSnap // nil to delete
+	// NewState  bool // true: add, false: delete
 }
 
-func NewShardStateChange(shardId data.ShardId, newState bool) *ShardStateChange {
+func NewShardStateChange(shardId data.ShardId, newSnap *ShardSnap) *ShardStateChange {
 	return &ShardStateChange{
-		ShardId:  shardId,
-		NewState: newState,
+		ShardId:   shardId,
+		ShardSnap: newSnap,
 	}
 }
 
@@ -147,22 +148,15 @@ func (move *ShardStateChange) Apply(snapshot *Snapshot) {
 		ke := kerror.Create("ShardStateChangeApplyFailed", "snapshot is frozen")
 		panic(ke)
 	}
-	_, ok := snapshot.AllShards.Get(move.ShardId)
-	if move.NewState {
-		if ok {
-			return
-		}
-		snapshot.AllShards.Set(move.ShardId, NewShardSnap(move.ShardId))
+	if move.ShardSnap != nil {
+		snapshot.AllShards.Set(move.ShardId, move.ShardSnap)
 	} else {
-		if !ok {
-			return
-		}
 		snapshot.AllShards.Delete(move.ShardId)
 	}
 }
 
 func (move *ShardStateChange) Signature() string {
-	return "ShardStateChange: " + string(move.ShardId) + " -> " + strconv.FormatBool(move.NewState)
+	return "ShardStateChange: " + string(move.ShardId) + ":" + move.ShardSnap.String()
 }
 
 // ReplicaStateChange implements PassiveMove

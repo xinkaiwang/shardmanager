@@ -8,6 +8,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -138,6 +139,14 @@ func (ss *ServiceState) FlushShardState(ctx context.Context, updated []data.Shar
 			ss.storeProvider.StoreShardState(shardId, nil)
 		}
 	}
+}
+
+func (shard *ShardState) ToSnapshot(ss *ServiceState) *costfunc.ShardSnap {
+	obj := costfunc.NewShardSnap(shard.ShardId)
+	for _, replica := range shard.Replicas {
+		obj.Replicas[replica.ReplicaIdx] = replica.ToSnapshot(ss)
+	}
+	return obj
 }
 
 func (shard *ShardState) ToJson() *smgjson.ShardStateJson {

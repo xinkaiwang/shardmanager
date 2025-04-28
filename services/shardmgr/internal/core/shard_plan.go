@@ -37,6 +37,8 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 				updated = append(updated, shard.ShardId)
 				shard.LastUpdateTimeMs = kcommon.GetWallTimeMs()
 				shard.LastUpdateReason = dirtyFlags.String()
+				shardSnap := shard.ToSnapshot(ss)
+				passiveMoves = append(passiveMoves, costfunc.NewShardStateChange(shard.ShardId, shardSnap))
 			} else {
 				unchanged++
 			}
@@ -47,7 +49,8 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 			shardState.ReEvaluateReplicaCount()
 			ss.AllShards[shardState.ShardId] = shardState
 			inserted = append(inserted, shardState.ShardId)
-			passiveMoves = append(passiveMoves, costfunc.NewShardStateChange(shardState.ShardId, true))
+			shardSnap := shardState.ToSnapshot(ss)
+			passiveMoves = append(passiveMoves, costfunc.NewShardStateChange(shardState.ShardId, shardSnap))
 		}
 	}
 	// remove shard if not in shardPlan
@@ -55,13 +58,15 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 		deleted = append(deleted, shard.ShardId)
 		// soft delete
 		shard.MarkAsSoftDelete(ctx)
+		shardSnap := shard.ToSnapshot(ss)
+		passiveMoves = append(passiveMoves, costfunc.NewShardStateChange(shard.ShardId, shardSnap))
 	}
 	// log
 	dirty := len(updated) + len(inserted) + len(deleted)
 	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).With("unchanged", unchanged).With("dirty", dirty).Log("syncShardPlan", "done")
 	if dirty != 0 {
 		ss.FlushShardState(ctx, updated, inserted, deleted)
-		ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
+		// ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
 	}
 	for _, passiveMove := range passiveMoves {
 		ss.ModifySnapshot(ctx, passiveMove.Apply, passiveMove.Signature())

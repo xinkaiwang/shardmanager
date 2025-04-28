@@ -79,6 +79,14 @@ func (ss *ShardSnap) ToJson() map[string]interface{} {
 	return obj
 }
 
+func (ss *ShardSnap) String() string {
+	jsonStr, err := json.Marshal(ss.ToJson())
+	if err != nil {
+		klogging.Fatal(context.Background()).WithError(err).Log("ShardSnap:ToJson", "error")
+	}
+	return string(jsonStr)
+}
+
 /*********************** ReplicaSnap **********************/
 type ReplicaSnap struct {
 	ShardId     data.ShardId

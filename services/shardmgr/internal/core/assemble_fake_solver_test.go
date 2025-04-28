@@ -8,6 +8,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -38,7 +39,7 @@ Step 11: done
 */
 func TestAssembleFakeSolver(t *testing.T) {
 	ctx := context.Background()
-	// klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -47,12 +48,13 @@ func TestAssembleFakeSolver(t *testing.T) {
 
 	fn := func() {
 		// Step 1: 创建 ServiceState
+		klogging.Info(ctx).Log("Step1", "创建 ServiceState")
 		ss := AssembleSsWithShadowState(ctx, "TestAssembleFakeSolver")
 		ss.SolverGroup = setup.FakeSnapshotListener
 		setup.ServiceState = ss
-		t.Logf("ServiceState已创建: %s", ss.Name)
 
 		// Step 2: 创建 worker-1 eph
+		klogging.Info(ctx).Log("Step2", "创建 worker-1 eph")
 		workerFullId, _ := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 
 		{
@@ -63,6 +65,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 
 		// Step 3: 创建 shardPlan and set into etcd
 		// 添加三个分片 (shard-a, shard-b, shard-c)
+		klogging.Info(ctx).Log("Step3", "创建 shardPlan")
 		setup.FakeTime.VirtualTimeForward(ctx, 10)
 		firstShardPlan := []string{"shard-a", "shard-b", "shard-c"}
 		setShardPlan(t, setup.FakeEtcd, ctx, firstShardPlan)
@@ -78,7 +81,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 					return true, ""
 				}
 				return false, "快照更新未达预期:" + snapshot.GetCost().String()
-			}, 1000, 10)
+			}, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 		}
 		{
