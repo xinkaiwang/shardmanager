@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
@@ -38,6 +39,7 @@ func (setup *FakeTimeTestSetup) Cleanup() {
 	// 确保所有的etcd相关资源都被释放
 	shadow.ResetEtcdStore()
 	etcdprov.ResetEtcdProvider()
+	klogging.TimeProvider = nil
 
 	klogging.Info(context.Background()).Log("TestCleanup", "清理完成")
 }
@@ -80,6 +82,9 @@ func NewFakeTimeTestSetup(t *testing.T) *FakeTimeTestSetup {
 	fakeEtcd := etcdprov.NewFakeEtcdProvider()
 	fakeStore := shadow.NewFakeEtcdStore()
 	fakeTime := kcommon.NewFakeTimeProvider(1234500000000)
+	klogging.TimeProvider = func() time.Time {
+		return time.Unix(0, fakeTime.GetWallTimeMs()*1000000)
+	}
 
 	setup := &FakeTimeTestSetup{
 		ctx:                  context.Background(),

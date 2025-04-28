@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -45,14 +44,14 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		}
 		proposal := ss.ProposalQueue.Pop()
 		// check 1: is proposal.BasedOn is up to date?
-		if proposal.BasedOn != ss.GetSnapshotFuture().SnapshotId {
+		if proposal.BasedOn != ss.GetSnapshotFutureForClone().SnapshotId {
 			// re-evaluate the proposal gain (based on the new snapshot)
 			ke := kcommon.TryCatchRun(ctx, func() {
-				currentCost := ss.GetSnapshotFuture().GetCost()
-				newCost := ss.GetSnapshotFuture().Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
+				currentCost := ss.GetSnapshotFutureForClone().GetCost()
+				newCost := ss.GetSnapshotFutureForClone().Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
 				gain := currentCost.Substract(newCost)
 				proposal.Gain = gain
-				proposal.BasedOn = ss.GetSnapshotFuture().SnapshotId
+				proposal.BasedOn = ss.GetSnapshotFutureForClone().SnapshotId
 				// add this proposal back to the queue again
 				ss.ProposalQueue.Push(proposal)
 			})
@@ -85,9 +84,10 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	}
 	// ss.AcceptedCount += len(accpeted)
 	if len(accpeted) > 0 {
-		future := ss.GetSnapshotFuture()
+		future := ss.GetSnapshotFutureForAny()
 		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost().String()).Log("AcceptEvent", "broadcastSnapshot")
-		ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
+		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, "acceptEvent")
+		// ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
 	}
 }
 
@@ -107,7 +107,7 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 
 	// apply this move to future snapshot
 	ke := kcommon.TryCatchRun(ctx, func() {
-		newFuture := ss.GetSnapshotFuture().Clone()
+		newFuture := ss.GetSnapshotFutureForClone().Clone()
 		newFuture.ApplyMove(proposal.Move, costfunc.AM_Strict)
 		newFuture.Freeze()
 		ss.SetSnapshotFuture(ctx, newFuture, "DoAcceptProposal")

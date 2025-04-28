@@ -27,10 +27,12 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 	fn := func() {
 		// Step 1: 创建 shardPlan and set into etcd
 		// 添加2个分片
+		klogging.Info(ctx).Log("Step1", "创建 shardPlan")
 		firstShardPlan := []string{"shard_1", "shard_2"}
 		setup.SetShardPlan(ctx, firstShardPlan)
 
 		// Step 2: 创建 ServiceState
+		klogging.Info(ctx).Log("Step2", "创建 ServiceState")
 		ss := AssembleSsAll(ctx, "TestAssembleAssignSolver")
 		setup.ServiceState = ss
 		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
@@ -38,26 +40,28 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 		{
 			// 等待快照更新
 			waitSucc, elapsedMs := setup.WaitUntilSs(t, func(ss *ServiceState) (bool, string) {
-				if ss.GetSnapshotFuture() == nil {
+				if ss.GetSnapshotFutureForAny() == nil {
 					return false, "快照不存在"
 				}
-				if !ss.GetSnapshotFuture().GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
-					return false, "快照不正确" + ss.GetSnapshotFuture().GetCost().String()
+				if !ss.GetSnapshotFutureForAny().GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
+					return false, "快照不正确" + ss.GetSnapshotFutureForAny().GetCost().String()
 				}
 				return true, "" // 快照存在
 			}, 1000, 10)
 			assert.True(t, waitSucc, "应该能在超时前创建快照, 耗时=%dms", elapsedMs)
 		}
 		// Step 3: 创建 worker-1 eph
+		klogging.Info(ctx).Log("Step3", "创建 worker-1 eph")
 		workerFullId, _ := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 
 		{
 			// 等待worker state创建
-			waitSucc, elapsedMs := setup.WaitUntilWorkerStateEnum(t, workerFullId, data.WS_Online_healthy, 1000, 10)
+			waitSucc, elapsedMs := setup.WaitUntilWorkerStateEnum(t, workerFullId, data.WS_Online_healthy, 1000, 100)
 			assert.Equal(t, true, waitSucc, "worker state 已创建 elapsedMs=%d", elapsedMs)
 		}
 
 		// Step 4: Enable AssignSolver
+		klogging.Info(ctx).Log("Step4", "Enable AssignSolver")
 		setup.UpdateServiceConfig(config.WithSolverConfig(func(sc *config.SolverConfig) {
 			sc.AssignSolverConfig.SolverEnabled = true
 		}))
@@ -88,10 +92,10 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 			ok := false
 			var reason string
 			setup.safeAccessServiceState(func(ss *ServiceState) {
-				if ss.GetSnapshotFuture() == nil {
+				if ss.GetSnapshotFutureForAny() == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotFuture().GetCost()
+				cost := ss.GetSnapshotFutureForAny().GetCost()
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}
@@ -100,6 +104,8 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 			assert.True(t, ok, reason)
 		}
 
+		// step5: simulate pilot node update
+		klogging.Info(ctx).Log("Step5", "simulate pilot node update")
 		var pilotAssign1 *cougarjson.PilotAssignmentJson
 		var pilotAssign2 *cougarjson.PilotAssignmentJson
 		{
@@ -118,13 +124,15 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 		}
 
 		// Step 5: simulate eph node update
-		setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign1.ShardId, pilotAssign1.ReplicaIdx, pilotAssign1.AsginmentId, cougarjson.CAS_Ready))
-			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AsginmentId, cougarjson.CAS_Ready))
-			wej.LastUpdateAtMs = setup.FakeTime.WallTime
-			wej.LastUpdateReason = "SimulateAddShard"
-			return wej
-		})
+		if pilotAssign1 != nil && pilotAssign2 != nil {
+			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
+				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign1.ShardId, pilotAssign1.ReplicaIdx, pilotAssign1.AsginmentId, cougarjson.CAS_Ready))
+				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AsginmentId, cougarjson.CAS_Ready))
+				wej.LastUpdateAtMs = setup.FakeTime.WallTime
+				wej.LastUpdateReason = "SimulateAddShard"
+				return wej
+			})
+		}
 
 		{
 			waitSucc, elapsedMs := setup.WaitUntilWorkerFullState(t, workerFullId, func(ws *WorkerState, assigns map[data.AssignmentId]*AssignmentState) (bool, string) {

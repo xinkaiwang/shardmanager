@@ -191,16 +191,11 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 				// add this new worker in current/future snapshot
 				workerSnap := costfunc.NewWorkerSnap(workerState.GetWorkerFullId())
 				workerSnap.Draining = workerState.ShutdownRequesting
-				ss.snapshotOperationManager.TrySchedule(ctx, func(snapshot *costfunc.Snapshot) {
+				fn := func(snapshot *costfunc.Snapshot) {
 					snapshot.AllWorkers.Set(workerFullId, workerSnap)
-				}, "AddWorkerToSnapshot")
-				// newCurrent := ss.SnapshotCurrent.Clone()
-				// newCurrent.AllWorkers.Set(workerFullId, workerSnap)
-				// ss.SnapshotCurrent = newCurrent.Freeze()
-				// newFuture := ss.SnapshotFuture.Clone()
-				// newFuture.AllWorkers.Set(workerFullId, workerSnap)
-				// ss.SnapshotFuture = newFuture.Freeze()
-
+				}
+				ss.ModifySnapshotCurrent(ctx, fn, "AddWorkerToSnapshot")
+				ss.ModifySnapshotFuture(ctx, fn, "AddWorkerToSnapshot")
 				// dirtyFlag
 				dirtyFlag.AddDirtyFlag("NewWorker:" + workerFullId.String())
 			}
@@ -216,23 +211,10 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 	}
 
 	ss.EphDirty = make(map[data.WorkerFullId]common.Unit)
+	if dirtyFlag.IsDirty() {
+		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, "digestStagingWorkerEph")
+	}
 }
-
-// func (ss *ServiceState) ApplyPassiveMove(ctx context.Context, moves []costfunc.PassiveMove, mode costfunc.ApplyMode) {
-// 	newCurrent := ss.SnapshotCurrent.Clone()
-// 	newFuture := ss.SnapshotFuture.Clone()
-// 	var reason []string
-// 	for _, move := range moves {
-// 		reason = append(reason, move.Signature())
-// 		newCurrent = move.Apply(newCurrent, mode)
-// 		newFuture = move.Apply(newFuture, mode)
-// 	}
-// 	ss.SnapshotCurrent = newCurrent.Freeze()
-// 	ss.SnapshotFuture = newFuture.Freeze()
-// 	if ss.SolverGroup != nil {
-// 		ss.SolverGroup.OnSnapshot(ctx, ss.SnapshotFuture, strings.Join(reason, ","))
-// 	}
-// }
 
 func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
 	currentBox := ws.SignalBox
@@ -320,8 +302,12 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 	}
 	if len(passiveMoves) > 0 {
 		for _, move := range passiveMoves {
-			ss.snapshotOperationManager.TrySchedule(ctx, move.Apply, "ApplyPassiveMove")
+			ss.ModifySnapshotCurrent(ctx, move.Apply, move.Signature())
+			ss.ModifySnapshotFuture(ctx, move.Apply, move.Signature())
+			// move.Apply(ss.GetSnapshotCurrentForModify(ctx, move.Signature()))
+			// ss.snapshotOperationManager.TrySchedule(ctx, move.Apply, "ApplyPassiveMove")
 		}
+		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, dirtyFlag.String())
 	}
 	return dirtyFlag
 }
@@ -463,16 +449,21 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 			With("newState", ws.State).
 			Log("checkWorkerOnTimeout", "worker 定时任务完成")
 	}
-	if dirty.IsDirty() {
-		if needsDelete {
-			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), nil, FS_Most, dirty.String())
-		} else {
-			ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, dirty.String())
-		}
+	if !dirty.IsDirty() {
+		return
+	}
+
+	if needsDelete {
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), nil, FS_Most, dirty.String())
+	} else {
+		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, dirty.String())
 	}
 	for _, move := range passiveMoves {
-		ss.snapshotOperationManager.TrySchedule(ctx, move.Apply, "ApplyPassiveMove")
+		ss.ModifySnapshotCurrent(ctx, move.Apply, move.Signature())
+		ss.ModifySnapshotFuture(ctx, move.Apply, move.Signature())
 	}
+	ss.boardcastSnapshotBatchManager.TrySchedule(ctx, dirty.String())
+
 	return
 }
 

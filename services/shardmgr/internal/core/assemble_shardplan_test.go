@@ -76,6 +76,7 @@ func TestAssembleShardPlan(t *testing.T) {
 		}
 
 		// Step 5: Remove shardPlan
+		klogging.Info(ctx).Log("Step5", "Remove shardPlan")
 		setup.SetShardPlan(ctx, []string{})
 		setup.FakeTime.VirtualTimeForward(ctx, 60*1000)
 		{
@@ -101,6 +102,7 @@ func TestAssembleShardPlan(t *testing.T) {
 
 		// Step 7:
 		{
+			klogging.Info(ctx).Log("Step7", "wait until no more moves")
 			waitSucc, elapsedMs := setup.WaitUntilSs(t, func(ss *ServiceState) (bool, string) {
 				if ss == nil {
 					return false, "没有 ServiceState"
@@ -114,6 +116,7 @@ func TestAssembleShardPlan(t *testing.T) {
 		}
 
 		// step 8: wait for 60s
+		klogging.Info(ctx).Log("Step8", "wait for 60s")
 		setup.FakeTime.VirtualTimeForward(ctx, 60*1000)
 	}
 

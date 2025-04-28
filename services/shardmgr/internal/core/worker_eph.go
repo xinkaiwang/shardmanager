@@ -40,6 +40,8 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 				klogging.Info(ctx).With("workerId", workerId).With("path", kvItem.Key).
 					Log("WorkerEphWatcher", "观察到worker eph已删除")
 				w.ss.PostEvent(NewWorkerEphEvent(workerId, nil))
+				klogging.Info(ctx).With("workerId", workerId).
+					Log("WorkerEphWatcher", "worker eph event posted")
 				continue
 			}
 			// this is a add or update event
@@ -49,6 +51,8 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 			workerId := w.workerIdFromPath(kvItem.Key)
 			workerEph := cougarjson.WorkerEphJsonFromJson(kvItem.Value)
 			w.ss.PostEvent(NewWorkerEphEvent(workerId, workerEph))
+			klogging.Info(ctx).With("workerId", workerId).With("eph", workerEph).
+				Log("WorkerEphWatcher", "worker eph event posted")
 		}
 	}
 }
@@ -95,8 +99,12 @@ func (ss *ServiceState) StagingWorkerEph(ctx context.Context, workerId data.Work
 		Log("stagingWorkerEph", "开始处理worker eph")
 
 	defer func() {
-		ss.syncWorkerBatchManager.TrySchedule(ctx, "StagingWorkerEph")
+		klogging.Info(ctx).With("workerId", workerId).
+			With("hasEph", workerEph != nil).With("eph", workerEph).
+			Log("stagingWorkerEph", "处理worker eph完成")
 	}()
+
+	ss.syncWorkerBatchManager.TryScheduleInternal(ctx, "StagingWorkerEph:"+string(workerId))
 
 	if workerEph == nil {
 		// delete

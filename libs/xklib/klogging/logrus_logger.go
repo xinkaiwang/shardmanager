@@ -196,6 +196,7 @@ func (logger *LogrusLogger) Log(entry *LogEntry, shouldLog bool) {
 		fields[item.K] = item.V
 	}
 	ent := logger.RusLogger.WithField("event", entry.LogType).WithFields(fields)
+	ent.Time = entry.Timestamp
 	ent.Log(kloggingLevel2Logrus(entry.Level), entry.Msg)
 
 	// otherLogger (logger chain)

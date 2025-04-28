@@ -64,7 +64,11 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 		ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
 	}
 	for _, passiveMove := range passiveMoves {
-		ss.snapshotOperationManager.TrySchedule(ctx, passiveMove.Apply, passiveMove.Signature())
+		ss.ModifySnapshotCurrent(ctx, passiveMove.Apply, passiveMove.Signature())
+		ss.ModifySnapshotFuture(ctx, passiveMove.Apply, passiveMove.Signature())
+	}
+	if len(passiveMoves) > 0 {
+		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
 	}
 }
 

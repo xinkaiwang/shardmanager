@@ -197,15 +197,33 @@ func (ss *ServiceState) PrintAllAssignments(ctx context.Context) {
 	}
 }
 
-// func (ss *ServiceState) SetSnapshotCurrent(ctx context.Context, newSnapshot *costfunc.Snapshot, reason string) {
-// 	oldId := "none"
-// 	if ss.SnapshotCurrent != nil {
-// 		oldId = string(ss.SnapshotCurrent.SnapshotId)
-// 	}
-// 	newId := string(newSnapshot.SnapshotId)
-// 	ss.SnapshotCurrent = newSnapshot
-// 	klogging.Info(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).With("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotCurrent", "")
-// }
+// GetSnapshotCurrentForClone: garenteed return frozen snapshot
+func (ss *ServiceState) GetSnapshotCurrentForClone() *costfunc.Snapshot {
+	if !ss.SnapshotCurrent.Frozen {
+		ss.SnapshotCurrent.Freeze()
+	}
+	return ss.SnapshotCurrent
+}
+
+func (ss *ServiceState) ModifySnapshotCurrent(ctx context.Context, fn func(*costfunc.Snapshot), reason string) {
+	if ss.SnapshotCurrent.Frozen {
+		ss.SnapshotCurrent = ss.SnapshotCurrent.Clone()
+	}
+	fn(ss.SnapshotCurrent)
+	klogging.Info(ctx).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("reason", reason).With("snapshot", ss.SnapshotCurrent.ToJsonString()).Log("ModifySnapshotCurrent", "")
+}
+
+func (ss *ServiceState) GetSnapshotCurrentForAny() *costfunc.Snapshot {
+	return ss.SnapshotCurrent
+}
+
+func (ss *ServiceState) ModifySnapshotFuture(ctx context.Context, fn func(*costfunc.Snapshot), reason string) {
+	if ss.SnapshotFuture.Frozen {
+		ss.SnapshotFuture = ss.SnapshotFuture.Clone()
+	}
+	fn(ss.SnapshotFuture)
+	klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("reason", reason).With("snapshot", ss.SnapshotFuture.ToJsonString()).Log("ModifySnapshotFuture", "")
+}
 
 func (ss *ServiceState) SetSnapshotFuture(ctx context.Context, newSnapshot *costfunc.Snapshot, reason string) {
 	oldId := "none"
@@ -220,32 +238,15 @@ func (ss *ServiceState) SetSnapshotFuture(ctx context.Context, newSnapshot *cost
 	klogging.Info(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).With("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotFuture", "")
 }
 
-// func (ss *ServiceState) GetSnapshotCurrent() *costfunc.Snapshot {
-// 	klogging.Info(context.Background()).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("snapshot", ss.SnapshotCurrent.ToJsonString()).Log("GetSnapshotCurrent", "")
-// 	return ss.SnapshotCurrent
-// }
-
-func (ss *ServiceState) GetSnapshotFuture() *costfunc.Snapshot {
-	klogging.Info(context.Background()).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFuture", "")
+func (ss *ServiceState) GetSnapshotFutureForClone() *costfunc.Snapshot {
+	if !ss.SnapshotFuture.Frozen {
+		ss.SnapshotFuture.Freeze()
+	}
+	klogging.Info(context.Background()).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForClone", "")
 	return ss.SnapshotFuture
 }
 
-// GetSnapshotCurrentForClone: garenteed return frozen snapshot
-func (ss *ServiceState) GetSnapshotCurrentForClone() *costfunc.Snapshot {
-	if !ss.SnapshotCurrent.Frozen {
-		ss.SnapshotCurrent.Freeze()
-	}
-	return ss.SnapshotCurrent
-}
-
-// GetSnapshotCurrentForModify: garenteed return modify-able (unfrozen) snapshot
-func (ss *ServiceState) GetSnapshotCurrentForModify() *costfunc.Snapshot {
-	if ss.SnapshotCurrent.Frozen {
-		ss.SnapshotCurrent = ss.SnapshotCurrent.Clone()
-	}
-	return ss.SnapshotCurrent
-}
-
-func (ss *ServiceState) GetSnapshotCurrentForAny() *costfunc.Snapshot {
-	return ss.SnapshotCurrent
+func (ss *ServiceState) GetSnapshotFutureForAny() *costfunc.Snapshot {
+	klogging.Info(context.Background()).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForAny", "")
+	return ss.SnapshotFuture
 }

@@ -14,6 +14,7 @@ import (
 
 func TestAssembleWorkerLifeCycle4(t *testing.T) {
 	ctx := context.Background()
+	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)

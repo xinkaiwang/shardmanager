@@ -16,6 +16,10 @@ import (
 // Level type
 type Level uint32
 
+var (
+	TimeProvider func() time.Time
+)
+
 // Original log levels kept intact
 const (
 	FatalLevel Level = iota + 1
@@ -151,13 +155,19 @@ type LogEntry struct {
 func NewEntry(ctx context.Context, level Level) *LogEntry {
 	logger := GetLogger()
 	threshold := logger.Level()
+	var now time.Time
+	if TimeProvider != nil {
+		now = TimeProvider()
+	} else {
+		now = time.Now()
+	}
 	entry := &LogEntry{
 		Logger:             logger,
 		Level:              level,
 		EffectiveThreshold: threshold,
 		ShouldLog:          NeedLog(level, threshold),
 		Ctx:                ctx,
-		Timestamp:          time.Now(),
+		Timestamp:          now,
 	}
 	if entry.ShouldLog {
 		info := GetCurrentCtxInfo(ctx)

@@ -237,7 +237,10 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				status = AS_Completed
 				// apply to current snapshot
 				ke = kcommon.TryCatchRun(ctx, func() {
-					action.ApplyToSnapshot(ss.GetSnapshotCurrentForModify(), costfunc.AM_Strict)
+					ss.ModifySnapshotCurrent(ctx, func(snap *costfunc.Snapshot) {
+						action.ApplyToSnapshot(snap, costfunc.AM_Strict)
+					}, action.String())
+					// action.ApplyToSnapshot(ss.GetSnapshotCurrentForModify(ctx, action.String()), costfunc.AM_Strict)
 				})
 				if ke != nil {
 					reason = "apply to snapshot failed:" + ke.FullString()
@@ -337,7 +340,10 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			applyToSnapshot := func() {
 				// remove from current snapshot
 				ke = kcommon.TryCatchRun(ctx, func() {
-					action.ApplyToSnapshot(ss.GetSnapshotCurrentForModify(), costfunc.AM_Relaxed)
+					ss.ModifySnapshotCurrent(ctx, func(snap *costfunc.Snapshot) {
+						action.ApplyToSnapshot(snap, costfunc.AM_Relaxed)
+					}, action.String())
+					// action.ApplyToSnapshot(ss.GetSnapshotCurrentForModify(ctx, action.String()), costfunc.AM_Relaxed)
 				})
 				if ke != nil {
 					status = AS_Failed

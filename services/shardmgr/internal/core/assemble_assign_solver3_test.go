@@ -41,11 +41,11 @@ func TestAssembleAssignSolver3(t *testing.T) {
 		{
 			// 等待快照更新
 			waitSucc, elapsedMs := setup.WaitUntilSs(t, func(ss *ServiceState) (bool, string) {
-				if ss.GetSnapshotFuture() == nil {
+				if ss.GetSnapshotFutureForAny() == nil {
 					return false, "快照不存在"
 				}
-				if !ss.GetSnapshotFuture().GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
-					return false, "快照不正确" + ss.GetSnapshotFuture().GetCost().String()
+				if !ss.GetSnapshotFutureForAny().GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
+					return false, "快照不正确" + ss.GetSnapshotFutureForAny().GetCost().String()
 				}
 				return true, "" // 快照存在
 			}, 1000, 10)
@@ -81,10 +81,10 @@ func TestAssembleAssignSolver3(t *testing.T) {
 			ok := false
 			var reason string
 			setup.safeAccessServiceState(func(ss *ServiceState) {
-				if ss.GetSnapshotFuture() == nil {
+				if ss.GetSnapshotFutureForAny() == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotFuture().GetCost()
+				cost := ss.GetSnapshotFutureForAny().GetCost()
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}
