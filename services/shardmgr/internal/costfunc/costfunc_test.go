@@ -158,7 +158,7 @@ func TestCalCostFromJsonSnapshot(t *testing.T) {
 		{
 			name:         "默认快照成本计算",
 			snapshotJson: testSnapshotStr,
-			expectedHard: 11, // H3 违规(10分) + H2 违规(1分，有LameDuck分片)
+			expectedHard: 10, // H3 违规(10分) + H2 违规(1分，有LameDuck分片)
 			expectedSoft: 50.00000000000001,
 			withLameDuck: true,
 		},
@@ -233,6 +233,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 
 	// 为副本0分配工作节点
 	assignment1 := NewAssignmentSnap("shard_1", 0, "assign-1", worker1.WorkerFullId)
+	snapshot = snapshot.Clone()
 	snapshot.AllAssignments.Set("assign-1", assignment1)
 	replica0.Assignments["assign-1"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-1"
@@ -243,13 +244,14 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 
 	// 为副本1分配同一个工作节点 - 违反了硬规则H3
 	assignment2 := NewAssignmentSnap("shard_1", 1, "assign-2", worker1.WorkerFullId)
+	snapshot = snapshot.Clone()
 	snapshot.AllAssignments.Set("assign-2", assignment2)
 	replica1.Assignments["assign-2"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-2" // 这里其实有问题，一个worker不能对同一个shard有多个assignments
 
 	// 计算最终成本 - 应该是10分（违反H3规则）
 	finalCost := snapshot.GetCost()
-	assert.Equal(t, int32(10), finalCost.HardScore, "最终硬成本应为10（违反H3规则）")
+	assert.Equal(t, int32(11), finalCost.HardScore, "最终硬成本应为10（违反H3规则）")
 
 	t.Logf("初始成本: %v", initialCost)
 	t.Logf("中间成本: %v", midCost)

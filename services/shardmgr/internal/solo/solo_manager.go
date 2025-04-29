@@ -2,12 +2,10 @@ package solo
 
 import (
 	"context"
+	"os"
+	"strings"
 
-	cougarEtcd "github.com/xinkaiwang/shardmanager/libs/cougar/etcdprov"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
 const (
@@ -25,47 +23,28 @@ const (
 	SLM_Robust SoloMode = "robust"
 )
 
-// SoloManager will maintain an lock in etcd and make sure only one shardmgr is running
-// in start up, we will try to acquire the lock, if we can not acquire the lock, we will error and exit.
-type SoloManager struct {
-	podName   string
-	sessionId string
-	// soloMode          SoloMode
-	etcdprov          cougarEtcd.EtcdProvider
-	session           cougarEtcd.EtcdSession
-	ServerStartTimeMs int64
-	ChLockLost        chan struct{}
-}
-
-func NewSoloManager(ctx context.Context, podName string) *SoloManager {
-	solo := &SoloManager{
-		podName:           podName,
-		sessionId:         common.GetSessionId(),
-		ServerStartTimeMs: kcommon.GetWallTimeMs(),
-		etcdprov:          cougarEtcd.GetCurrentEtcdProvider(ctx),
-		ChLockLost:        make(chan struct{}, 1),
-	}
-
-	solo.session = solo.etcdprov.CreateEtcdSession(ctx)
-	solo.PutNode("init")
-	solo.session.SetStateListener(solo)
-	return solo
-}
-
-func (solo *SoloManager) PutNode(reason string) {
-	node := smgjson.NewGlobalLock(solo.podName, solo.sessionId, solo.session.GetLeaseId(), solo.ServerStartTimeMs, common.GetVersion())
-	node.LastUpdateTimeMs = kcommon.GetWallTimeMs()
-	node.LastUpdateResason = reason
-	solo.session.PutNode(GlobalLockPath, node.ToJson())
-}
-
-func (solo *SoloManager) OnStateChange(state cougarEtcd.EtcdSessionState, msg string) {
-	klogging.Info(context.Background()).With("newState", state).With("reason", msg).Log("SoloManager", "etcd state change")
-	if state == cougarEtcd.ESS_Disconnected {
-		close(solo.ChLockLost)
+func SoloModeParseFromString(modeStr string) SoloMode {
+	str := strings.TrimSpace(strings.ToLower(modeStr))
+	switch str {
+	case string(SLM_Strict):
+		return SLM_Strict
+	case string(SLM_Robust):
+		return SLM_Robust
+	default:
+		ke := kerror.Create("InvalidSoloMode", "invalid solo mode").With("value", modeStr)
+		panic(ke)
 	}
 }
 
-func (solo *SoloManager) Close(ctx context.Context) {
-	solo.session.Close(ctx)
+func GetSoloMode() SoloMode {
+	str := os.Getenv("SMG_SOLO_MODE")
+	if str == "" {
+		str = string(SLM_Strict)
+	}
+	return SoloModeParseFromString(str)
+}
+
+type SoloManager interface {
+	GetLckLostCh() <-chan struct{}
+	Close(ctx context.Context)
 }

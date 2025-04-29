@@ -40,6 +40,6 @@ func main() {
 	session.DeleteNode("/test/eph1")
 	fmt.Println("Node deleted")
 	// 3. 关闭 session
-	session.Close()
+	session.Close(ctx)
 	fmt.Println("Session closed")
 }

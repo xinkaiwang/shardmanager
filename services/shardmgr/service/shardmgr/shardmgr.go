@@ -17,6 +17,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/biz"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/handler"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/solo"
 	"go.opencensus.io/metric/metricproducer"
 )
 
@@ -93,6 +94,18 @@ func main() {
 		Handler: metricsMux,
 	}
 
+	// solo manager
+	podName := os.Getenv("POD_NAME")
+	if podName == "" {
+		podName = GetHostname()
+	}
+	soloMgr := solo.NewSoloManagerRobust(ctx, podName)
+	go func() {
+		<-soloMgr.ChLockLost
+		fmt.Println("Lock lost, exiting...")
+		os.Exit(1)
+	}()
+
 	// 记录端口配置
 	klogging.Info(ctx).
 		With("api_port", apiPort).
@@ -131,4 +144,16 @@ func main() {
 		klogging.Error(ctx).With("error", err).Log("MainServerError", "Main server error")
 	}
 	klogging.Info(ctx).Log("ServerShutdown", "Servers stopped")
+}
+
+// GetHostname 返回当前主机名
+func GetHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		klogging.Error(context.Background()).
+			WithError(err).
+			Log("GetHostname", "Failed to get hostname")
+		return "unknown"
+	}
+	return hostname
 }
