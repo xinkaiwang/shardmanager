@@ -34,6 +34,10 @@ var testSnapshotStr = `
       }
     }
   ],
+  "Cost": {
+    "HardScore": 0,
+    "SoftScore": 50.00000000000001
+  },
   "Shards": [
     {
       "Replicas": [
@@ -154,7 +158,7 @@ func TestCalCostFromJsonSnapshot(t *testing.T) {
 		{
 			name:         "默认快照成本计算",
 			snapshotJson: testSnapshotStr,
-			expectedHard: 10, // 根据实际输出调整期望值，在实际项目中需要仔细确认
+			expectedHard: 11, // H3 违规(10分) + H2 违规(1分，有LameDuck分片)
 			expectedSoft: 50.00000000000001,
 			withLameDuck: true,
 		},
@@ -178,15 +182,6 @@ func TestCalCostFromJsonSnapshot(t *testing.T) {
 			snapshot := NewSnapshot(ctx, createDefaultCostConfig())
 			err = snapshotFromJson(snapshot, jsonData)
 			assert.NoError(t, err, "从JSON创建快照失败")
-
-			// 在调试信息中打印LameDuck状态
-			if tt.withLameDuck {
-				if shard, ok := snapshot.AllShards.Get("shard_1"); ok {
-					if replica, ok := shard.Replicas[1]; ok {
-						t.Logf("Replica 1 LameDuck状态: %v", replica.LameDuck)
-					}
-				}
-			}
 
 			// 3. 计算成本
 			cost := snapshot.GetCost()
@@ -213,7 +208,6 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 
 	// 添加分片和副本
 	shard := NewShardSnap("shard_1")
-	// FastMap必须在修改之前没有被冻结
 	snapshot.AllShards.Set("shard_1", shard)
 
 	// 添加副本0
@@ -239,38 +233,23 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 
 	// 为副本0分配工作节点
 	assignment1 := NewAssignmentSnap("shard_1", 0, "assign-1", worker1.WorkerFullId)
-	// 这一步可能会失败，如果快照在GetCost()后被冻结
-	// 从快照定义可知，GetCost()可能会冻结快照，因此之后的所有修改都需要克隆一份
-	clonedSnapshot := snapshot.Clone()
-	clonedSnapshot.AllAssignments.Set("assign-1", assignment1)
-	// 更新对应的引用
-	shard, _ = clonedSnapshot.AllShards.Get("shard_1")
-	replica0 = shard.Replicas[0]
-	worker1, _ = clonedSnapshot.AllWorkers.Get(worker1.WorkerFullId)
-
+	snapshot.AllAssignments.Set("assign-1", assignment1)
 	replica0.Assignments["assign-1"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-1"
 
 	// 计算中间成本 - 应该是2分（副本1未分配）
-	midCost := clonedSnapshot.GetCost()
+	midCost := snapshot.GetCost()
 	assert.Equal(t, int32(2), midCost.HardScore, "中间硬成本应为2（一个未分配副本）")
 
 	// 为副本1分配同一个工作节点 - 违反了硬规则H3
 	assignment2 := NewAssignmentSnap("shard_1", 1, "assign-2", worker1.WorkerFullId)
-	// 再次克隆以避免冻结问题
-	clonedSnapshot2 := clonedSnapshot.Clone()
-	clonedSnapshot2.AllAssignments.Set("assign-2", assignment2)
-	// 更新对应的引用
-	shard, _ = clonedSnapshot2.AllShards.Get("shard_1")
-	replica1 = shard.Replicas[1]
-	worker1, _ = clonedSnapshot2.AllWorkers.Get(worker1.WorkerFullId)
-
+	snapshot.AllAssignments.Set("assign-2", assignment2)
 	replica1.Assignments["assign-2"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-2" // 这里其实有问题，一个worker不能对同一个shard有多个assignments
 
-	// 计算最终成本 - 根据实际输出调整期望值
-	finalCost := clonedSnapshot2.GetCost()
-	assert.Equal(t, int32(11), finalCost.HardScore, "最终硬成本应为11（违反H3规则））")
+	// 计算最终成本 - 应该是10分（违反H3规则）
+	finalCost := snapshot.GetCost()
+	assert.Equal(t, int32(10), finalCost.HardScore, "最终硬成本应为10（违反H3规则）")
 
 	t.Logf("初始成本: %v", initialCost)
 	t.Logf("中间成本: %v", midCost)
@@ -313,9 +292,9 @@ func snapshotFromJson(snapshot *Snapshot, jsonData map[string]interface{}) error
 					replicaSnap := NewReplicaSnap(shardId, replicaIdx)
 					shardSnap.Replicas[replicaIdx] = replicaSnap
 
-					// 设置LameDuck状态 - 确保正确解析
-					if lameDuck, ok := replicaMap["LameDuck"].(float64); ok && lameDuck > 0 {
-						replicaSnap.LameDuck = true
+					// 设置LameDuck状态
+					if lameDuck, ok := replicaMap["LameDuck"].(float64); ok {
+						replicaSnap.LameDuck = lameDuck > 0
 					}
 
 					// 解析分配
@@ -345,8 +324,8 @@ func snapshotFromJson(snapshot *Snapshot, jsonData map[string]interface{}) error
 			snapshot.AllWorkers.Set(workerFullId, workerSnap)
 
 			// 设置Draining状态
-			if draining, ok := workerMap["Draining"].(float64); ok && draining > 0 {
-				workerSnap.Draining = true
+			if draining, ok := workerMap["Draining"].(float64); ok {
+				workerSnap.Draining = draining > 0
 			}
 
 			// 解析分配
@@ -361,7 +340,7 @@ func snapshotFromJson(snapshot *Snapshot, jsonData map[string]interface{}) error
 		}
 	}
 
-	// 解析Assignments - 需要在解析完Shards和Workers之后进行，以便正确建立关联
+	// 解析Assignments
 	if assignmentsJson, ok := jsonData["Assignments"].([]interface{}); ok {
 		for _, assignJson := range assignmentsJson {
 			assignMap := assignJson.(map[string]interface{})

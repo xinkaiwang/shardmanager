@@ -38,13 +38,14 @@ type EtcdStateListener interface {
 }
 
 type EtcdSession interface {
+	GetLeaseId() int64
 	PutNode(key string, value string)
 	DeleteNode(key string)
 	SetStateListener(listener EtcdStateListener)
 	GetCurrentState() EtcdSessionState
 	WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan EtcdKvItem
 	// Close 关闭会话，停止租约续约并释放资源
-	Close()
+	Close(ctx context.Context)
 }
 
 type EtcdProvider interface {

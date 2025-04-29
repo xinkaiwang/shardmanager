@@ -9,7 +9,7 @@ DOCKER_TAG ?= $(VERSION)
 DOCKER_IMAGE := xinkaiw/shardmgr
 
 # 所有命令行工具
-CMDS := hello
+CMDS := hello solomgr
 SVCS := shardmgr
 
 # 测试日志目录

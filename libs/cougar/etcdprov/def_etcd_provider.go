@@ -196,6 +196,10 @@ func (session *DefEtcdSession) setState(state EtcdSessionState, message string) 
 	}
 }
 
+func (session *DefEtcdSession) GetLeaseId() int64 {
+	return int64(session.lease)
+}
+
 // DeleteNode implements EtcdSession.
 func (session *DefEtcdSession) DeleteNode(key string) {
 	// Check session state first
@@ -231,9 +235,39 @@ func (session *DefEtcdSession) PutNode(key string, value string) {
 	defer cancel()
 
 	klogging.Debug(ctx).With("key", key).With("value", value).With("lease", session.lease).With("sessionId", session.sessionId).Log("PutNode", "写入节点")
-	_, err := session.parent.client.Put(ctx, key, value, clientv3.WithLease(session.lease))
+
+	// 尝试两种情况：
+	// 1. 键不存在
+	// 2. 键存在且由当前租约创建
+	txn := session.parent.client.Txn(ctx)
+	txn = txn.If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
+		Then(clientv3.OpPut(key, value, clientv3.WithLease(session.lease))).
+		Else(
+			// 如果键存在，检查是否由当前租约创建
+			clientv3.OpTxn(
+				[]clientv3.Cmp{clientv3.Compare(clientv3.LeaseValue(key), "=", session.lease)},
+				[]clientv3.Op{clientv3.OpPut(key, value, clientv3.WithLease(session.lease))},
+				nil,
+			),
+		)
+
+	// 提交事务
+	txnResp, err := txn.Commit()
 	if err != nil {
 		ke := kerror.Wrap(err, "EtcdPutError", "failed to put node", false).With("key", key).With("value", value).With("sessionId", session.sessionId)
+		panic(ke)
+	}
+
+	// 检查事务是否成功
+	if !txnResp.Succeeded {
+		// 如果外层事务失败，检查内层事务的结果
+		if len(txnResp.Responses) > 0 && txnResp.Responses[0].Response != nil {
+			if resp := txnResp.Responses[0].GetResponseTxn(); resp != nil && resp.Succeeded {
+				// 内层事务成功，说明键已存在且由当前租约创建
+				return
+			}
+		}
+		ke := kerror.Create("EtcdPutError", "key exists and is not under my lease").With("key", key).With("sessionId", session.sessionId)
 		panic(ke)
 	}
 }
@@ -250,7 +284,7 @@ func (session *DefEtcdSession) SetStateListener(listener EtcdStateListener) {
 }
 
 // Close implements EtcdSession.
-func (session *DefEtcdSession) Close() {
+func (session *DefEtcdSession) Close(ctx context.Context) {
 	klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Closing session explicitly")
 
 	// Use sync.Once to ensure cleanup happens only once
@@ -260,6 +294,24 @@ func (session *DefEtcdSession) Close() {
 		if session.keepAliveCancel != nil {
 			session.keepAliveCancel()
 		}
+
+		// 显式撤销租约
+		ctx, cancel := context.WithTimeout(ctx, time.Duration(etcdTimeoutMs)*time.Millisecond)
+		defer cancel()
+		_, err := session.parent.client.Revoke(ctx, session.lease)
+		if err != nil {
+			klogging.Error(context.Background()).
+				WithError(err).
+				With("sessionId", session.sessionId).
+				With("lease", session.lease).
+				Log("EtcdSession", "Failed to revoke lease")
+		} else {
+			klogging.Info(context.Background()).
+				With("sessionId", session.sessionId).
+				With("lease", session.lease).
+				Log("EtcdSession", "Lease revoked successfully")
+		}
+
 		// Signal watchers to close by closing the channel
 		close(session.chClosed)
 	})
