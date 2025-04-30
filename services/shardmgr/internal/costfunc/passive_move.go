@@ -24,63 +24,54 @@ type PassiveMove interface {
 	Signature() string // for debugging/logging/metrics purpose only
 }
 
-// WorkerDelete implements PassiveMove
-type WorkerDelete struct {
-	WorkerId data.WorkerFullId
-}
-
-func NewWorkerDelete(workerId data.WorkerFullId) *WorkerDelete {
-	return &WorkerDelete{
-		WorkerId: workerId,
-	}
-}
-
-func (move *WorkerDelete) Apply(snapshot *Snapshot) {
-	if snapshot.Frozen {
-		ke := kerror.Create("WorkerDeleteApplyFailed", "snapshot is frozen")
-		panic(ke)
-	}
-	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
-	if !ok {
-		return
-	}
-	// delete all assignments
-	for _, assignment := range workerSnap.Assignments {
-		snapshot.AllAssignments.Delete(assignment)
-	}
-	// delete worker
-	snapshot.AllWorkers.Delete(move.WorkerId)
-}
-
-func (move *WorkerDelete) Signature() string {
-	return "WorkerDelete: " + move.WorkerId.String()
-}
-
-// WorkerAdded implements PassiveMove
-type WorkerAdded struct {
+// WorkerStateAddRemove implements PassiveMove
+type WorkerStateAddRemove struct {
 	WorkerId   data.WorkerFullId
-	WorkerSnap *WorkerSnap
+	WorkerSnap *WorkerSnap // nil to delete
+	reason     string
 }
 
-func NewWorkerAdded(workerId data.WorkerFullId, workerSnap *WorkerSnap) *WorkerAdded {
-	return &WorkerAdded{
+func NewWorkerStateAddRemove(workerId data.WorkerFullId, workerSnap *WorkerSnap, reason string) *WorkerStateAddRemove {
+	return &WorkerStateAddRemove{
 		WorkerId:   workerId,
 		WorkerSnap: workerSnap,
+		reason:     reason,
 	}
 }
-
-func (move *WorkerAdded) Apply(snapshot *Snapshot) *Snapshot {
-	_, ok := snapshot.AllWorkers.Get(move.WorkerId)
-	if ok {
-		// worker already exists, no need to add
-		return snapshot
+func (move *WorkerStateAddRemove) Apply(snapshot *Snapshot) {
+	if snapshot.Frozen {
+		ke := kerror.Create("WorkerStateAddRemoveApplyFailed", "snapshot is frozen")
+		panic(ke)
 	}
-	snapshot.AllWorkers.Set(move.WorkerId, move.WorkerSnap.Clone()) // make a copy
-	return snapshot
+	if move.WorkerSnap != nil {
+		snapshot.AllWorkers.Set(move.WorkerId, move.WorkerSnap)
+	} else {
+		// delete all assignments
+		workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
+		if !ok {
+			return
+		}
+		for _, assignment := range workerSnap.Assignments {
+			assignmentSnap, ok := snapshot.AllAssignments.Get(assignment)
+			if !ok {
+				continue
+			}
+			// delete from shard
+			shardSnap, ok := snapshot.AllShards.Get(assignmentSnap.ShardId)
+			if !ok {
+				continue
+			}
+			for _, replicaSnap := range shardSnap.Replicas {
+				delete(replicaSnap.Assignments, assignment)
+			}
+			snapshot.AllAssignments.Delete(assignment)
+		}
+		// delete worker
+		snapshot.AllWorkers.Delete(move.WorkerId)
+	}
 }
-
-func (move *WorkerAdded) Signature() string {
-	return "WorkerAdded: " + move.WorkerId.String()
+func (move *WorkerStateAddRemove) Signature() string {
+	return move.reason + ":" + move.WorkerId.String()
 }
 
 // WorkerStateUpdate implements PassiveMove
@@ -116,78 +107,65 @@ func (move *WorkerStateUpdate) Signature() string {
 	return move.reason + ":" + move.WorkerId.String()
 }
 
-// WorkerStateChange implements PassiveMove
-type WorkerStateChange struct {
-	WorkerId data.WorkerFullId
-	NewState data.WorkerStateEnum
-	Draining bool
+// ShardStateAddRemove implements PassiveMove
+type ShardStateAddRemove struct {
+	ShardId data.ShardId
+	snap    *ShardSnap // nil to delete
+	reason  string
 }
 
-func NewWorkerStateChange(workerId data.WorkerFullId, newState data.WorkerStateEnum, draining bool) *WorkerStateChange {
-	return &WorkerStateChange{
-		WorkerId: workerId,
-		NewState: newState,
-		Draining: draining,
+func NewShardStateAddRemove(shardId data.ShardId, snap *ShardSnap, reason string) *ShardStateAddRemove {
+	return &ShardStateAddRemove{
+		ShardId: shardId,
+		snap:    snap,
+		reason:  reason,
 	}
 }
-
-func (move *WorkerStateChange) Apply(snapshot *Snapshot) {
-	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
-	if !ok {
-		return
-	}
-	if move.NewState == data.WS_Deleted || move.NewState == data.WS_Offline_dead {
-		// delete all assignments (rare case)
-		for shardId, assignmentId := range workerSnap.Assignments {
-			snapshot.AllAssignments.Delete(assignmentId)
-			// delete from shard
-			shardSnap, ok := snapshot.AllShards.Get(shardId)
-			if !ok {
-				continue
-			}
-			for _, replicaSnap := range shardSnap.Replicas {
-				delete(replicaSnap.Assignments, assignmentId)
-			}
-		}
-		// delete worker
-		snapshot.AllWorkers.Delete(move.WorkerId)
-		return
-	}
-	workerSnap.Draining = move.Draining
-}
-
-func (move *WorkerStateChange) Signature() string {
-	return "WorkerStateChange: " + move.WorkerId.String() + " -> " + string(move.NewState)
-}
-
-// ShardStateChange implements PassiveMove
-type ShardStateChange struct {
-	ShardId   data.ShardId
-	ShardSnap *ShardSnap // nil to delete
-	// NewState  bool // true: add, false: delete
-}
-
-func NewShardStateChange(shardId data.ShardId, newSnap *ShardSnap) *ShardStateChange {
-	return &ShardStateChange{
-		ShardId:   shardId,
-		ShardSnap: newSnap,
-	}
-}
-
-func (move *ShardStateChange) Apply(snapshot *Snapshot) {
+func (move *ShardStateAddRemove) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
-		ke := kerror.Create("ShardStateChangeApplyFailed", "snapshot is frozen")
+		ke := kerror.Create("ShardStateAddRemoveApplyFailed", "snapshot is frozen")
 		panic(ke)
 	}
-	if move.ShardSnap != nil {
-		snapshot.AllShards.Set(move.ShardId, move.ShardSnap)
+	if move.snap != nil {
+		snapshot.AllShards.Set(move.ShardId, move.snap)
 	} else {
 		snapshot.AllShards.Delete(move.ShardId)
 	}
 }
+func (move *ShardStateAddRemove) Signature() string {
+	return move.reason + ":" + string(move.ShardId) + ":" + move.snap.String()
+}
 
-func (move *ShardStateChange) Signature() string {
-	return "ShardStateChange: " + string(move.ShardId) + ":" + move.ShardSnap.String()
+// ShardStateUpdate implements PassiveMove
+type ShardStateUpdate struct {
+	ShardId data.ShardId
+	fn      func(*ShardSnap)
+	reason  string
+}
+
+func NewShardStateUpdate(shardId data.ShardId, fn func(*ShardSnap), reason string) *ShardStateUpdate {
+	return &ShardStateUpdate{
+		ShardId: shardId,
+		fn:      fn,
+		reason:  reason,
+	}
+}
+func (move *ShardStateUpdate) Apply(snapshot *Snapshot, mode ApplyMode) {
+	if snapshot.Frozen {
+		ke := kerror.Create("ShardStateUpdateApplyFailed", "snapshot is frozen")
+		panic(ke)
+	}
+	shardSnap, ok := snapshot.AllShards.Get(move.ShardId)
+	if !ok {
+		ke := kerror.Create("ShardStateUpdateApplyFailed", "shard not found in snapshot").With("shardId", move.ShardId).With("move", move.Signature())
+		panic(ke)
+	}
+	newSnap := shardSnap.Clone()
+	move.fn(newSnap)
+	snapshot.AllShards.Set(move.ShardId, newSnap)
+}
+func (move *ShardStateUpdate) Signature() string {
+	return move.reason + ":" + string(move.ShardId)
 }
 
 // ReplicaAddRemove implements PassiveMove
@@ -236,6 +214,7 @@ func (move *ReplicaAddRemove) Signature() string {
 	return "ReplicaStateChange: " + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx)) + " -> " + strconv.FormatBool(move.NewState)
 }
 
+// ReplicaStateUpdate implements PassiveMove
 type ReplicaStateUpdate struct {
 	ShardId    data.ShardId
 	ReplicaIdx data.ReplicaIdx

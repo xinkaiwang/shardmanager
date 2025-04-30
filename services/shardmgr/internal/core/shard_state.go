@@ -14,20 +14,26 @@ import (
 )
 
 type ShardState struct {
-	ShardId          data.ShardId
-	Replicas         map[data.ReplicaIdx]*ReplicaState
-	Hints            config.ShardConfig
-	CustomProperties map[string]string
-	LameDuck         bool   // soft delete. we will hard delete this shard (in housekeeping) if all replicas are hard deleted
-	LastUpdateTimeMs int64  // last update time in ms
-	LastUpdateReason string // for logging/debugging purpose only
+	ShardId            data.ShardId
+	TargetReplicaCount int
+	Replicas           map[data.ReplicaIdx]*ReplicaState
+	Hints              config.ShardConfig
+	CustomProperties   map[string]string
+	LameDuck           bool   // soft delete. we will hard delete this shard (in housekeeping) if all replicas are hard deleted
+	LastUpdateTimeMs   int64  // last update time in ms
+	LastUpdateReason   string // for logging/debugging purpose only
 }
 
-func NewShardState(shardId data.ShardId) *ShardState {
-	return &ShardState{
+func NewShardState(shardId data.ShardId, replicaCount int) *ShardState {
+	shard := &ShardState{
 		ShardId:  shardId,
 		Replicas: make(map[data.ReplicaIdx]*ReplicaState),
 	}
+	for i := 0; i < replicaCount; i++ {
+		replica := NewReplicaState(shardId, data.ReplicaIdx(i))
+		shard.Replicas[data.ReplicaIdx(i)] = replica
+	}
+	return shard
 }
 
 func NewShardStateByPlan(shardLine *smgjson.ShardLineJson, defCfg config.ShardConfig) *ShardState {
@@ -142,7 +148,8 @@ func (ss *ServiceState) FlushShardState(ctx context.Context, updated []data.Shar
 }
 
 func (shard *ShardState) ToSnapshot(ss *ServiceState) *costfunc.ShardSnap {
-	obj := costfunc.NewShardSnap(shard.ShardId)
+	obj := costfunc.NewShardSnap(shard.ShardId, 0)
+	obj.TargetReplicaCount = shard.TargetReplicaCount
 	for _, replica := range shard.Replicas {
 		obj.Replicas[replica.ReplicaIdx] = replica.ToSnapshot(ss)
 	}

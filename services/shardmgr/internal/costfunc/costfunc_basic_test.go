@@ -22,7 +22,7 @@ func TestCostfunc_basic(t *testing.T) {
 	// step 2: Add a shard (no replica yet), hard cost should be 0
 	snap2 := snap1.Clone()
 	{
-		shard := NewShardSnap("shard_1")
+		shard := NewShardSnap("shard_1", 0)
 		snap2.AllShards.Set("shard_1", shard)
 		cost2 := snap2.GetCost()
 		assert.Equal(t, cost2.HardScore, int32(0), "添加shard后硬成本应为0")
@@ -34,7 +34,7 @@ func TestCostfunc_basic(t *testing.T) {
 	{
 		move1 := NewReplicaAddRemove(data.ShardId("shard_1"), 0, true)
 		move1.Apply(snap3)
-		move2 := NewWorkerAdded(workerFullId, NewWorkerSnap(workerFullId))
+		move2 := NewWorkerStateAddRemove(workerFullId, NewWorkerSnap(workerFullId), "")
 		move2.Apply(snap3)
 		cost3 := snap3.GetCost()
 		assert.Greater(t, cost3.HardScore, int32(0), "添加副本后硬成本应该大于0")

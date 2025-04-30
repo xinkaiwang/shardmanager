@@ -207,7 +207,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	snapshot := NewSnapshot(ctx, costConfig)
 
 	// 添加分片和副本
-	shard := NewShardSnap("shard_1")
+	shard := NewShardSnap("shard_1", 0)
 	snapshot.AllShards.Set("shard_1", shard)
 
 	// 添加副本0
@@ -281,7 +281,7 @@ func snapshotFromJson(snapshot *Snapshot, jsonData map[string]interface{}) error
 			shardId := data.ShardId(shardMap["ShardId"].(string))
 
 			// 创建分片
-			shardSnap := NewShardSnap(shardId)
+			shardSnap := NewShardSnap(shardId, 0)
 			snapshot.AllShards.Set(shardId, shardSnap)
 
 			// 解析副本

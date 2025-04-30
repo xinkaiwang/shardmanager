@@ -23,9 +23,9 @@ func TestCostfunc_unassign(t *testing.T) {
 	snap2 := snap1.Clone()
 	shardId1 := data.ShardId("shard_1")
 	{
-		shard1 := NewShardSnap(shardId1)
-		shard1.Replicas[0] = NewReplicaSnap(shardId1, 0)
-		NewShardStateChange(shardId1, shard1).Apply(snap2)
+		shard1 := NewShardSnap(shardId1, 1)
+		// shard1.Replicas[0] = NewReplicaSnap(shardId1, 0)
+		NewShardStateAddRemove(shardId1, shard1, "shard_1").Apply(snap2)
 
 		cost2 := snap2.GetCost()
 		assert.Greater(t, cost2.HardScore, int32(0), "添加shard后硬成本应大于0")
@@ -35,7 +35,7 @@ func TestCostfunc_unassign(t *testing.T) {
 	snap3 := snap2.Clone()
 	workerFullId1 := data.WorkerFullIdParseFromString("worker-1:session-1")
 	{
-		NewWorkerAdded(workerFullId1, NewWorkerSnap(workerFullId1)).Apply(snap3)
+		NewWorkerStateAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
 		cost3 := snap3.GetCost()
 		assert.Greater(t, cost3.HardScore, int32(0), "添加worker后硬成本应大于0")
 	}

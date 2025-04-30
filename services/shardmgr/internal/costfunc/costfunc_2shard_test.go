@@ -24,12 +24,10 @@ func TestCostfunc_2shard(t *testing.T) {
 	shardId1 := data.ShardId("shard_1")
 	shardId2 := data.ShardId("shard_2")
 	{
-		shard1 := NewShardSnap(shardId1)
-		shard1.Replicas[0] = NewReplicaSnap(shardId1, 0)
-		shard2 := NewShardSnap(shardId2)
-		shard2.Replicas[0] = NewReplicaSnap(shardId2, 0)
-		NewShardStateChange(shardId1, shard1).Apply(snap2)
-		NewShardStateChange(shardId2, shard2).Apply(snap2)
+		shard1 := NewShardSnap(shardId1, 1)
+		shard2 := NewShardSnap(shardId2, 1)
+		NewShardStateAddRemove(shardId1, shard1, "").Apply(snap2)
+		NewShardStateAddRemove(shardId2, shard2, "").Apply(snap2)
 
 		cost2 := snap2.GetCost()
 		assert.Greater(t, cost2.HardScore, int32(0), "添加shard后硬成本应大于0")
@@ -40,8 +38,8 @@ func TestCostfunc_2shard(t *testing.T) {
 	workerFullId1 := data.WorkerFullIdParseFromString("worker-1:session-1")
 	workerFullId2 := data.WorkerFullIdParseFromString("worker-2:session-2")
 	{
-		NewWorkerAdded(workerFullId1, NewWorkerSnap(workerFullId1)).Apply(snap3)
-		NewWorkerAdded(workerFullId2, NewWorkerSnap(workerFullId2)).Apply(snap3)
+		NewWorkerStateAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
+		NewWorkerStateAddRemove(workerFullId2, NewWorkerSnap(workerFullId2), "").Apply(snap3)
 		cost3 := snap3.GetCost()
 		assert.Greater(t, cost3.HardScore, int32(0), "添加worker后硬成本应大于0")
 	}

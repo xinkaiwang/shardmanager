@@ -13,7 +13,8 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 	snapshot := costfunc.NewSnapshot(ctx, ss.ServiceConfig.CostFuncCfg)
 	// shards
 	for shardId, shardState := range ss.AllShards {
-		shardSnap := costfunc.NewShardSnap(shardId)
+		shardSnap := costfunc.NewShardSnap(shardId, 0)
+		shardSnap.TargetReplicaCount = shardState.TargetReplicaCount
 		for replicaIdx, replicaState := range shardState.Replicas {
 			replicaSnap := costfunc.NewReplicaSnap(shardId, replicaIdx)
 			replicaSnap.LameDuck = replicaState.LameDuck

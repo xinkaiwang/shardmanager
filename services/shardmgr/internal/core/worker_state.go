@@ -366,8 +366,16 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 			if hat {
 				dirtyFlag.AddDirtyFlag("hat")
 			}
-			passiveMove := costfunc.NewWorkerStateChange(ws.GetWorkerFullId(), ws.State, ws.HasShutdownHat())
-			moves = append(moves, passiveMove)
+			if shouldWorkerIncludeInSnapshot(ws) {
+				drain := ws.HasShutdownHat()
+				passiveMove := costfunc.NewWorkerStateUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
+					ws.Draining = drain
+				}, "WorkerStateUpdate")
+				moves = append(moves, passiveMove)
+			} else {
+				passiveMove := costfunc.NewWorkerStateAddRemove(ws.GetWorkerFullId(), nil, "WorkerStateAddRemove")
+				moves = append(moves, passiveMove)
+			}
 		}
 	}
 
@@ -401,7 +409,9 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 			hat := ss.hatTryGet(ctx, ws.GetWorkerFullId())
 			if hat {
 				dirty.AddDirtyFlag("hat")
-				passiveMove := costfunc.NewWorkerStateChange(ws.GetWorkerFullId(), ws.State, ws.IsDaining())
+				passiveMove := costfunc.NewWorkerStateUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
+					ws.Draining = true
+				}, "drainingHat")
 				passiveMoves = append(passiveMoves, passiveMove)
 			}
 		}
@@ -414,7 +424,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 			}
 			// Grace period expired, DirtyPurge this worker
 			ws.State = data.WS_Offline_dead
-			passiveMove := costfunc.NewWorkerStateChange(ws.GetWorkerFullId(), ws.State, ws.IsDaining())
+			passiveMove := costfunc.NewWorkerStateAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
 			passiveMoves = append(passiveMoves, passiveMove)
 			dirty.AddDirtyFlag("WS_Offline_dead")
 		}
@@ -429,7 +439,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		}
 		// Worker Event: Grace period expired, worker becomes offline
 		ws.State = data.WS_Offline_dead
-		passiveMove := costfunc.NewWorkerStateChange(ws.GetWorkerFullId(), ws.State, ws.IsDaining())
+		passiveMove := costfunc.NewWorkerStateAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
 		passiveMoves = append(passiveMoves, passiveMove)
 		dirty.AddDirtyFlag("WS_Offline_dead")
 		needsDelete = true

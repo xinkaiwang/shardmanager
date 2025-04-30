@@ -11,7 +11,7 @@ import (
 
 func TestShardSnap(t *testing.T) {
 	shardId := data.ShardId("shard1")
-	shard := NewShardSnap(shardId)
+	shard := NewShardSnap(shardId, 0)
 
 	// 测试 Clone 方法
 	cloned := shard.Clone()
@@ -83,9 +83,9 @@ func TestSnapshot(t *testing.T) {
 
 		// 添加一个 shard 和 replica
 		shardId := data.ShardId("shard1")
-		replicaIdx := data.ReplicaIdx(0)
-		shard := NewShardSnap(shardId)
-		shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
+		// replicaIdx := data.ReplicaIdx(0)
+		shard := NewShardSnap(shardId, 1)
+		// shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
 		snapshot.AllShards.Set(shardId, shard)
 
 		// 在克隆前先冻结快照
@@ -115,8 +115,8 @@ func TestSnapshot(t *testing.T) {
 		// 添加一个 shard 和 replica
 		shardId := data.ShardId("shard1")
 		replicaIdx := data.ReplicaIdx(0)
-		shard := NewShardSnap(shardId)
-		shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
+		shard := NewShardSnap(shardId, 1)
+		// shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
 		snapshot.AllShards.Set(shardId, shard)
 
 		// 测试 Assign 方法
@@ -157,10 +157,10 @@ func TestSnapshot(t *testing.T) {
 		shard1 := data.ShardId("shard1")
 		shard2 := data.ShardId("shard2")
 		for _, shardId := range []data.ShardId{shard1, shard2} {
-			shard := NewShardSnap(shardId)
-			for replicaIdx := data.ReplicaIdx(0); replicaIdx < 2; replicaIdx++ {
-				shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
-			}
+			shard := NewShardSnap(shardId, 2)
+			// for replicaIdx := data.ReplicaIdx(0); replicaIdx < 2; replicaIdx++ {
+			// 	shard.Replicas[replicaIdx] = NewReplicaSnap(shardId, replicaIdx)
+			// }
 			snapshot.AllShards.Set(shardId, shard)
 		}
 
@@ -241,7 +241,7 @@ func TestSnapshotErrorCases(t *testing.T) {
 	})
 
 	// 添加 shard 但不添加 replica
-	shard := NewShardSnap(shardId)
+	shard := NewShardSnap(shardId, 0)
 	snapshot.AllShards.Set(shardId, shard)
 
 	// 测试分配不存在的 replica

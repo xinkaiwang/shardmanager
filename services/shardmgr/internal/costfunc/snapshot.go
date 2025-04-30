@@ -18,23 +18,31 @@ import (
 
 // ShardSnap: implements TypeT2
 type ShardSnap struct {
-	ShardId  data.ShardId
-	Replicas map[data.ReplicaIdx]*ReplicaSnap
+	ShardId            data.ShardId
+	TargetReplicaCount int
+	Replicas           map[data.ReplicaIdx]*ReplicaSnap
 }
 
 func (ss ShardSnap) IsValueTypeT2() {}
 
-func NewShardSnap(shardId data.ShardId) *ShardSnap {
-	return &ShardSnap{
-		ShardId:  shardId,
-		Replicas: make(map[data.ReplicaIdx]*ReplicaSnap),
+func NewShardSnap(shardId data.ShardId, initReplicaCount int) *ShardSnap {
+	shard := &ShardSnap{
+		ShardId:            shardId,
+		TargetReplicaCount: initReplicaCount,
+		Replicas:           make(map[data.ReplicaIdx]*ReplicaSnap, initReplicaCount),
 	}
+	for i := 0; i < initReplicaCount; i++ {
+		replica := NewReplicaSnap(shardId, data.ReplicaIdx(i))
+		shard.Replicas[data.ReplicaIdx(i)] = replica
+	}
+	return shard
 }
 
 func (ss *ShardSnap) Clone() *ShardSnap {
 	clone := &ShardSnap{
-		ShardId:  ss.ShardId,
-		Replicas: make(map[data.ReplicaIdx]*ReplicaSnap),
+		ShardId:            ss.ShardId,
+		TargetReplicaCount: ss.TargetReplicaCount,
+		Replicas:           make(map[data.ReplicaIdx]*ReplicaSnap),
 	}
 	for replicaIdx, replicaSnap := range ss.Replicas {
 		clone.Replicas[replicaIdx] = replicaSnap

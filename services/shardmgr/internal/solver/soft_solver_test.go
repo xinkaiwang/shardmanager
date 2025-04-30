@@ -78,8 +78,8 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 	shard1 := data.ShardId("shard1")
 	shard2 := data.ShardId("shard2")
 	for _, shardId := range []data.ShardId{shard1, shard2} {
-		shard := costfunc.NewShardSnap(shardId)
-		shard.Replicas[0] = costfunc.NewReplicaSnap(shardId, 0)
+		shard := costfunc.NewShardSnap(shardId, 1)
+		// shard.Replicas[0] = costfunc.NewReplicaSnap(shardId, 0)
 		snapshot.AllShards.Set(shardId, shard)
 	}
 

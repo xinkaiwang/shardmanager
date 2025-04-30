@@ -123,7 +123,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			ss.storeProvider.StoreShardState(shard.ShardId, nil)
 			klogging.Info(ctx).With("shardId", shard.ShardId).Log("hardDeleteShardState", "delete shardState")
 			// delete from snapshot
-			passiveMove := costfunc.NewShardStateChange(shard.ShardId, nil)
+			passiveMove := costfunc.NewShardStateAddRemove(shard.ShardId, nil, "hardDeleteShard")
 			ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteShard")
 		} else if dirtyFlag.IsDirty() {
 			// shard is dirty, update it
