@@ -69,13 +69,11 @@ func NewWorkerAdded(workerId data.WorkerFullId, workerSnap *WorkerSnap) *WorkerA
 	}
 }
 
-func (move *WorkerAdded) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
+func (move *WorkerAdded) Apply(snapshot *Snapshot) *Snapshot {
 	_, ok := snapshot.AllWorkers.Get(move.WorkerId)
 	if ok {
-		if mode == AM_Strict {
-			ke := kerror.Create("WorkerAlreadyExists", "worker already exists in snapshot")
-			panic(ke)
-		}
+		// worker already exists, no need to add
+		return snapshot
 	}
 	snapshot.AllWorkers.Set(move.WorkerId, move.WorkerSnap.Clone()) // make a copy
 	return snapshot
@@ -83,6 +81,39 @@ func (move *WorkerAdded) Apply(snapshot *Snapshot, mode ApplyMode) *Snapshot {
 
 func (move *WorkerAdded) Signature() string {
 	return "WorkerAdded: " + move.WorkerId.String()
+}
+
+// WorkerStateUpdate implements PassiveMove
+type WorkerStateUpdate struct {
+	WorkerId data.WorkerFullId
+	fn       func(*WorkerSnap)
+	reason   string
+}
+
+func NewWorkerStateUpdate(workerId data.WorkerFullId, fn func(*WorkerSnap), reason string) *WorkerStateUpdate {
+	return &WorkerStateUpdate{
+		WorkerId: workerId,
+		fn:       fn,
+		reason:   reason,
+	}
+}
+
+func (move *WorkerStateUpdate) Apply(snapshot *Snapshot) {
+	if snapshot.Frozen {
+		ke := kerror.Create("WorkerStateUpdateApplyFailed", "snapshot is frozen")
+		panic(ke)
+	}
+	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
+	if !ok {
+		ke := kerror.Create("WorkerStateUpdateApplyFailed", "worker not found in snapshot").With("workerId", move.WorkerId).With("move", move.Signature())
+		panic(ke)
+	}
+	newSnap := workerSnap.Clone()
+	move.fn(newSnap)
+	snapshot.AllWorkers.Set(move.WorkerId, newSnap)
+}
+func (move *WorkerStateUpdate) Signature() string {
+	return move.reason + ":" + move.WorkerId.String()
 }
 
 // WorkerStateChange implements PassiveMove
@@ -159,22 +190,22 @@ func (move *ShardStateChange) Signature() string {
 	return "ShardStateChange: " + string(move.ShardId) + ":" + move.ShardSnap.String()
 }
 
-// ReplicaStateChange implements PassiveMove
-type ReplicaStateChange struct {
+// ReplicaAddRemove implements PassiveMove
+type ReplicaAddRemove struct {
 	ShardId    data.ShardId
 	ReplicaIdx data.ReplicaIdx
 	NewState   bool // true: add, false: delete
 }
 
-func NewReplicaStateChange(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaStateChange {
-	return &ReplicaStateChange{
+func NewReplicaAddRemove(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaAddRemove {
+	return &ReplicaAddRemove{
 		ShardId:    shardId,
 		ReplicaIdx: replicaIdx,
 		NewState:   newState,
 	}
 }
 
-func (move *ReplicaStateChange) Apply(snapshot *Snapshot) {
+func (move *ReplicaAddRemove) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
 		ke := kerror.Create("ReplicaStateChangeApplyFailed", "snapshot is frozen")
 		panic(ke)
@@ -201,6 +232,48 @@ func (move *ReplicaStateChange) Apply(snapshot *Snapshot) {
 	}
 }
 
-func (move *ReplicaStateChange) Signature() string {
+func (move *ReplicaAddRemove) Signature() string {
 	return "ReplicaStateChange: " + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx)) + " -> " + strconv.FormatBool(move.NewState)
+}
+
+type ReplicaStateUpdate struct {
+	ShardId    data.ShardId
+	ReplicaIdx data.ReplicaIdx
+	fn         func(*ReplicaSnap)
+	reason     string
+}
+
+func NewReplicaStateUpdate(shardId data.ShardId, replicaIdx data.ReplicaIdx, fn func(*ReplicaSnap), reason string) *ReplicaStateUpdate {
+	return &ReplicaStateUpdate{
+		ShardId:    shardId,
+		ReplicaIdx: replicaIdx,
+		fn:         fn,
+		reason:     reason,
+	}
+}
+
+func (move *ReplicaStateUpdate) Apply(snapshot *Snapshot) {
+	if snapshot.Frozen {
+		ke := kerror.Create("ReplicaStateChangeApplyFailed", "snapshot is frozen")
+		panic(ke)
+	}
+	shardSnap, ok := snapshot.AllShards.Get(move.ShardId)
+	if !ok {
+		ke := kerror.Create("ReplicaStateChangeApplyFailed", "shard not found in snapshot").With("shardId", move.ShardId).With("move", move.Signature())
+		panic(ke)
+	}
+	replicaSnap, ok := shardSnap.Replicas[move.ReplicaIdx]
+	if !ok {
+		ke := kerror.Create("ReplicaStateChangeApplyFailed", "replica not found in snapshot").With("shardId", move.ShardId).With("replicaIdx", move.ReplicaIdx).With("move", move.Signature())
+		panic(ke)
+	}
+	newShard := shardSnap.Clone()
+	snapshot.AllShards.Set(move.ShardId, newShard)
+	newReplicaSnap := replicaSnap.Clone()
+	newShard.Replicas[move.ReplicaIdx] = newReplicaSnap
+	move.fn(newReplicaSnap)
+}
+
+func (move *ReplicaStateUpdate) Signature() string {
+	return move.reason + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx))
 }

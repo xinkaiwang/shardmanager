@@ -111,7 +111,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 					// delete this replica
 					// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
 					delete(shard.Replicas, replica.ReplicaIdx)
-					passiveMove := costfunc.NewReplicaStateChange(shard.ShardId, replica.ReplicaIdx, false)
+					passiveMove := costfunc.NewReplicaAddRemove(shard.ShardId, replica.ReplicaIdx, false)
 					ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteReplica")
 					dirtyFlag.AddDirtyFlag("hardDeleteReplica:" + string(shard.ShardId) + ":" + strconv.Itoa(int(replica.ReplicaIdx)))
 				}

@@ -158,7 +158,7 @@ func TestCalCostFromJsonSnapshot(t *testing.T) {
 		{
 			name:         "默认快照成本计算",
 			snapshotJson: testSnapshotStr,
-			expectedHard: 10, // H3 违规(10分) + H2 违规(1分，有LameDuck分片)
+			expectedHard: 11, // H3 违规(10分) + H5 违规(1分，有LameDuck, 每个 assign 1分)
 			expectedSoft: 50.00000000000001,
 			withLameDuck: true,
 		},
@@ -251,7 +251,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 
 	// 计算最终成本 - 应该是10分（违反H3规则）
 	finalCost := snapshot.GetCost()
-	assert.Equal(t, int32(11), finalCost.HardScore, "最终硬成本应为10（违反H3规则）")
+	assert.Equal(t, int32(10), finalCost.HardScore, "最终硬成本应为10（违反H3规则）")
 
 	t.Logf("初始成本: %v", initialCost)
 	t.Logf("中间成本: %v", midCost)

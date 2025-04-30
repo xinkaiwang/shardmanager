@@ -24,48 +24,82 @@ func NewCostFuncSimpleProvider(CostfuncCfg config.CostfuncConfig) *CostFuncSimpl
 	}
 }
 
+type AssignmentView struct {
+	AssignmentId data.AssignmentId
+	ShardId      data.ShardId
+	ReplicaIdx   data.ReplicaIdx
+	WorkerSnap   *WorkerSnap
+}
+
+func (snap *Snapshot) CollectAssignments(assigns map[data.AssignmentId]common.Unit) map[data.AssignmentId]*AssignmentView {
+	assignmentViews := make(map[data.AssignmentId]*AssignmentView)
+	for assignmentId := range assigns {
+		assignment, ok := snap.AllAssignments.Get(assignmentId)
+		if !ok {
+			klogging.Fatal(context.Background()).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "assignment not found")
+			continue
+		}
+		worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
+		if !ok {
+			klogging.Fatal(context.Background()).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "worker not found")
+			continue
+		}
+		av := &AssignmentView{
+			AssignmentId: assignment.AssignmentId,
+			ShardId:      assignment.ShardId,
+			ReplicaIdx:   assignment.ReplicaIdx,
+			WorkerSnap:   worker,
+		}
+		assignmentViews[assignmentId] = av
+	}
+	return assignmentViews
+}
+
+func CountAssignments(assigns map[data.AssignmentId]*AssignmentView, fn func(*AssignmentView) bool) int {
+	count := 0
+	for _, av := range assigns {
+		if fn(av) {
+			count++
+		}
+	}
+	return count
+}
+
 // CalCost implements the CostFuncProvider interface
 func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 	cost := Cost{HardScore: 0, SoftScore: 0}
 
 	// Rule H1: a replica which is unassigned got 2 point
-	// Rule H2: a replicas which is assigned to a "daining" worker got 1 point
+	// Rule H2: a replicas which is assigned to a "draining" worker got 1 point
 	// Rule H3: replicas from same shard should be on different workers (10 points penaty = illegal)
+	// Rule H4: a worker which has more than WorkerMaxAssignments got 10 points
+	// Rule H5: for lame duck replica, each assignment got 1 point
 	{
 		hard := int32(0)
-		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) { // each shard
-			dict := make(map[data.WorkerFullId]common.Unit)  // for H3
-			for replicaId, replica := range shard.Replicas { // each replica
+		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
+			// each shard
+			dict := make(map[data.WorkerFullId]common.Unit) // for H3
+			for _, replica := range shard.Replicas {
+				// each replica
 				// this replica is assigned?
-				replicaHasAssignment := false
-				replicaHasHealthyAssignment := false // this replica is assigned to a healthy (not daining) worker
-				for assignmentId := range replica.Assignments {
-					replicaHasAssignment = true
-					assignment, ok := snap.AllAssignments.Get(assignmentId)
-					if !ok {
-						klogging.Fatal(context.Background()).With("shard", shardId).With("replica", replicaId).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "assignment not found")
-						continue
-					}
-					if _, ok := dict[assignment.WorkerFullId]; ok {
+				assignments := snap.CollectAssignments(replica.Assignments)
+				hasAssignmentNow := len(assignments) > 0
+				hasAssignmentInFuture := CountAssignments(assignments, func(av *AssignmentView) bool { return !av.WorkerSnap.Draining }) > 0
+
+				for _, av := range assignments {
+					if _, ok := dict[av.WorkerSnap.WorkerFullId]; ok {
 						hard += 10 // illegal (H3)
 					} else {
-						dict[assignment.WorkerFullId] = common.Unit{}
-						worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
-						if !ok {
-							klogging.Fatal(context.Background()).With("shard", shardId).With("replica", replicaId).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "worker not found")
-							continue
-						}
-						if !worker.Draining {
-							replicaHasHealthyAssignment = true
-						}
+						dict[av.WorkerSnap.WorkerFullId] = common.Unit{}
 					}
 				}
 				if replica.LameDuck {
+					hard += int32(len(assignments)) // H5
 					continue
 				}
-				if !replicaHasAssignment {
+				if !hasAssignmentNow {
 					hard += 2 // H1
-				} else if !replicaHasHealthyAssignment {
+				} else if !hasAssignmentInFuture {
 					hard += 1 // H2
 				}
 			}
@@ -81,6 +115,7 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 	}
 
 	// Part 2: Soft score
+	// Rule H4: a worker which has more than WorkerMaxAssignments got 10 points
 	{
 		soft := float64(0)
 		hard := int32(0)
@@ -88,7 +123,20 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 			workerLoad := float64(len(worker.Assignments)) / float64(simple.CostfuncCfg.ShardCountCostNorm)
 			soft += workerLoad * workerLoad
 			if len(worker.Assignments) > int(simple.CostfuncCfg.WorkerMaxAssignments) {
-				hard++
+				hard += 10 // illegal (H4)
+			}
+			dict := make(map[data.ShardId]common.Unit) // for H3
+			for _, assignmentId := range worker.Assignments {
+				assignment, ok := snap.AllAssignments.Get(assignmentId)
+				if !ok {
+					klogging.Fatal(context.Background()).With("worker", workerId).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "assignment not found")
+					continue
+				}
+				if _, ok := dict[assignment.ShardId]; ok {
+					hard += 10 // illegal (H3)
+				} else {
+					dict[assignment.ShardId] = common.Unit{}
+				}
 			}
 		})
 		cost.SoftScore += soft

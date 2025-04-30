@@ -92,7 +92,11 @@ type ReplicaSnap struct {
 	ShardId     data.ShardId
 	ReplicaIdx  data.ReplicaIdx
 	Assignments map[data.AssignmentId]common.Unit
-	LameDuck    bool
+
+	// Lame duck: set to remove this replica.
+	// How it works: A regular (non-LameDuck) replica will got hard score penalty (H1) if it has no assignment.
+	// But once set as LameDuck, it will not got those penalty. Thus eventrually it will be unassigned (due to soft score incentives).
+	LameDuck bool
 }
 
 func NewReplicaSnap(shardId data.ShardId, replicaIdx data.ReplicaIdx) *ReplicaSnap {
@@ -392,6 +396,17 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
 		}
 	}
+	if oldAssignId, ok := workerSnap.Assignments[shardId]; ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("WorkerAlreadyHasShard", "worker already has shard").With("workerFullId", workerFullId).With("shardId", shardId).With("newReplica", replicaIdx).With("oldAssigId", oldAssignId).With("newAssigId", assignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			klogging.Warning(context.Background()).With("workerFullId", workerFullId).With("shardId", shardId).With("newReplica", replicaIdx).With("oldAssigId", oldAssignId).With("newAssigId", assignmentId).Log("WorkerAlreadyHasShard", "this should never happen")
+			// ignore and continue
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
+	}
 	// update shardSnap
 	newReplicaSnap := replicaSnap.Clone()
 	newReplicaSnap.Assignments[assignmentId] = common.Unit{}
@@ -435,6 +450,17 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 	if !ok {
 		if mode == AM_Strict {
 			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
+	}
+	_, ok = snap.AllAssignments.Get(assignmentId)
+	if !ok {
+		if mode == AM_Strict {
+			ke := kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", assignmentId).With("shardId", shardId).With("replicaIdx", replicaIdx)
 			panic(ke)
 		} else if mode == AM_Relaxed {
 			return
