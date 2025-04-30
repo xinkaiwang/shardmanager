@@ -36,8 +36,8 @@ func TestCostfunc_2replica(t *testing.T) {
 	workerFullId1 := data.WorkerFullIdParseFromString("worker-1:session-1")
 	workerFullId2 := data.WorkerFullIdParseFromString("worker-2:session-2")
 	{
-		NewWorkerStateAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
-		NewWorkerStateAddRemove(workerFullId2, NewWorkerSnap(workerFullId2), "").Apply(snap3)
+		NewWorkerSnapAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
+		NewWorkerSnapAddRemove(workerFullId2, NewWorkerSnap(workerFullId2), "").Apply(snap3)
 		cost3 := snap3.GetCost()
 		assert.Greater(t, cost3.HardScore, int32(0), "添加worker后硬成本应大于0")
 	}

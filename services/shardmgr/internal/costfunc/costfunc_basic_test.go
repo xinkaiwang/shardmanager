@@ -32,9 +32,9 @@ func TestCostfunc_basic(t *testing.T) {
 	snap3 := snap2.Clone()
 	workerFullId := data.WorkerFullIdParseFromString("worker-1:session-1")
 	{
-		move1 := NewReplicaAddRemove(data.ShardId("shard_1"), 0, true)
+		move1 := NewReplicaSnapAddRemove(data.ShardId("shard_1"), 0, true)
 		move1.Apply(snap3)
-		move2 := NewWorkerStateAddRemove(workerFullId, NewWorkerSnap(workerFullId), "")
+		move2 := NewWorkerSnapAddRemove(workerFullId, NewWorkerSnap(workerFullId), "")
 		move2.Apply(snap3)
 		cost3 := snap3.GetCost()
 		assert.Greater(t, cost3.HardScore, int32(0), "添加副本后硬成本应该大于0")

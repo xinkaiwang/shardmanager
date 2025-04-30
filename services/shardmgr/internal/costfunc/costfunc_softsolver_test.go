@@ -35,8 +35,8 @@ func TestCostfunc_softsolver(t *testing.T) {
 	workerFullId1 := data.WorkerFullIdParseFromString("worker-1:session-1")
 	workerFullId2 := data.WorkerFullIdParseFromString("worker-2:session-2")
 	{
-		NewWorkerStateAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
-		NewWorkerStateAddRemove(workerFullId2, NewWorkerSnap(workerFullId2), "").Apply(snap3)
+		NewWorkerSnapAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
+		NewWorkerSnapAddRemove(workerFullId2, NewWorkerSnap(workerFullId2), "").Apply(snap3)
 		cost3 := snap3.GetCost()
 		assert.Greater(t, cost3.HardScore, int32(0), "添加worker后硬成本应大于0")
 	}
@@ -56,7 +56,7 @@ func TestCostfunc_softsolver(t *testing.T) {
 	// step 5: worker1 become draining
 	snap5 := snap4.Clone()
 	{
-		move1 := NewWorkerStateUpdate(workerFullId1, func(ws *WorkerSnap) {
+		move1 := NewWorkerSnapUpdate(workerFullId1, func(ws *WorkerSnap) {
 			ws.Draining = true
 		}, "Draining")
 		move1.Apply(snap5)
@@ -68,7 +68,7 @@ func TestCostfunc_softsolver(t *testing.T) {
 	// step 6: replica becomes lame duck
 	snap6 := snap5.Clone()
 	{
-		move1 := NewReplicaStateUpdate(shardId1, 0, func(rs *ReplicaSnap) {
+		move1 := NewReplicaSnapUpdate(shardId1, 0, func(rs *ReplicaSnap) {
 			rs.LameDuck = true
 		}, "lameDuck")
 		move1.Apply(snap6)

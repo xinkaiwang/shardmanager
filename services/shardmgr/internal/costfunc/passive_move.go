@@ -24,21 +24,21 @@ type PassiveMove interface {
 	Signature() string // for debugging/logging/metrics purpose only
 }
 
-// WorkerStateAddRemove implements PassiveMove
-type WorkerStateAddRemove struct {
+// WorkerSnapAddRemove implements PassiveMove
+type WorkerSnapAddRemove struct {
 	WorkerId   data.WorkerFullId
 	WorkerSnap *WorkerSnap // nil to delete
 	reason     string
 }
 
-func NewWorkerStateAddRemove(workerId data.WorkerFullId, workerSnap *WorkerSnap, reason string) *WorkerStateAddRemove {
-	return &WorkerStateAddRemove{
+func NewWorkerSnapAddRemove(workerId data.WorkerFullId, workerSnap *WorkerSnap, reason string) *WorkerSnapAddRemove {
+	return &WorkerSnapAddRemove{
 		WorkerId:   workerId,
 		WorkerSnap: workerSnap,
 		reason:     reason,
 	}
 }
-func (move *WorkerStateAddRemove) Apply(snapshot *Snapshot) {
+func (move *WorkerSnapAddRemove) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
 		ke := kerror.Create("WorkerStateAddRemoveApplyFailed", "snapshot is frozen")
 		panic(ke)
@@ -70,26 +70,26 @@ func (move *WorkerStateAddRemove) Apply(snapshot *Snapshot) {
 		snapshot.AllWorkers.Delete(move.WorkerId)
 	}
 }
-func (move *WorkerStateAddRemove) Signature() string {
+func (move *WorkerSnapAddRemove) Signature() string {
 	return move.reason + ":" + move.WorkerId.String()
 }
 
-// WorkerStateUpdate implements PassiveMove
-type WorkerStateUpdate struct {
+// WorkerSnapUpdate implements PassiveMove
+type WorkerSnapUpdate struct {
 	WorkerId data.WorkerFullId
 	fn       func(*WorkerSnap)
 	reason   string
 }
 
-func NewWorkerStateUpdate(workerId data.WorkerFullId, fn func(*WorkerSnap), reason string) *WorkerStateUpdate {
-	return &WorkerStateUpdate{
+func NewWorkerSnapUpdate(workerId data.WorkerFullId, fn func(*WorkerSnap), reason string) *WorkerSnapUpdate {
+	return &WorkerSnapUpdate{
 		WorkerId: workerId,
 		fn:       fn,
 		reason:   reason,
 	}
 }
 
-func (move *WorkerStateUpdate) Apply(snapshot *Snapshot) {
+func (move *WorkerSnapUpdate) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
 		ke := kerror.Create("WorkerStateUpdateApplyFailed", "snapshot is frozen")
 		panic(ke)
@@ -103,7 +103,7 @@ func (move *WorkerStateUpdate) Apply(snapshot *Snapshot) {
 	move.fn(newSnap)
 	snapshot.AllWorkers.Set(move.WorkerId, newSnap)
 }
-func (move *WorkerStateUpdate) Signature() string {
+func (move *WorkerSnapUpdate) Signature() string {
 	return move.reason + ":" + move.WorkerId.String()
 }
 
@@ -136,21 +136,21 @@ func (move *ShardStateAddRemove) Signature() string {
 	return move.reason + ":" + string(move.ShardId) + ":" + move.snap.String()
 }
 
-// ShardStateUpdate implements PassiveMove
-type ShardStateUpdate struct {
+// ShardSnapUpdate implements PassiveMove
+type ShardSnapUpdate struct {
 	ShardId data.ShardId
 	fn      func(*ShardSnap)
 	reason  string
 }
 
-func NewShardStateUpdate(shardId data.ShardId, fn func(*ShardSnap), reason string) *ShardStateUpdate {
-	return &ShardStateUpdate{
+func NewShardSnapUpdate(shardId data.ShardId, fn func(*ShardSnap), reason string) *ShardSnapUpdate {
+	return &ShardSnapUpdate{
 		ShardId: shardId,
 		fn:      fn,
 		reason:  reason,
 	}
 }
-func (move *ShardStateUpdate) Apply(snapshot *Snapshot, mode ApplyMode) {
+func (move *ShardSnapUpdate) Apply(snapshot *Snapshot, mode ApplyMode) {
 	if snapshot.Frozen {
 		ke := kerror.Create("ShardStateUpdateApplyFailed", "snapshot is frozen")
 		panic(ke)
@@ -164,26 +164,26 @@ func (move *ShardStateUpdate) Apply(snapshot *Snapshot, mode ApplyMode) {
 	move.fn(newSnap)
 	snapshot.AllShards.Set(move.ShardId, newSnap)
 }
-func (move *ShardStateUpdate) Signature() string {
+func (move *ShardSnapUpdate) Signature() string {
 	return move.reason + ":" + string(move.ShardId)
 }
 
-// ReplicaAddRemove implements PassiveMove
-type ReplicaAddRemove struct {
+// ReplicaSnapAddRemove implements PassiveMove
+type ReplicaSnapAddRemove struct {
 	ShardId    data.ShardId
 	ReplicaIdx data.ReplicaIdx
 	NewState   bool // true: add, false: delete
 }
 
-func NewReplicaAddRemove(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaAddRemove {
-	return &ReplicaAddRemove{
+func NewReplicaSnapAddRemove(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaSnapAddRemove {
+	return &ReplicaSnapAddRemove{
 		ShardId:    shardId,
 		ReplicaIdx: replicaIdx,
 		NewState:   newState,
 	}
 }
 
-func (move *ReplicaAddRemove) Apply(snapshot *Snapshot) {
+func (move *ReplicaSnapAddRemove) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
 		ke := kerror.Create("ReplicaStateChangeApplyFailed", "snapshot is frozen")
 		panic(ke)
@@ -210,20 +210,20 @@ func (move *ReplicaAddRemove) Apply(snapshot *Snapshot) {
 	}
 }
 
-func (move *ReplicaAddRemove) Signature() string {
+func (move *ReplicaSnapAddRemove) Signature() string {
 	return "ReplicaStateChange: " + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx)) + " -> " + strconv.FormatBool(move.NewState)
 }
 
-// ReplicaStateUpdate implements PassiveMove
-type ReplicaStateUpdate struct {
+// ReplicaSnapUpdate implements PassiveMove
+type ReplicaSnapUpdate struct {
 	ShardId    data.ShardId
 	ReplicaIdx data.ReplicaIdx
 	fn         func(*ReplicaSnap)
 	reason     string
 }
 
-func NewReplicaStateUpdate(shardId data.ShardId, replicaIdx data.ReplicaIdx, fn func(*ReplicaSnap), reason string) *ReplicaStateUpdate {
-	return &ReplicaStateUpdate{
+func NewReplicaSnapUpdate(shardId data.ShardId, replicaIdx data.ReplicaIdx, fn func(*ReplicaSnap), reason string) *ReplicaSnapUpdate {
+	return &ReplicaSnapUpdate{
 		ShardId:    shardId,
 		ReplicaIdx: replicaIdx,
 		fn:         fn,
@@ -231,7 +231,7 @@ func NewReplicaStateUpdate(shardId data.ShardId, replicaIdx data.ReplicaIdx, fn 
 	}
 }
 
-func (move *ReplicaStateUpdate) Apply(snapshot *Snapshot) {
+func (move *ReplicaSnapUpdate) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
 		ke := kerror.Create("ReplicaStateChangeApplyFailed", "snapshot is frozen")
 		panic(ke)
@@ -253,6 +253,6 @@ func (move *ReplicaStateUpdate) Apply(snapshot *Snapshot) {
 	move.fn(newReplicaSnap)
 }
 
-func (move *ReplicaStateUpdate) Signature() string {
+func (move *ReplicaSnapUpdate) Signature() string {
 	return move.reason + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx))
 }
