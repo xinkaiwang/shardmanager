@@ -130,7 +130,7 @@ func TestSnapshot(t *testing.T) {
 		assert.Equal(t, replicaIdx, assignmentSnap.ReplicaIdx)
 
 		// 测试 Unassign 方法
-		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId, AM_Strict)
+		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId, AM_Strict, true)
 
 		// 验证取消分配是否成功
 		_, exists = snapshot.AllAssignments.Get(assignmentId)
@@ -188,7 +188,7 @@ func TestSnapshot(t *testing.T) {
 		assert.Contains(t, shard1Snap.Replicas[1].Assignments, assign2)
 
 		// 3. 取消 worker1 的分配，并将 shard2:replica0 分配给它
-		snapshot.Unassign(worker1, shard1, 0, assign1, AM_Strict)
+		snapshot.Unassign(worker1, shard1, 0, assign1, AM_Strict, true)
 		assign3 := data.AssignmentId("assign3")
 		snapshot.Assign(shard2, 0, assign3, worker1, AM_Strict)
 
@@ -257,6 +257,6 @@ func TestSnapshotErrorCases(t *testing.T) {
 
 	// 测试取消不存在的分配
 	assert.Panics(t, func() {
-		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId, AM_Strict)
+		snapshot.Unassign(workerFullId, shardId, replicaIdx, assignmentId, AM_Strict, true)
 	})
 }

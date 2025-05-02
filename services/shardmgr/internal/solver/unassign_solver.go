@@ -48,7 +48,7 @@ func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.S
 				assign = candidateAssignment[rnd]
 			}
 			newSnap := snapshot.Clone()
-			newSnap.Unassign(assign.WorkerFullId, assign.ShardId, assign.ReplicaIdx, assign.AssignmentId, costfunc.AM_Strict)
+			newSnap.Unassign(assign.WorkerFullId, assign.ShardId, assign.ReplicaIdx, assign.AssignmentId, costfunc.AM_Strict, true)
 			newCost := newSnap.GetCost()
 			if newCost.IsLowerThan(bestCost) {
 				bestCost = newCost

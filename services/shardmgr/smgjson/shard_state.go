@@ -14,6 +14,8 @@ type ShardStateJson struct {
 	// key is replicaIdx
 	Resplicas map[data.ReplicaIdx]*ReplicaStateJson `json:"resplicas"`
 
+	TargetReplicaCount int `json:"target_replica_count,omitempty"`
+
 	LameDuck int8 `json:"lame_duck,omitempty"` // use int to represent bool
 
 	CustomProperties map[string]string `json:"custom_properties,omitempty"`

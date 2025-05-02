@@ -98,6 +98,8 @@ func TestAssembleWorkerLifeCycle4(t *testing.T) {
 				return false, pnj.ToJson()
 			}, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
+			// step 7: simulate eph node update
+			klogging.Info(ctx).Log("Step7", "simulate eph node update")
 			setup.UpdateEphNode(workerFullId2, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 				assign := cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AsginmentId, cougarjson.CAS_Ready)
 				wej.Assignments = append(wej.Assignments, assign)
@@ -107,6 +109,8 @@ func TestAssembleWorkerLifeCycle4(t *testing.T) {
 			})
 		}
 		{
+			// step 8: wail until routing node update
+			klogging.Info(ctx).Log("Step8", "wail until routing node update")
 			waitSucc, elapsedMs := setup.WaitUntilRoutingState(t, workerFullId, func(rj *unicornjson.WorkerEntryJson) (bool, string) {
 				if rj == nil {
 					return true, "没有 routing 节点"

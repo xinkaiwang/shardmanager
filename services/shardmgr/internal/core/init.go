@@ -157,9 +157,9 @@ func (ss *ServiceState) ReCreateSnapshot(ctx context.Context, reason string) {
 	snapshotFuture.Freeze()
 	if ss.SolverGroup != nil {
 		ss.SolverGroup.OnSnapshot(ctx, snapshotFuture, reason)
-		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup.OnSnapshot")
+		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).With("reason", reason).Log("ReCreateSnapshot", "SolverGroup.OnSnapshot")
 	} else {
-		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).Log("ReCreateSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString()).With("time", kcommon.GetWallTimeMs()).With("reason", reason).Log("ReCreateSnapshot", "SolverGroup is nil, skip OnSnapshot")
 	}
 	ss.SetSnapshotFuture(ctx, snapshotFuture, "ReCreateSnapshot")
 }
@@ -171,6 +171,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 		shardSnap := costfunc.NewShardSnap(shard.ShardId, 0)
 		shardSnap.TargetReplicaCount = shard.TargetReplicaCount
 		for replicaIdx, replica := range shard.Replicas {
+			// Note: snapshot needs to include all replicas, even if they are lame duck. This is because assign solver needs to know what are the available replica Idxs
 			replicaSnap := costfunc.NewReplicaSnap(shard.ShardId, replicaIdx)
 			replicaSnap.LameDuck = replica.LameDuck
 			shardSnap.Replicas[replicaIdx] = replicaSnap
@@ -194,7 +195,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 			continue
 		}
 		workerSnap := costfunc.NewWorkerSnap(workerId)
-		workerSnap.Draining = worker.ShutdownRequesting
+		workerSnap.Draining = worker.IsDaining()
 		for assignId := range worker.Assignments {
 			assignmentState, ok := ss.AllAssignments[assignId]
 			if !ok {

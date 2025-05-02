@@ -73,7 +73,7 @@ func TestAssembleWorkerLifeCycle2(t *testing.T) {
 		}
 
 		// Step 5: 更新 worker eph 节点，设置 ReqShutDown=1
-		klogging.Info(ctx).Log("Step3", "更新 worker eph 节点，设置 ReqShutDown=1")
+		klogging.Info(ctx).Log("Step5", "更新 worker eph 节点，设置 ReqShutDown=1")
 		setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 			wej.ReqShutDown = 1
 			wej.LastUpdateAtMs = kcommon.GetWallTimeMs()

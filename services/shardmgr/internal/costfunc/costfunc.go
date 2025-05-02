@@ -24,6 +24,37 @@ func NewCostFuncSimpleProvider(CostfuncCfg config.CostfuncConfig) *CostFuncSimpl
 	}
 }
 
+type ReplicaView struct {
+	ShardId     data.ShardId
+	ReplicaIdx  data.ReplicaIdx
+	LameDuck    bool
+	Assignments map[data.AssignmentId]*AssignmentView
+}
+
+func (shardSnap *ShardSnap) CollectReplicas(snapshot *Snapshot) map[data.ReplicaIdx]*ReplicaView {
+	replicaViews := make(map[data.ReplicaIdx]*ReplicaView)
+	for replicaIdx, replicaSnap := range shardSnap.Replicas {
+		replicaView := &ReplicaView{
+			ShardId:     replicaSnap.ShardId,
+			ReplicaIdx:  replicaSnap.ReplicaIdx,
+			LameDuck:    replicaSnap.LameDuck,
+			Assignments: snapshot.CollectAssignments(replicaSnap.Assignments),
+		}
+		replicaViews[replicaIdx] = replicaView
+	}
+	return replicaViews
+}
+
+func CountReplicas(replicaSnaps map[data.ReplicaIdx]*ReplicaView, fn func(*ReplicaView) bool) int {
+	count := 0
+	for _, rv := range replicaSnaps {
+		if fn(rv) {
+			count++
+		}
+	}
+	return count
+}
+
 type AssignmentView struct {
 	AssignmentId data.AssignmentId
 	ShardId      data.ShardId
@@ -69,32 +100,40 @@ func CountAssignments(assigns map[data.AssignmentId]*AssignmentView, fn func(*As
 func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 	cost := Cost{HardScore: 0, SoftScore: 0}
 
-	// Rule H1: a replica which is unassigned got 2 point
+	// Rule H1: a replica which is unassigned got 2 point <deprecated by H6>
 	// Rule H2: a replicas which is assigned to a "draining" worker got 1 point
 	// Rule H3: replicas from same shard should be on different workers (10 points penaty = illegal)
 	// Rule H4: a worker which has more than WorkerMaxAssignments got 10 points
-	// Rule H5: for lame duck replica, each assignment got 1 point
+	// Rule H5: for lame duck replica, each assignment got 1 point <deprecated by H7>
+	// Rule H6: replicaCount < shard.TargetReplicaCount, each replica got 2 point
+	// Rule H7: replicaCount > shard.TargetReplicaCount, each replica got 1 point
 	{
 		hard := int32(0)
 		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
 			// each shard
+			replicas := shard.CollectReplicas(snap)
+			currentReplicaCount := CountReplicas(replicas, func(rv *ReplicaView) bool { return !rv.LameDuck })
+			if currentReplicaCount < int(shard.TargetReplicaCount) {
+				hard += int32(shard.TargetReplicaCount-currentReplicaCount) * 2 // H6
+			} else if currentReplicaCount > int(shard.TargetReplicaCount) {
+				hard += int32(currentReplicaCount - shard.TargetReplicaCount) // H7
+			}
 			dict := make(map[data.WorkerFullId]common.Unit) // for H3
-			for _, replica := range shard.Replicas {
+			for _, replicaView := range replicas {
 				// each replica
 				// this replica is assigned?
-				assignments := snap.CollectAssignments(replica.Assignments)
-				hasAssignmentNow := len(assignments) > 0
-				hasAssignmentInFuture := CountAssignments(assignments, func(av *AssignmentView) bool { return !av.WorkerSnap.Draining }) > 0
+				hasAssignmentNow := len(replicaView.Assignments) > 0
+				hasAssignmentInFuture := CountAssignments(replicaView.Assignments, func(av *AssignmentView) bool { return !av.WorkerSnap.Draining }) > 0
 
-				for _, av := range assignments {
+				for _, av := range replicaView.Assignments {
 					if _, ok := dict[av.WorkerSnap.WorkerFullId]; ok {
 						hard += 10 // illegal (H3)
 					} else {
 						dict[av.WorkerSnap.WorkerFullId] = common.Unit{}
 					}
 				}
-				if replica.LameDuck {
-					hard += int32(len(assignments)) // H5
+				if replicaView.LameDuck {
+					hard += int32(len(replicaView.Assignments)) // H5
 					continue
 				}
 				if !hasAssignmentNow {

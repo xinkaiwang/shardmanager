@@ -33,6 +33,10 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	// candidate worker list
 	candidateWorkers := []data.WorkerFullId{}
 	snapshot.AllWorkers.VisitAll(func(fullId data.WorkerFullId, worker *costfunc.WorkerSnap) {
+		if worker.Draining {
+			// this worker is draining, skip it
+			return
+		}
 		candidateWorkers = append(candidateWorkers, fullId)
 	})
 	if len(candidateWorkers) == 0 {
@@ -49,11 +53,11 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 				// candidate replica list
 				candidateReplicas := []data.ReplicaFullId{}
 				snapshot.AllShards.VisitAll(func(shardId data.ShardId, shard *costfunc.ShardSnap) {
-					for _, replica := range shard.Replicas {
-						if len(replica.Assignments) > 0 {
-							continue
-						}
-						candidateReplicas = append(candidateReplicas, replica.GetReplicaFullId())
+					replicaViews := shard.CollectReplicas(snapshot)
+					if costfunc.CountReplicas(replicaViews, func(rv *costfunc.ReplicaView) bool {
+						return !rv.LameDuck
+					}) < shard.TargetReplicaCount {
+						candidateReplicas = append(candidateReplicas, data.NewReplicaFullId(shardId, -1)) // replicaIdx will be set later, -1 is just a placeholder
 					}
 				})
 				if len(candidateReplicas) == 0 {
@@ -69,6 +73,14 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 				// step 3: which dest worker?
 				rnd := kcommon.RandomInt(ctx, len(candidateWorkers))
 				destWorkerId = candidateWorkers[rnd]
+			}
+			{
+				// step 3b: is this move valid?
+				// check if the replica is already assigned to the dest worker
+				workerSnap, _ := snapshot.AllWorkers.Get(destWorkerId)
+				if _, ok := workerSnap.Assignments[replicaCandidate.ShardId]; ok {
+					return // not valid
+				}
 			}
 			// step 4: is this move better?
 			// make a copy of the snapshot
@@ -95,6 +107,20 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	if bestMove == nil {
 		return nil
 	}
+
+	// step 5: remember the replicaIdx is not set yet?
+	if bestMove.Replica.ReplicaIdx == -1 {
+		// find the next available replicaIdx
+		shardSnap, _ := snapshot.AllShards.Get(bestMove.Replica.ShardId)
+		replicas := shardSnap.Replicas
+		firstAvailableIdx := 0
+		for replicas[data.ReplicaIdx(firstAvailableIdx)] != nil {
+			firstAvailableIdx++
+		}
+		bestMove.Replica.ReplicaIdx = data.ReplicaIdx(firstAvailableIdx)
+	}
+
+	// step 6: create a proposal
 	proposal := costfunc.NewProposal(ctx, "AssignMove", baseCost.Substract(bestCost), snapshot.SnapshotId)
 	proposal.Move = bestMove
 	proposal.Signature = bestMove.GetSignature()

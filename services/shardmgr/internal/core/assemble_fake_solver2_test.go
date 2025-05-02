@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -35,17 +36,21 @@ func TestAssembleFakeSolver2(t *testing.T) {
 
 	fn := func() {
 		// Step 1: 创建 worker-1 eph
+		klogging.Info(ctx).Log("Step1", "创建 worker-1 eph")
 		workerFullId, _ := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 
 		// Step 2: 创建 shardPlan and set into etcd
 		// 添加三个分片 (shard-a, shard-b, shard-c)
+		klogging.Info(ctx).Log("Step2", "创建 shardPlan and set into etcd")
 		setup.FakeTime.VirtualTimeForward(ctx, 10)
 		firstShardPlan := []string{"shard-a", "shard-b", "shard-c"}
 		setShardPlan(t, setup.FakeEtcd, ctx, firstShardPlan)
 
 		// Step 3: 创建 ServiceState
+		klogging.Info(ctx).Log("Step3", "创建 ServiceState")
 		ss := AssembleSsWithShadowState(ctx, "TestAssembleFakeSolver")
 		ss.SolverGroup = setup.FakeSnapshotListener
+		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(), "TestAssembleFakeSolver")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
@@ -77,6 +82,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 		}
 
 		// Step 4: simulate a solver move
+		klogging.Info(ctx).Log("Step4", "simulate a solver move")
 		{
 			shardId := data.ShardId("shard-a")
 			replicaFullId := data.NewReplicaFullId(shardId, 0)
@@ -87,6 +93,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 		}
 
 		// Step 5: 等待accept (接受提案)
+		klogging.Info(ctx).Log("Step5", "等待accept (接受提案)")
 		{
 			// 等待提案接受
 			waitSucc, elapsedMs := WaitUntil(t, func() (bool, string) {
@@ -123,6 +130,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 		}
 
 		// Step 6: Fake worker eph
+		klogging.Info(ctx).Log("Step6", "Fake worker eph")
 		{
 			ephNode := setup.GetEphNode(workerFullId)
 			assign := cougarjson.NewAssignmentJson("shard-a", 0, "as1", cougarjson.CAS_Ready)

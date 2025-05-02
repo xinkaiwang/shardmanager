@@ -73,6 +73,7 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// Step 5:
+		klogging.Info(ctx).Log("Step5", "设置 replica count=2")
 		setup.UpdateServiceConfig(config.WithShardConfig(func(sc *config.ShardConfig) {
 			sc.MinReplicaCount = 2
 			sc.MaxReplicaCount = 2
@@ -116,7 +117,7 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// Step 8:
-		klogging.Info(ctx).Log("Step8", "worker-1.DropShard")
+		klogging.Info(ctx).Log("Step8", "HardScore=0")
 		{
 			waitSucc, elapsedMs := setup.WaitUntilSnapshotCurrent(t, func(snap *costfunc.Snapshot) (bool, string) {
 				if snap == nil {
@@ -131,67 +132,46 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 			assert.Equal(t, true, waitSucc, "应该能在超时前快照, 耗时=%dms", elapsedMs)
 		}
 
-		// step 9: 1 replica
-		klogging.Info(ctx).Log("Step9", "设置 replica count=1")
+		// step 9: worker-1 request shutdown
+		klogging.Info(ctx).Log("Step9", "request shutdown worker-1")
+		{
+			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
+				wej.ReqShutDown = 1
+				wej.LastUpdateAtMs = setup.FakeTime.WallTime
+				wej.LastUpdateReason = "SimulateDropShard"
+				return wej
+			})
+		}
+
+		// Step 10: hardScore=1
+		klogging.Info(ctx).Log("Step10", "HardScore=1")
+		{
+			waitSucc, elapsedMs := setup.WaitUntilSnapshotCurrent(t, func(snap *costfunc.Snapshot) (bool, string) {
+				if snap == nil {
+					return false, "快照不存在"
+				}
+				cost := snap.GetCost()
+				if cost.HardScore != 1 {
+					return false, "快照不正确, cost=" + cost.String()
+				}
+				return true, "cost=" + cost.String()
+			}, 10*1000, 1000)
+			assert.Equal(t, true, waitSucc, "应该能在超时前快照, 耗时=%dms", elapsedMs)
+		}
+
+		// step 11: wait for long time
+		klogging.Info(ctx).Log("Step11", "wait for long time")
+		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
+
+		// step 12: 1 replica
+		klogging.Info(ctx).Log("Step12", "设置 replica count=1")
 		setup.UpdateServiceConfig(config.WithShardConfig(func(sc *config.ShardConfig) {
 			sc.MinReplicaCount = 1
 			sc.MaxReplicaCount = 1
 		}))
 
-		{
-			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId2, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
-				if pnj == nil {
-					return false, "没有 pilot 节点"
-				}
-				if len(pnj.Assignments) == 0 {
-					return true, pnj.ToJson()
-				}
-				return false, pnj.ToJson()
-			}, 30*1000, 1000)
-			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
-			// step9b: simulate eph node update
-			setup.UpdateEphNode(workerFullId2, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-				wej.Assignments = nil
-				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()
-				wej.LastUpdateReason = "simulate eph node update"
-				return wej
-			})
-		}
-
-		// step 10: worker-1 request shutdown
-		klogging.Info(ctx).Log("Step10", "request shutdown worker-1")
-		setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-			wej.ReqShutDown = 1
-			wej.LastUpdateAtMs = setup.FakeTime.WallTime
-			wej.LastUpdateReason = "SimulateDropShard"
-			return wej
-		})
-
-		// Step 11: worker2 should get the assignment
-		klogging.Info(ctx).Log("Step11", "worker-2.AddShard")
-		{
-			var pilot2Assign *cougarjson.PilotAssignmentJson
-			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId2, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
-				if pnj == nil {
-					return false, "没有 pilot 节点"
-				}
-				if len(pnj.Assignments) == 1 {
-					pilot2Assign = pnj.Assignments[0]
-					return true, pnj.ToJson()
-				}
-				return false, pnj.ToJson()
-			}, 30*1000, 1000)
-			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
-			// step11b: simulate eph node update
-			setup.UpdateEphNode(workerFullId2, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-				assign := cougarjson.NewAssignmentJson(pilot2Assign.ShardId, pilot2Assign.ReplicaIdx, pilot2Assign.AsginmentId, cougarjson.CAS_Ready)
-				wej.Assignments = append(wej.Assignments, assign)
-				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()
-				wej.LastUpdateReason = "simulate eph node update"
-				return wej
-			})
-		}
-		// step 12: worker1 should be unassigned
+		// step 13: worker-1 should be unassigned (since it is shutdown requesting, so solver should favor worker-1 compare to worker-2)
+		klogging.Info(ctx).Log("Step13", "worker-1 should be unassigned")
 		{
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
 				if pnj == nil {
@@ -203,7 +183,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 				return false, pnj.ToJson()
 			}, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
-			// step12b: simulate eph node update
+			// step14: simulate eph node update
+			klogging.Info(ctx).Log("Step14", "simulate eph node update")
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 				wej.Assignments = nil
 				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()
@@ -211,7 +192,13 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 				return wej
 			})
 		}
-		// step 13: worker1 should get shutdown permit
+
+		// step 15: wait for long time
+		klogging.Info(ctx).Log("Step15", "wait for long time")
+		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
+
+		// step 16: worker1 should get shutdown permit
+		klogging.Info(ctx).Log("Step16", "worker-1 should get shutdown permit")
 		{
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
 				if pnj == nil {
@@ -224,6 +211,10 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 			}, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
 		}
+
+		// step 17: wait for long time
+		klogging.Info(ctx).Log("Step17", "wait for long time")
+		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
 
 		// force print log
 		// assert.Equal(t, true, false, "force print log")

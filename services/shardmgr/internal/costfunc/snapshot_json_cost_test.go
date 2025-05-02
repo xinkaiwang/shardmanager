@@ -40,6 +40,7 @@ var testSnapshotStr = `
   },
   "Shards": [
     {
+	  "TargetReplicaCount": 1,
       "Replicas": [
         {
           "Assignments": [
@@ -104,6 +105,7 @@ var testEmptySnapshotStr = `
   },
   "Shards": [
     {
+	  "TargetReplicaCount": 2,
       "Replicas": [
         {
           "Assignments": [],
@@ -217,6 +219,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	// 添加副本1
 	replica1 := NewReplicaSnap("shard_1", 1)
 	shard.Replicas[1] = replica1
+	shard.TargetReplicaCount = 2
 
 	// 添加工作节点1
 	worker1 := NewWorkerSnap(data.WorkerFullId{WorkerId: "worker-1", SessionId: "session-1"})
@@ -282,6 +285,7 @@ func snapshotFromJson(snapshot *Snapshot, jsonData map[string]interface{}) error
 
 			// 创建分片
 			shardSnap := NewShardSnap(shardId, 0)
+			shardSnap.TargetReplicaCount = int(shardMap["TargetReplicaCount"].(float64))
 			snapshot.AllShards.Set(shardId, shardSnap)
 
 			// 解析副本

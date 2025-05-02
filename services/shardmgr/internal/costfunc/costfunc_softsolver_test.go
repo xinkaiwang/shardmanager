@@ -74,7 +74,7 @@ func TestCostfunc_softsolver(t *testing.T) {
 		move1.Apply(snap6)
 		cost6 := snap6.GetCost()
 		cost5 := snap5.GetCost()
-		assert.Equal(t, true, cost6.HardScore == cost5.HardScore, "hard cost should get same after lame duck")
+		assert.Equal(t, true, cost6.HardScore > cost5.HardScore, "hard cost should get higher after lame duck")
 	}
 	// step 7: unassign a LameDuck assignment
 	snap7 := snap6.Clone()

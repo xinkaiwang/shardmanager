@@ -382,17 +382,6 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
 		}
 	}
-	replicaSnap, ok := shardSnap.Replicas[replicaIdx]
-	if !ok {
-		if mode == AM_Strict {
-			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
-			panic(ke)
-		} else if mode == AM_Relaxed {
-			return
-		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
-		}
-	}
 	workerSnap, ok := snap.AllWorkers.Get(workerFullId)
 	if !ok {
 		if mode == AM_Strict {
@@ -415,6 +404,11 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
 		}
 	}
+	replicaSnap, ok := shardSnap.Replicas[replicaIdx]
+	if !ok {
+		// looks like this is a new replica
+		replicaSnap = NewReplicaSnap(shardId, replicaIdx)
+	}
 	// update shardSnap
 	newReplicaSnap := replicaSnap.Clone()
 	newReplicaSnap.Assignments[assignmentId] = common.Unit{}
@@ -430,7 +424,7 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 	snap.AllAssignments.Set(assignmentId, newAssignmentSnap)
 }
 
-func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, mode ApplyMode) {
+func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId, mode ApplyMode, removeReplica bool) {
 	// update workerSnap
 	workerSnap, ok := snap.AllWorkers.Get(workerFullId)
 	if !ok {
@@ -481,6 +475,9 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 	snap.AllWorkers.Set(workerFullId, newWorkerSnap)
 	// update shardSnap
 	newReplicaSnap := replicaSnap.Clone()
+	if removeReplica {
+		newReplicaSnap.LameDuck = true
+	}
 	delete(newReplicaSnap.Assignments, assignmentId)
 	newShardSnap := shardSnap.Clone()
 	newShardSnap.Replicas[replicaIdx] = newReplicaSnap

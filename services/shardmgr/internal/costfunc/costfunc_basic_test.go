@@ -34,6 +34,8 @@ func TestCostfunc_basic(t *testing.T) {
 	{
 		move1 := NewReplicaSnapAddRemove(data.ShardId("shard_1"), 0, true)
 		move1.Apply(snap3)
+		shard, _ := snap3.AllShards.Get("shard_1")
+		shard.TargetReplicaCount = 1
 		move2 := NewWorkerSnapAddRemove(workerFullId, NewWorkerSnap(workerFullId), "")
 		move2.Apply(snap3)
 		cost3 := snap3.GetCost()

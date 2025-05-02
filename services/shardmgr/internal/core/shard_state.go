@@ -15,11 +15,11 @@ import (
 
 type ShardState struct {
 	ShardId            data.ShardId
-	TargetReplicaCount int
+	TargetReplicaCount int // solver will depending on this to decide how many replicas to add/remove
 	Replicas           map[data.ReplicaIdx]*ReplicaState
 	Hints              config.ShardConfig
 	CustomProperties   map[string]string
-	LameDuck           bool   // soft delete. we will hard delete this shard (in housekeeping) if all replicas are hard deleted
+	LameDuck           bool   // soft delete. we will hard delete this shard (in housekeeping) once all replicas are all gone
 	LastUpdateTimeMs   int64  // last update time in ms
 	LastUpdateReason   string // for logging/debugging purpose only
 }
@@ -61,24 +61,17 @@ func NewShardStateByPlan(shardLine *smgjson.ShardLineJson, defCfg config.ShardCo
 
 func NewShardStateByJson(ctx context.Context, ss *ServiceState, shardStateJson *smgjson.ShardStateJson) *ShardState {
 	shardState := &ShardState{
-		ShardId:          shardStateJson.ShardName,
-		Replicas:         make(map[data.ReplicaIdx]*ReplicaState),
-		Hints:            ss.ServiceConfig.ShardConfig,
-		CustomProperties: shardStateJson.CustomProperties,
-		LameDuck:         common.BoolFromInt8(shardStateJson.LameDuck),
-		LastUpdateReason: "unmarshal",
+		ShardId:            shardStateJson.ShardName,
+		Replicas:           make(map[data.ReplicaIdx]*ReplicaState),
+		Hints:              ss.ServiceConfig.ShardConfig,
+		CustomProperties:   shardStateJson.CustomProperties,
+		TargetReplicaCount: shardStateJson.TargetReplicaCount,
+		LameDuck:           common.BoolFromInt8(shardStateJson.LameDuck),
+		LastUpdateReason:   "unmarshal",
 	}
 	for i, replicaJson := range shardStateJson.Resplicas {
 		replica := NewReplicaStateByJson(shardState, replicaJson)
 		shardState.Replicas[data.ReplicaIdx(i)] = replica
-		// for _, assignId := range replicaJson.Assignments {
-		// 	_, ok := ss.AllAssignments[data.AssignmentId(assignId)]
-		// 	if !ok {
-		// 		klogging.Fatal(ctx).With("shardId", shardState.ShardId).With("replicaIdx", i).With("assignId", assignId).Log("NewShardStateByJson", "assignment not found")
-		// 		continue
-		// 	}
-		// 	replica.Assignments[data.AssignmentId(assignId)] = common.Unit{}
-		// }
 	}
 	return shardState
 }
@@ -103,7 +96,7 @@ func (ss *ServiceState) UpdateShardStateByPlan(shard *ShardState, shardLine *smg
 		// in theory, hints update don't need to trigger flush, cause hints is not part of the shardStateJson.
 		// dirtyFlag.AddDirtyFlag("hints")
 	}
-	dirtyFlag.AddDirtyFlags(shard.ReEvaluateReplicaCount())
+	dirtyFlag.AddDirtyFlags(shard.reEvaluateReplicaCount())
 
 	if shard.LameDuck { // 如果分片已经被标记为软删除，则undo软删除, 重新激活分片
 		shard.LameDuck = false
@@ -112,13 +105,9 @@ func (ss *ServiceState) UpdateShardStateByPlan(shard *ShardState, shardLine *smg
 	return dirtyFlag
 }
 
-// func (shard *ShardState) EvaluateReplicaCount() []string {
-// 	dirtyFlag := shard.ReEvaluateReplicaCount()
-// 	return dirtyFlag.flags
-// }
-
 func (shard *ShardState) MarkAsSoftDelete(ctx context.Context) {
 	shard.LameDuck = true
+	shard.TargetReplicaCount = 0
 	for _, replica := range shard.Replicas {
 		replica.MarkAsSoftDelete(ctx)
 	}
@@ -161,50 +150,72 @@ func (shard *ShardState) ToJson() *smgjson.ShardStateJson {
 	for _, replica := range shard.Replicas {
 		obj.Resplicas[replica.ReplicaIdx] = replica.ToJson()
 	}
+	obj.TargetReplicaCount = shard.TargetReplicaCount
 	obj.LameDuck = smgjson.Bool2Int8(shard.LameDuck)
 	obj.LastUpdateTimeMs = shard.LastUpdateTimeMs
 	obj.LastUpdateReason = shard.LastUpdateReason
 	return obj
 }
 
-// ReEvaluateReplicaCount: based on the current replica count and the minimum replica count, add new replicas if needed
+// reEvaluateReplicaCount: based on the current replica count and the minimum replica count, add new replicas if needed
 // return >0 means replica added, <0 means replica removed, 0 means no change
-func (shard *ShardState) ReEvaluateReplicaCount() *DirtyFlag {
+func (shard *ShardState) reEvaluateReplicaCount() *DirtyFlag {
 	// 重新计算副本数
-	curReplicaCount := 0
+	curReplicaCount := shard.TargetReplicaCount
 	dirtyFlag := NewDirtyFlag()
-	largestReplicaIdx := data.ReplicaIdx(0)
-	for _, replica := range shard.Replicas {
-		if !replica.LameDuck {
-			curReplicaCount++
-		}
-		if replica.ReplicaIdx > largestReplicaIdx {
-			largestReplicaIdx = replica.ReplicaIdx
-		}
+	targetReplicaCount := curReplicaCount
+	if targetReplicaCount < shard.Hints.MinReplicaCount {
+		diff := shard.Hints.MinReplicaCount - targetReplicaCount
+		targetReplicaCount = shard.Hints.MinReplicaCount
+		dirtyFlag.AddDirtyFlag("minReplicaCount:+" + strconv.Itoa(diff))
 	}
-	// add new replicas if needed
-	for curReplicaCount < shard.Hints.MinReplicaCount {
-		// add new replica
-		// step 1: find the next available replica index
-		nextReplicaIdx := shard.findNextAvailableReplicaIndex()
-		// step 2: create a new replica
-		replica := NewReplicaState(shard.ShardId, nextReplicaIdx)
-		shard.Replicas[nextReplicaIdx] = replica
-		curReplicaCount++
-		dirtyFlag.AddDirtyFlag("addReplica" + strconv.Itoa(int(nextReplicaIdx)))
+	if targetReplicaCount > shard.Hints.MaxReplicaCount {
+		diff := targetReplicaCount - shard.Hints.MaxReplicaCount
+		targetReplicaCount = shard.Hints.MaxReplicaCount
+		dirtyFlag.AddDirtyFlag("maxReplicaCount:-" + strconv.Itoa(diff))
 	}
-	// (soft delete) remove extra replicas if needed
-	for curReplicaCount > shard.Hints.MaxReplicaCount {
-		// remove the last replica
-		if replica, ok := shard.Replicas[largestReplicaIdx]; ok && !replica.LameDuck {
-			replica.LameDuck = true
-			curReplicaCount--
-			dirtyFlag.AddDirtyFlag("lameDuckReplica" + strconv.Itoa(int(largestReplicaIdx)))
-		}
-		largestReplicaIdx--
-	}
+	// here we only adjust targetReplicaCount, the actual replica/assign will be add/remove by solvers (through proposal)
+	shard.TargetReplicaCount = targetReplicaCount
 	return dirtyFlag
 }
+
+// func (shard *ShardState) ReEvaluateReplicaCount() *DirtyFlag {
+// 	// 重新计算副本数
+// 	curReplicaCount := 0
+// 	dirtyFlag := NewDirtyFlag()
+// 	largestReplicaIdx := data.ReplicaIdx(0)
+// 	for _, replica := range shard.Replicas {
+// 		if !replica.LameDuck {
+// 			curReplicaCount++
+// 		}
+// 		if replica.ReplicaIdx > largestReplicaIdx {
+// 			largestReplicaIdx = replica.ReplicaIdx
+// 		}
+// 	}
+// 	// add new replicas if needed
+// 	for curReplicaCount < shard.Hints.MinReplicaCount {
+// 		// add new replica
+// 		// step 1: find the next available replica index
+// 		nextReplicaIdx := shard.findNextAvailableReplicaIndex()
+// 		// step 2: create a new replica
+// 		replica := NewReplicaState(shard.ShardId, nextReplicaIdx)
+// 		shard.Replicas[nextReplicaIdx] = replica
+// 		curReplicaCount++
+// 		dirtyFlag.AddDirtyFlag("addReplica" + strconv.Itoa(int(nextReplicaIdx)))
+// 	}
+// 	// (soft delete) remove extra replicas if needed
+// 	for curReplicaCount > shard.Hints.MaxReplicaCount {
+// 		// remove the last replica
+// 		if replica, ok := shard.Replicas[largestReplicaIdx]; ok && !replica.LameDuck {
+// 			replica.LameDuck = true
+// 			curReplicaCount--
+// 			dirtyFlag.AddDirtyFlag("lameDuckReplica" + strconv.Itoa(int(largestReplicaIdx)))
+// 		}
+// 		largestReplicaIdx--
+// 	}
+// 	shard.TargetReplicaCount = curReplicaCount
+// 	return dirtyFlag
+// }
 
 func (shard *ShardState) findNextAvailableReplicaIndex() data.ReplicaIdx {
 	// find the next available replica index

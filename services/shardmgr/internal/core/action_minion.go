@@ -163,12 +163,6 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
-			replicaState, ok := shardState.Replicas[action.ReplicaIdx]
-			if !ok {
-				ke = kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", action.ReplicaIdx)
-				status = AS_Failed
-				return
-			}
 			_, ok = ss.AllAssignments[action.AssignmentId]
 			if ok {
 				ke = kerror.Create("AssignmentAlreadyExist", "assignment already exist").With("assignmentId", action.AssignmentId)
@@ -180,6 +174,12 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				ke = kerror.Create("DestWorkerNotFound", "worker not found").With("workerFullId", workerFullId)
 				status = AS_Failed
 				return
+			}
+			replicaState, ok := shardState.Replicas[action.ReplicaIdx]
+			if !ok {
+				// replica not exist yet, create it
+				replicaState = NewReplicaState(action.ShardId, action.ReplicaIdx)
+				shardState.Replicas[action.ReplicaIdx] = replicaState
 			}
 			assign := NewAssignmentState(action.AssignmentId, shardId, action.ReplicaIdx, workerFullId)
 			assign.TargetState = cougarjson.CAS_Ready
@@ -313,6 +313,9 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			}
 			assign.ShouldInPilot = false
 			assign.TargetState = cougarjson.CAS_Dropped
+			if action.DeleteReplica {
+				replicaState.LameDuck = true
+			}
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "dropShard")
 			if workerState.IsOnline() {

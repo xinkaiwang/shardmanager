@@ -6,7 +6,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -14,9 +13,9 @@ import (
 
 // digestStagingShardPlan: this must called in runloop
 // this will modify AllShards, and call FlushShardState
-func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
+func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) bool {
 	shardPlan := ss.stagingShardPlan
-	var passiveMoves []costfunc.PassiveMove
+	// var passiveMoves []costfunc.PassiveMove
 
 	// compare with current shard state
 	needRemove := map[data.ShardId]*ShardState{}
@@ -27,11 +26,11 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 	inserted := []data.ShardId{}
 	deleted := []data.ShardId{}
 	unchanged := 0
-	// Based on what we have in shardPlan, we will update shard state, add new shard if not exist, and remove shard if not in shardPlan, update shard state if shardPlan is different
+	// Based on what we have in shardPlan, we will update shard state, 1) add new shard if not exist, and 2) remove shard if not in shardPlan, 3) update shard state if shardPlan is different
 	for _, shardLine := range shardPlan {
 		shardId := data.ShardId(shardLine.ShardName)
 		if shard, ok := ss.AllShards[shardId]; ok {
-			// update shard state
+			// 3) update
 			dirtyFlags := ss.UpdateShardStateByPlan(shard, shardLine)
 			if dirtyFlags.IsDirty() {
 				updated = append(updated, shard.ShardId)
@@ -42,29 +41,32 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) {
 			}
 			delete(needRemove, shard.ShardId)
 		} else {
-			// add new shardState
+			// 1) add new
 			shardState := NewShardStateByPlan(shardLine, ss.ServiceConfig.ShardConfig)
-			shardState.ReEvaluateReplicaCount()
+			shardState.reEvaluateReplicaCount()
 			ss.AllShards[shardState.ShardId] = shardState
 			inserted = append(inserted, shardState.ShardId)
 		}
 	}
-	// remove shard if not in shardPlan
+	// 2) remove
 	for _, shard := range needRemove {
-		deleted = append(deleted, shard.ShardId)
-		// soft delete
-		shard.MarkAsSoftDelete(ctx)
+		if !shard.LameDuck {
+			deleted = append(deleted, shard.ShardId)
+			// soft delete
+			shard.MarkAsSoftDelete(ctx)
+			shard.LastUpdateTimeMs = kcommon.GetWallTimeMs()
+			shard.LastUpdateReason = "lameDuck"
+		}
 	}
 	// log
 	dirty := len(updated) + len(inserted) + len(deleted)
 	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).With("unchanged", unchanged).With("dirty", dirty).Log("syncShardPlan", "done")
 	if dirty != 0 {
 		ss.FlushShardState(ctx, updated, inserted, deleted)
-		ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
+		// ss.ReCreateSnapshot(ctx, "digestStagingShardPlan")
+		// ss.reCreateSnapshotBatchManager.TrySchedule(ctx, "digestStagingShardPlan")
 	}
-	for _, passiveMove := range passiveMoves {
-		ss.ModifySnapshot(ctx, passiveMove.Apply, passiveMove.Signature())
-	}
+	return dirty != 0
 }
 
 type ShardPlanWatcher struct {

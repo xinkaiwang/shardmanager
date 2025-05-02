@@ -49,6 +49,7 @@ type Action struct {
 	AddDestToRouting     bool
 	SleepMs              int
 	ActionStage          smgjson.ActionStage
+	DeleteReplica        bool
 }
 
 func NewAction(actionType smgjson.ActionType) *Action {
@@ -133,14 +134,8 @@ func (action *Action) applyAddShard(snapshot *Snapshot, mode ApplyMode) {
 	}
 	replicaState, ok := shardState.Replicas[action.ReplicaIdx]
 	if !ok {
-		if mode == AM_Strict {
-			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", action.ShardId).With("replicaIdx", action.ReplicaIdx)
-			panic(ke)
-		} else if mode == AM_Relaxed {
-			return
-		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
-		}
+		// replica not found, create a new one
+		replicaState = NewReplicaSnap(action.ShardId, action.ReplicaIdx)
 	}
 	// when reach here, the destWorker/shard/replica confirmed exist
 	// copy on write (workerSnap)
@@ -225,6 +220,9 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 	// copy-on-write (shardSnap)
 	newReplicaSnap := replicaState.Clone()
 	newShardSnap := shardState.Clone()
+	if action.DeleteReplica {
+		newReplicaSnap.LameDuck = true
+	}
 	newShardSnap.Replicas[action.ReplicaIdx] = newReplicaSnap
 	snapshot.AllShards.Set(action.ShardId, newShardSnap)
 	delete(newReplicaSnap.Assignments, action.AssignmentId)
@@ -276,7 +274,7 @@ func (move *SimpleMove) GetSignature() string {
 }
 
 func (move *SimpleMove) Apply(snapshot *Snapshot, mode ApplyMode) {
-	snapshot.Unassign(move.Src, move.Replica.ShardId, move.Replica.ReplicaIdx, move.SrcAssignmentId, mode)
+	snapshot.Unassign(move.Src, move.Replica.ShardId, move.Replica.ReplicaIdx, move.SrcAssignmentId, mode, false)
 	snapshot.Assign(move.Replica.ShardId, move.Replica.ReplicaIdx, move.DestAssignmentId, move.Dst, mode)
 }
 
@@ -295,11 +293,12 @@ func (move *SimpleMove) GetActions(cfg config.ShardConfig) []*Action {
 		})
 		// step 2: drop
 		list = append(list, &Action{
-			ActionType:   smgjson.AT_DropShard,
-			ShardId:      move.Replica.ShardId,
-			ReplicaIdx:   move.Replica.ReplicaIdx,
-			AssignmentId: move.SrcAssignmentId,
-			From:         move.Src,
+			ActionType:    smgjson.AT_DropShard,
+			ShardId:       move.Replica.ShardId,
+			ReplicaIdx:    move.Replica.ReplicaIdx,
+			AssignmentId:  move.SrcAssignmentId,
+			From:          move.Src,
+			DeleteReplica: false,
 		})
 		// step 3: add shard
 		list = append(list, &Action{
@@ -349,11 +348,12 @@ func (move *SimpleMove) GetActions(cfg config.ShardConfig) []*Action {
 		})
 		// step 4: drop
 		list = append(list, &Action{
-			ActionType:   smgjson.AT_DropShard,
-			ShardId:      move.Replica.ShardId,
-			ReplicaIdx:   move.Replica.ReplicaIdx,
-			AssignmentId: move.SrcAssignmentId,
-			From:         move.Src,
+			ActionType:    smgjson.AT_DropShard,
+			ShardId:       move.Replica.ShardId,
+			ReplicaIdx:    move.Replica.ReplicaIdx,
+			AssignmentId:  move.SrcAssignmentId,
+			From:          move.Src,
+			DeleteReplica: false,
 		})
 		return list
 	} else {
@@ -427,7 +427,7 @@ func (move *UnassignMove) GetSignature() string {
 }
 
 func (move *UnassignMove) Apply(snapshot *Snapshot, mode ApplyMode) {
-	snapshot.Unassign(move.Worker, move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId, mode)
+	snapshot.Unassign(move.Worker, move.Replica.ShardId, move.Replica.ReplicaIdx, move.AssignmentId, mode, true)
 }
 
 func (move *UnassignMove) GetActions(cfg config.ShardConfig) []*Action {
@@ -444,11 +444,12 @@ func (move *UnassignMove) GetActions(cfg config.ShardConfig) []*Action {
 	})
 	// step 2: drop
 	list = append(list, &Action{
-		ActionType:   smgjson.AT_DropShard,
-		ShardId:      move.Replica.ShardId,
-		ReplicaIdx:   move.Replica.ReplicaIdx,
-		AssignmentId: move.AssignmentId,
-		From:         move.Worker,
+		ActionType:    smgjson.AT_DropShard,
+		ShardId:       move.Replica.ShardId,
+		ReplicaIdx:    move.Replica.ReplicaIdx,
+		AssignmentId:  move.AssignmentId,
+		From:          move.Worker,
+		DeleteReplica: true,
 	})
 	return list
 }
