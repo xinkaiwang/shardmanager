@@ -3,6 +3,7 @@ package cougar
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 )
 
@@ -13,5 +14,5 @@ type CougarApp interface {
 
 type AppShard interface {
 	UpdateShard(ctx context.Context, shard *ShardInfo) // optional: this is no-op for most applications
-	GetShardQpm(ctx context.Context) int64
+	GetShardStats(ctx context.Context) cougarjson.ShardStats
 }

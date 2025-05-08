@@ -105,6 +105,7 @@ type AssignmentJson struct {
 	ReplicaIdx   int                   `json:"idx,omitempty"`
 	AssignmentId string                `json:"asg"`
 	State        CougarAssignmentState `json:"sts"`
+	Stats        *ShardStats           `json:"qpm,omitempty"` // query per minute
 }
 
 func NewAssignmentJson(shardId string, replicaIdx int, assignmentId string, state CougarAssignmentState) *AssignmentJson {
@@ -124,4 +125,14 @@ func (obj *AssignmentJson) ToJson() string {
 		panic(ke)
 	}
 	return string(bytes)
+}
+
+type ShardStats struct {
+	Qpm   int64 `json:"qpm,omitempty"`    // query per minute
+	MemMb int64 `json:"mem_mb,omitempty"` // memory usage
+}
+
+type PodStats struct {
+	MemMb int64 `json:"mem_mb,omitempty"` // memory usage
+	CpuMs int64 `json:"cpu_ms,omitempty"` // cpu usage
 }

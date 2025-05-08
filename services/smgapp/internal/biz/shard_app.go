@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougar"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
@@ -28,9 +28,7 @@ func NewMyCougarApp() *MyCougarApp {
 // AddShard implements cougarapp.CougarApp interface
 func (app *MyCougarApp) AddShard(ctx context.Context, shardInfo *cougar.ShardInfo, chDone chan struct{}) cougar.AppShard {
 	klogging.Info(ctx).With("shardId", shardInfo.ShardId).Log("MyCougarApp", "AddShard")
-	shard := &MyAppShard{
-		shardInfo: shardInfo,
-	}
+	shard := NewAppShard(ctx, shardInfo)
 	app.Mu.Lock()
 	defer app.Mu.Unlock()
 	app.Shards[shardInfo.ShardId] = shard
@@ -42,6 +40,10 @@ func (app *MyCougarApp) DropShard(ctx context.Context, shardId data.ShardId, chD
 	klogging.Info(ctx).With("shardId", shardId).Log("MyCougarApp", "DropShard")
 	app.Mu.Lock()
 	defer app.Mu.Unlock()
+	shard, ok := app.Shards[shardId]
+	if ok {
+		shard.Stop()
+	}
 	delete(app.Shards, shardId)
 	close(chDone)
 }
@@ -65,15 +67,22 @@ func (app *MyCougarApp) GetShard(ctx context.Context, shardId data.ShardId) *MyA
 
 // MyAppShard implements cougarapp.AppShard interface
 type MyAppShard struct {
-	shardInfo  *cougar.ShardInfo
-	currentQpm int64
+	shardInfo *cougar.ShardInfo
+	// currentQpm int64
+	qpm *cougar.ShardQpm
 }
 
-func NewAppShard(shardInfo *cougar.ShardInfo) *MyAppShard {
+func NewAppShard(ctx context.Context, shardInfo *cougar.ShardInfo) *MyAppShard {
 	return &MyAppShard{
-		shardInfo:  shardInfo,
-		currentQpm: 300,
+		shardInfo: shardInfo,
+		// currentQpm: 300,
+		qpm: cougar.NewShardQpm(ctx, shardInfo.ShardId),
 	}
+}
+
+func (shard *MyAppShard) Stop() {
+	klogging.Info(context.Background()).With("shardId", shard.shardInfo.ShardId).Log("MyAppShard", "Stopping")
+	shard.qpm.Stop()
 }
 
 func (shard *MyAppShard) UpdateShard(ctx context.Context, shardInfo *cougar.ShardInfo) {
@@ -81,19 +90,16 @@ func (shard *MyAppShard) UpdateShard(ctx context.Context, shardInfo *cougar.Shar
 	shard.shardInfo = shardInfo
 }
 
-func (shard *MyAppShard) GetShardQpm(ctx context.Context) int64 {
-	max := 600
-	min := 0
-	shard.currentQpm += int64(kcommon.RandomInt(ctx, 11) - 5)
-	if shard.currentQpm > int64(max) {
-		shard.currentQpm = int64(max)
-	} else if shard.currentQpm < int64(min) {
-		shard.currentQpm = int64(min)
+func (shard *MyAppShard) GetShardStats(ctx context.Context) cougarjson.ShardStats {
+	qpm := shard.qpm.GetQpm()
+	klogging.Info(ctx).With("shardId", shard.shardInfo.ShardId).With("currentQpm", qpm).Log("MyAppShard", "GetShardQpm")
+	return cougarjson.ShardStats{
+		Qpm:   qpm,
+		MemMb: 0,
 	}
-	klogging.Info(ctx).With("shardId", shard.shardInfo.ShardId).With("currentQpm", shard.currentQpm).Log("MyAppShard", "GetShardQpm")
-	return shard.currentQpm // TODO: implement this
 }
 
 func (shard *MyAppShard) Ping(ctx context.Context, name string) string {
+	shard.qpm.Inc(1)
 	return "pong, name=" + name + ", shardId=" + string(shard.shardInfo.ShardId)
 }

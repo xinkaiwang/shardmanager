@@ -59,6 +59,15 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 					}) < shard.TargetReplicaCount {
 						candidateReplicas = append(candidateReplicas, data.NewReplicaFullId(shardId, -1)) // replicaIdx will be set later, -1 is just a placeholder
 					}
+					for replicaIdx, replicaView := range replicaViews {
+						if replicaView.LameDuck {
+							continue
+						}
+						if len(replicaView.Assignments) > 0 {
+							continue
+						}
+						candidateReplicas = append(candidateReplicas, data.NewReplicaFullId(shardId, replicaIdx))
+					}
 				})
 				if len(candidateReplicas) == 0 {
 					// no replica needs new assignment

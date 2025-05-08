@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougar"
+	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 )
@@ -40,8 +41,11 @@ func (shard *MyShard) UpdateShard(ctx context.Context, shardInfo *cougar.ShardIn
 	// Update shard information if needed
 }
 
-func (shard *MyShard) GetShardQpm(ctx context.Context) int64 {
-	return 1000
+func (shard *MyShard) GetShardStats(ctx context.Context) cougarjson.ShardStats {
+	return cougarjson.ShardStats{
+		Qpm:   100,
+		MemMb: 1024,
+	}
 }
 
 func main() {
@@ -52,39 +56,6 @@ func main() {
 	builder := cougar.NewCougarBuilder()
 	cougarApp := NewMyCougarApp()
 	builder.WithCougarApp(cougarApp)
-	// builder.WithNotifyShardChange(func(shardId data.ShardId, action cougar.CougarAction) {
-	// 	fmt.Printf("Shard %s changed\n", shardId)
-	// 	kcommon.ScheduleRun(1000, func() {
-	// 		if action == cougar.CA_AddShard {
-	// 			// fmt.Printf("Adding shard %s\n", shardId)
-	// 			cougarInstance.VisitState(func(state *cougar.CougarState) string {
-	// 				shard := state.AllShards[shardId]
-	// 				shard.CurrentConfirmedState = cougarjson.CAS_Ready
-	// 				fmt.Printf("Added shard %s\n", shardId)
-	// 				return "AddedSucc"
-	// 			})
-	// 		} else if action == cougar.CA_RemoveShard {
-	// 			// fmt.Printf("Removing shard %s\n", shardId)
-	// 			cougarInstance.VisitState(func(state *cougar.CougarState) string {
-	// 				shard, ok := state.AllShards[shardId]
-	// 				if !ok {
-	// 					// 如果 shard 不存在，则直接返回
-	// 					klogging.Warning(ctx).With("shardId", shardId).Log("shard not found", "")
-	// 					return "ShardNotFound"
-	// 				}
-	// 				shard.CurrentConfirmedState = cougarjson.CAS_Dropped
-	// 				fmt.Printf("Removed shard %s\n", shardId)
-	// 				return "RemovedSucc"
-	// 			})
-	// 		} else if action == cougar.CA_UpdateShard {
-	// 			// fmt.Printf("Updating shard %s\n", shardId)
-	// 			cougarInstance.VisitState(func(state *cougar.CougarState) string {
-	// 				fmt.Printf("Updated shard %s\n", shardId)
-	// 				return "UpdatedSucc"
-	// 			})
-	// 		}
-	// 	})
-	// })
 	workerInfo := cougar.NewWorkerInfo(
 		"worker1",
 		"session1",

@@ -24,6 +24,8 @@ type ShardInfo struct {
 	AppShard              AppShard
 	ChReady               chan struct{} // notify when shard is ready
 	ChDropped             chan struct{} // notify when shard is dropped
+
+	stats *cougarjson.ShardStats
 }
 
 func NewCougarShardInfo(shardId data.ShardId, replicaIdx data.ReplicaIdx, assignmentId data.AssignmentId) *ShardInfo {
@@ -62,16 +64,25 @@ func (s *ShardInfo) IsDropped() bool {
 type NotifyChangeFunc func(shardId data.ShardId, action CougarAction)
 
 type CougarState struct {
-	ShutDownRequest  bool
+	ShutDownRequest  chan struct{}
 	ShutdownPermited chan struct{}
 	AllShards        map[data.ShardId]*ShardInfo
 }
 
 func NewCougarStates() *CougarState {
 	return &CougarState{
-		ShutDownRequest:  false,
+		ShutDownRequest:  make(chan struct{}),
 		ShutdownPermited: make(chan struct{}),
 		AllShards:        make(map[data.ShardId]*ShardInfo),
+	}
+}
+
+func (s *CougarState) IsShutdownRequested() bool {
+	select {
+	case <-s.ShutDownRequest:
+		return true
+	default:
+		return false
 	}
 }
 

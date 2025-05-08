@@ -76,7 +76,7 @@ func (pm *PathManager) FmtWorkerEphPath(workerFullId data.WorkerFullId) string {
 
 func (pm *PathManager) FmtPilotPath(workerFullId data.WorkerFullId) string {
 	// Pilot node is using workerId (not workerFullId) as key. Since it's not possible for multiple worker to alive at same time, it's safe.
-	return pm.GetPilotPathPrefix() + string(workerFullId.WorkerId)
+	return pm.GetPilotPathPrefix() + workerFullId.String()
 }
 
 func (pm *PathManager) FmtRoutingPath(workerFullId data.WorkerFullId) string {

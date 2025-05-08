@@ -87,7 +87,7 @@ func (c *CougarImpl) VisitStateAndWait(visitor CougarStateVisitor) {
 func (c *CougarImpl) RequestShutdown() chan struct{} {
 	var ch chan struct{}
 	c.VisitStateAndWait(func(state *CougarState) string {
-		state.ShutDownRequest = true
+		close(state.ShutDownRequest)
 		ch = state.ShutdownPermited
 		return "requestShutdown"
 	})
@@ -96,7 +96,7 @@ func (c *CougarImpl) RequestShutdown() chan struct{} {
 
 // etcd path is "/smg/eph/{worker_id}:{session_id}"
 func (c *CougarImpl) ephPath() string {
-	return fmt.Sprintf("/smg/eph/%s", c.workerInfo.WorkerId)
+	return fmt.Sprintf("/smg/eph/%s:%s", c.workerInfo.WorkerId, c.workerInfo.SessionId)
 }
 
 // etcd path is "/smg/pilot/{worker_id}"
@@ -146,14 +146,16 @@ func (c *CougarImpl) ToEphNode(updateReason string) *cougarjson.WorkerEphJson {
 	ephNode.StatefulType = c.workerInfo.StatefulType
 	ephNode.LastUpdateAtMs = kcommon.GetWallTimeMs()
 	ephNode.LastUpdateReason = updateReason
-	ephNode.ReqShutDown = kcommon.BoolToInt8(c.cougarState.ShutDownRequest)
+	ephNode.ReqShutDown = kcommon.BoolToInt8(c.cougarState.IsShutdownRequested())
 	for shardId, shard := range c.cougarState.AllShards {
-		ephNode.Assignments = append(ephNode.Assignments, &cougarjson.AssignmentJson{
+		assign := &cougarjson.AssignmentJson{
 			ShardId:      string(shardId),
 			ReplicaIdx:   int(shard.ReplicaIdx),
 			AssignmentId: string(shard.AssignmentId),
 			State:        shard.CurrentConfirmedState,
-		})
+		}
+		assign.Stats = shard.stats
+		ephNode.Assignments = append(ephNode.Assignments, assign)
 	}
 	return ephNode
 }
