@@ -33,6 +33,10 @@ func (te *Housekeep30sEvent) Process(ctx context.Context, ss *ServiceState) {
 }
 
 func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
+	// when we have in-flight moves, we don't fatal on snapshot diff. this is to avoid false positive.
+	// For example, after the assignment is confirmed (in ss), but before the move is done (in snapshot current), the snapshot will be different from the current state. this is expected.
+	inFlightMove := len(ss.AllMoves) > 0
+
 	// re-create current snapshot from scratch
 	newSnapshotCurrent := ss.CreateSnapshotFromCurrentState(ctx)
 	// re-create future snapshot
@@ -43,11 +47,19 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	// compare with existing snapshot
 	diffs := compareSnapshot(ctx, ss.SnapshotCurrent, newSnapshotCurrent)
 	if len(diffs) > 0 {
-		klogging.Fatal(ctx).With("diffs", diffs).With("current", ss.SnapshotCurrent.ToJsonString()).With("newCurrent", newSnapshotCurrent.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+		if !inFlightMove {
+			klogging.Fatal(ctx).With("diffs", diffs).With("current", ss.SnapshotCurrent.ToJsonString()).With("newCurrent", newSnapshotCurrent.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+		} else {
+			klogging.Warning(ctx).With("diffs", diffs).With("current", ss.SnapshotCurrent.ToJsonString()).With("newCurrent", newSnapshotCurrent.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+		}
 	}
 	diffs = compareSnapshot(ctx, ss.GetSnapshotFutureForAny(), newSnapshotFuture)
 	if len(diffs) > 0 {
-		klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+		if !inFlightMove {
+			klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+		} else {
+			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+		}
 	}
 	ss.SnapshotCurrent = newSnapshotCurrent
 	newSnapshotFuture.Freeze()

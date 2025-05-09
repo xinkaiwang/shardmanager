@@ -283,35 +283,8 @@ func snapshotFromJson(snapshot *Snapshot, jsonData map[string]interface{}) error
 			shardMap := shardJson.(map[string]interface{})
 			shardId := data.ShardId(shardMap["ShardId"].(string))
 
-			// 创建分片
-			shardSnap := NewShardSnap(shardId, 0)
-			shardSnap.TargetReplicaCount = int(shardMap["TargetReplicaCount"].(float64))
+			shardSnap := ShardSnapParseFromJson(shardMap)
 			snapshot.AllShards.Set(shardId, shardSnap)
-
-			// 解析副本
-			if replicasJson, ok := shardMap["Replicas"].([]interface{}); ok {
-				for _, replicaJson := range replicasJson {
-					replicaMap := replicaJson.(map[string]interface{})
-					replicaIdx := data.ReplicaIdx(int32(replicaMap["ReplicaIdx"].(float64)))
-
-					// 创建副本
-					replicaSnap := NewReplicaSnap(shardId, replicaIdx)
-					shardSnap.Replicas[replicaIdx] = replicaSnap
-
-					// 设置LameDuck状态
-					if lameDuck, ok := replicaMap["LameDuck"].(float64); ok {
-						replicaSnap.LameDuck = lameDuck > 0
-					}
-
-					// 解析分配
-					if assignmentsJson, ok := replicaMap["Assignments"].([]interface{}); ok {
-						for _, assignId := range assignmentsJson {
-							assignmentId := data.AssignmentId(assignId.(string))
-							replicaSnap.Assignments[assignmentId] = common.Unit{}
-						}
-					}
-				}
-			}
 		}
 	}
 

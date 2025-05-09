@@ -226,3 +226,12 @@ func (fm *FastMap[T1, T2]) Compare(other *FastMap[T1, T2]) []string {
 	})
 	return diff
 }
+
+func (fm *FastMap[T1, T2]) GetOrPanic(key T1) *T2 {
+	v, ok := fm.Get(key)
+	if !ok {
+		ke := kerror.Create("FastMapKeyNotFound", "key not found in FastMap").With("key", key)
+		panic(ke)
+	}
+	return v
+}

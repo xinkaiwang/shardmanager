@@ -78,6 +78,7 @@ func (ss *ShardSnap) Compare(other *ShardSnap) []string {
 func (ss *ShardSnap) ToJson() map[string]interface{} {
 	obj := make(map[string]interface{})
 	obj["ShardId"] = ss.ShardId
+	obj["TargetReplicaCount"] = ss.TargetReplicaCount
 	obj["Replicas"] = make([]map[string]interface{}, 0)
 	for replicaIdx, replicaSnap := range ss.Replicas {
 		replicaObj := replicaSnap.ToJson()
@@ -85,6 +86,40 @@ func (ss *ShardSnap) ToJson() map[string]interface{} {
 		obj["Replicas"] = append(obj["Replicas"].([]map[string]interface{}), replicaObj)
 	}
 	return obj
+}
+
+func ShardSnapParseFromJson(jsonData map[string]interface{}) *ShardSnap {
+	shardId := data.ShardId(jsonData["ShardId"].(string))
+	targetReplicaCount := 0
+	if targetReplicaCountJson, ok := jsonData["TargetReplicaCount"]; ok {
+		targetReplicaCount = int(targetReplicaCountJson.(float64))
+	}
+	shardSnap := NewShardSnap(shardId, targetReplicaCount)
+	if replicasJson, ok := jsonData["Replicas"].([]interface{}); ok {
+		// 解析副本
+		for _, replicaJson := range replicasJson {
+			replicaMap := replicaJson.(map[string]interface{})
+			replicaIdx := data.ReplicaIdx(int32(replicaMap["ReplicaIdx"].(float64)))
+
+			// 创建副本
+			replicaSnap := NewReplicaSnap(shardId, replicaIdx)
+			shardSnap.Replicas[replicaIdx] = replicaSnap
+
+			// 设置LameDuck状态
+			if lameDuck, ok := replicaMap["LameDuck"].(float64); ok {
+				replicaSnap.LameDuck = lameDuck > 0
+			}
+
+			// 解析分配
+			if assignmentsJson, ok := replicaMap["Assignments"].([]interface{}); ok {
+				for _, assignId := range assignmentsJson {
+					assignmentId := data.AssignmentId(assignId.(string))
+					replicaSnap.Assignments[assignmentId] = common.Unit{}
+				}
+			}
+		}
+	}
+	return shardSnap
 }
 
 func (ss *ShardSnap) String() string {
@@ -264,6 +299,7 @@ func (worker *WorkerSnap) CanAcceptAssignment(shardId data.ShardId) bool {
 func (worker *WorkerSnap) Clone() *WorkerSnap {
 	clone := &WorkerSnap{
 		WorkerFullId: worker.WorkerFullId,
+		Draining:     worker.Draining,
 		Assignments:  make(map[data.ShardId]data.AssignmentId),
 	}
 	for shardId, assignmentId := range worker.Assignments {
@@ -351,7 +387,7 @@ func (snap *Snapshot) Clone() *Snapshot {
 	return clone
 }
 
-func (snap *Snapshot) Freeze() {
+func (snap *Snapshot) Freeze() *Snapshot {
 	if snap.Frozen {
 		ke := kerror.Create("SnapshotAlreadyFrozen", "snapshot already frozen").With("snapshotId", snap.SnapshotId)
 		panic(ke)
@@ -360,6 +396,7 @@ func (snap *Snapshot) Freeze() {
 	snap.AllWorkers.Freeze()
 	snap.AllAssignments.Freeze()
 	snap.Frozen = true
+	return snap
 }
 
 func (snap *Snapshot) CompactAndFreeze() *Snapshot {
@@ -531,7 +568,7 @@ func (snap *Snapshot) Compare(other *Snapshot) []string {
 func (snap *Snapshot) ToJson() map[string]interface{} {
 	obj := make(map[string]interface{})
 	obj["SnapshotId"] = snap.SnapshotId
-	obj["Cost"] = snap.GetCost()
+	// obj["Cost"] = snap.GetCost()
 	obj["Shards"] = make([]map[string]interface{}, 0)
 	snap.AllShards.VisitAll(func(shardId data.ShardId, shardSnap *ShardSnap) {
 		shardObj := shardSnap.ToJson()

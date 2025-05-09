@@ -35,3 +35,13 @@ export METRICS_PORT=9091
 export POD_NAME=worker-1
 ./bin/smgapp
 ```
+
+
+```
+export LOG_LEVEL=debug
+export LOG_FORMAT=simple
+export API_PORT=8082
+export METRICS_PORT=9092
+export POD_NAME=worker-2
+./bin/smgapp
+```

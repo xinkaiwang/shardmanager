@@ -86,7 +86,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	if len(accpeted) > 0 {
 		future := ss.GetSnapshotFutureForAny()
 		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost().String()).Log("AcceptEvent", "broadcastSnapshot")
-		ss.boardcastSnapshotBatchManager.TrySchedule(ctx, "acceptEvent")
+		ss.boardcastSnapshotBatchManager.TryScheduleInternal(ctx, "acceptEvent")
 		// ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
 	}
 }

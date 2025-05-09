@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Typography,
   Box,
@@ -18,18 +18,31 @@ import {
   Alert,
   styled,
   Fab,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent,
+  Chip,
+  Container,
 } from '@mui/material';
-import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import * as api from '../services/api';
 import { EtcdKeyResponse } from '../types/api';
 
+// 刷新间隔选项（秒）
+const refreshIntervalOptions = [
+  { value: 0, label: '手动刷新' },
+  { value: 1, label: '1秒' },
+  { value: 5, label: '5秒' },
+  { value: 30, label: '30秒' },
+];
+
 // 辅助函数：截断文本
 const truncateText = (text: string | undefined | null, maxLength: number = 50): string => {
-  // Handle null or undefined input
   if (text === undefined || text === null) {
-    return '(无值)'; // Or return '', or '(undefined)', etc. depending on desired display
+    return '(无值)';
   }
-  // Now we know text is a string
   if (text.length <= maxLength) {
     return text;
   }
@@ -39,6 +52,7 @@ const truncateText = (text: string | undefined | null, maxLength: number = 50): 
 // 自定义样式的 ListItem
 const StyledListItem = styled(ListItem)(({ theme }) => ({
   position: 'relative',
+  padding: theme.spacing(1, 2),
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
     '& .action-buttons': {
@@ -49,11 +63,18 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
   '& .action-buttons': {
     position: 'absolute',
     right: theme.spacing(2),
+    top: '50%',
+    transform: 'translateY(-50%)',
     visibility: 'hidden',
     opacity: 0,
     transition: 'all 0.2s ease-in-out',
+    display: 'flex',
+    zIndex: 2,
   },
-  // 添加样式以处理长文本
+  '& .MuiListItemText-root': {
+    marginRight: theme.spacing(10), // 为按钮预留空间
+    width: '100%',
+  },
   '& .MuiListItemText-secondary': {
     whiteSpace: 'pre-line',
     overflow: 'hidden',
@@ -64,59 +85,90 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
   },
 }));
 
-export default function HomePage() {
+const HomePage = () => {
   const [keys, setKeys] = useState<EtcdKeyResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchPrefix, setSearchPrefix] = useState('');
+  const [searchPrefix, setSearchPrefix] = useState<string>('');
   const [editKey, setEditKey] = useState<EtcdKeyResponse | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [showSnackbar, setShowSnackbar] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState<number>(5);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const lastRefreshTime = useRef<number>(0);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 加载键值对列表
-  const loadKeys = async () => {
+  const loadKeys = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setIsRefreshing(true);
       const response = await api.getKeys(searchPrefix);
       setKeys(response.keys);
+      setError(null);
     } catch (err) {
-      console.error('Failed to load keys:', err);
-      setError('加载键值对列表失败');
-      showMessage('加载键值对列表失败', 'error');
+      setError(err instanceof Error ? err.message : 'Failed to load keys');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
+      lastRefreshTime.current = Date.now();
     }
-  };
-
-  // 初始加载和搜索时重新加载
-  useEffect(() => {
-    loadKeys();
   }, [searchPrefix]);
 
-  // 处理编辑
-  const handleEdit = (key: EtcdKeyResponse) => {
-    setEditKey(key);
-    setEditValue(key.value);
+  const handleRefreshIntervalChange = (event: SelectChangeEvent<number>) => {
+    const newInterval = Number(event.target.value);
+    setRefreshInterval(newInterval);
   };
 
-  // 保存编辑
-  const handleSave = async () => {
-    if (!editKey) return;
+  const handleRefresh = () => {
+    loadKeys();
+  };
 
+  // 使用 useEffect 处理自动刷新
+  useEffect(() => {
+    if (refreshInterval > 0) {
+      const scheduleNextRefresh = () => {
+        const now = Date.now();
+        const timeSinceLastRefresh = now - lastRefreshTime.current;
+        const nextRefreshDelay = Math.max(0, refreshInterval * 1000 - timeSinceLastRefresh);
+        
+        refreshTimeoutRef.current = setTimeout(() => {
+          loadKeys();
+          scheduleNextRefresh();
+        }, nextRefreshDelay);
+      };
+
+      scheduleNextRefresh();
+    }
+
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, [refreshInterval, loadKeys]);
+
+  // 初始加载
+  useEffect(() => {
+    loadKeys();
+  }, [loadKeys]);
+
+  // 处理编辑
+  const handleEdit = async (key: EtcdKeyResponse) => {
     try {
-      await api.setKey(editKey.key, editValue);
-      setEditKey(null);
-      await loadKeys();
-      showMessage('保存成功', 'success');
+      // 首先设置 editKey 打开对话框
+      setEditKey(key);
+      
+      // 从后端重新获取最新的值
+      const latestKey = await api.getKey(key.key);
+      
+      // 更新编辑框的值为最新的值
+      setEditValue(latestKey.value);
     } catch (err) {
-      console.error('Failed to save key:', err);
-      showMessage('保存失败', 'error');
+      // 如果获取失败，使用缓存的值并显示错误
+      setEditValue(key.value);
+      setError(err instanceof Error ? err.message : '获取最新值失败');
     }
   };
 
@@ -125,24 +177,30 @@ export default function HomePage() {
     try {
       await api.deleteKey(key);
       await loadKeys();
-      showMessage('删除成功', 'success');
+      setSnackbar({ open: true, message: '删除成功' });
     } catch (err) {
-      console.error('Failed to delete key:', err);
-      showMessage('删除失败', 'error');
+      setError(err instanceof Error ? err.message : '删除失败');
     }
   };
 
-  // 显示消息
-  const showMessage = (message: string, severity: 'success' | 'error') => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setShowSnackbar(true);
+  // 处理保存
+  const handleSave = async () => {
+    if (!editKey) return;
+
+    try {
+      await api.setKey(editKey.key, editValue);
+      setEditKey(null);
+      await loadKeys();
+      setSnackbar({ open: true, message: '保存成功' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败');
+    }
   };
 
   // 处理添加新键值对
   const handleAdd = async () => {
     if (!newKey.trim()) {
-      showMessage('键不能为空', 'error');
+      setSnackbar({ open: true, message: '键不能为空' });
       return;
     }
 
@@ -152,115 +210,87 @@ export default function HomePage() {
       setNewKey('');
       setNewValue('');
       await loadKeys();
-      showMessage('添加成功', 'success');
+      setSnackbar({ open: true, message: '添加成功' });
     } catch (err) {
       console.error('Failed to add key:', err);
-      showMessage('添加失败', 'error');
+      setSnackbar({ open: true, message: '添加失败' });
     }
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        width: '100vw',
-        overflow: 'hidden',
-        bgcolor: 'background.default',
-      }}
-    >
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          p: 3,
-          overflow: 'hidden',
-          alignItems: 'center',
-        }}
-      >
-        <Paper
-          elevation={2}
-          sx={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            maxWidth: '1000px',
-            width: '100%',
-          }}
-        >
-          <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
-            <Typography variant="h4" component="h1" gutterBottom align="center">
-              etcd 管理器
-            </Typography>
-
-            {/* 搜索框 */}
-            <TextField
-              fullWidth
-              label="搜索前缀"
-              value={searchPrefix}
-              onChange={(e) => setSearchPrefix(e.target.value)}
-              variant="outlined"
-              size="small"
-              sx={{ mt: 2 }}
-            />
-          </Box>
-
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-            {/* 错误提示 */}
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-
-            {/* 加载中 */}
-            {loading ? (
-              <Box display="flex" justifyContent="center" p={4}>
-                <CircularProgress />
-              </Box>
-            ) : (
-              /* 键值对列表 */
-              <List>
-                {keys.map((item) => (
-                  <StyledListItem key={item.key}>
-                    <ListItemText
-                      primary={item.key}
-                      secondary={`值: ${truncateText(item.value)} (版本: ${item.version})`}
-                      secondaryTypographyProps={{
-                        component: 'div',
-                      }}
-                    />
-                    <Box className="action-buttons">
-                      <IconButton size="small" onClick={() => handleEdit(item)}>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(item.key)}>
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
-                  </StyledListItem>
-                ))}
-                {keys.length === 0 && (
-                  <ListItem>
-                    <ListItemText primary="没有找到键值对" />
-                  </ListItem>
-                )}
-              </List>
-            )}
-          </Box>
-        </Paper>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <TextField
+          label="Search Prefix"
+          variant="outlined"
+          size="small"
+          value={searchPrefix}
+          onChange={(e) => setSearchPrefix(e.target.value)}
+          sx={{ width: 300 }}
+        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Auto Refresh</InputLabel>
+            <Select
+              value={refreshInterval}
+              label="Auto Refresh"
+              onChange={handleRefreshIntervalChange}
+            >
+              {refreshIntervalOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Chip
+            icon={<RefreshIcon />}
+            label="Refresh"
+            onClick={handleRefresh}
+            color="primary"
+            variant="outlined"
+            sx={{ 
+              animation: isRefreshing ? 'pulse 1s infinite' : 'none',
+              '&:hover': {
+                backgroundColor: 'primary.light',
+                color: 'white'
+              }
+            }}
+          />
+        </Box>
       </Box>
 
+      {loading && keys.length === 0 ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : error ? (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      ) : (
+        <List>
+          {keys.map((kv) => (
+            <StyledListItem key={kv.key}>
+              <ListItemText
+                primary={truncateText(kv.key, 100)}
+                secondary={truncateText(kv.value, 200)}
+              />
+              <Box className="action-buttons">
+                <IconButton onClick={() => handleEdit(kv)}>
+                  <EditIcon />
+                </IconButton>
+                <IconButton onClick={() => handleDelete(kv.key)}>
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            </StyledListItem>
+          ))}
+        </List>
+      )}
+
       {/* 编辑对话框 */}
-      <Dialog 
-        open={!!editKey} 
-        onClose={() => setEditKey(null)}
-        maxWidth="md"
-        fullWidth
-      >
+      <Dialog open={editKey !== null} onClose={() => setEditKey(null)} maxWidth="md" fullWidth>
         <DialogTitle>编辑键值对</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
@@ -269,13 +299,12 @@ export default function HomePage() {
             </Typography>
             <TextField
               fullWidth
-              label="值"
+              multiline
+              rows={4}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               variant="outlined"
-              multiline
-              minRows={4}
-              maxRows={12}
+              label="值"
             />
           </Box>
         </DialogContent>
@@ -287,16 +316,13 @@ export default function HomePage() {
         </DialogActions>
       </Dialog>
 
-      {/* 提示消息 */}
+      {/* 消息提示 */}
       <Snackbar
-        open={showSnackbar}
+        open={snackbar.open}
         autoHideDuration={3000}
-        onClose={() => setShowSnackbar(false)}
-      >
-        <Alert severity={snackbarSeverity} onClose={() => setShowSnackbar(false)}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+      />
 
       {/* 添加键值对的浮动按钮 */}
       <Fab
@@ -349,6 +375,28 @@ export default function HomePage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
-} 
+};
+
+// 添加脉冲动画样式
+const pulseKeyframes = `
+@keyframes pulse {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+`;
+
+// 添加样式到文档
+const style = document.createElement('style');
+style.textContent = pulseKeyframes;
+document.head.appendChild(style);
+
+export default HomePage; 
