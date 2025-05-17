@@ -45,11 +45,11 @@ func (rbs RangeBasedShardId) ToString(minLen int) string {
 
 func uint32ToString(num uint32, minLen int) string {
 	str := strconv.FormatUint(uint64(num), 16)
-	for len(str) > minLen && str[len(str)-1] == '0' {
-		str = str[:len(str)-1]
-	}
-	for len(str) < minLen {
+	for len(str) < 8 { // step 1: patch to full 8 digits
 		str = "0" + str
+	}
+	for len(str) > minLen && str[len(str)-1] == '0' { // step 2: remove trailing zeros
+		str = str[:len(str)-1]
 	}
 	return str
 }
