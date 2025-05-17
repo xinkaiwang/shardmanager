@@ -42,7 +42,7 @@ ENV TZ=America/Los_Angeles
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=builder /app/services/helloblitz/bin/helloblitz /app/
+COPY --from=builder /app/services/helloblitz/bin/* /app/
 
 # 设置默认环境变量
 ENV BLITZ_THREAD_COUNT=3 \

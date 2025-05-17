@@ -12,14 +12,19 @@ DOCKER_REPO := xinkaiw
 DOCKER_IMAGE := helloblitz
 DOCKER_TAG := $(VERSION)
 
-.PHONY: all build test clean docker-build docker-push run
+.PHONY: all helloblitz test clean docker-build docker-push run
 
-all: build
+all: helloblitz unicornblitz
 
-build:
+helloblitz:
 	@echo "Building helloblitz..."
 	@mkdir -p bin
-	go build $(GOFLAGS) -o bin/helloblitz ./cmd
+	go build $(GOFLAGS) -o bin/helloblitz ./cmd/helloblitz
+
+unicornblitz:
+	@echo "Building unicornblitz..."
+	@mkdir -p bin
+	go build $(GOFLAGS) -o bin/unicornblitz ./cmd/unicornblitz
 
 test:
 	@echo "Running tests..."
@@ -37,6 +42,6 @@ docker-push:
 	@echo "Pushing Docker image..."
 	docker push $(DOCKER_REPO)/$(DOCKER_IMAGE):$(DOCKER_TAG)
 
-run: build
+run: helloblitz
 	@echo "Running helloblitz..."
 	./bin/helloblitz

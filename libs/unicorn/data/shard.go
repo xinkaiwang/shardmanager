@@ -23,3 +23,5 @@ func NewReplicaFullId(shardId ShardId, replicaIdx ReplicaIdx) ReplicaFullId {
 func (replicaFullId ReplicaFullId) String() string {
 	return string(replicaFullId.ShardId) + ":" + strconv.Itoa(int(replicaFullId.ReplicaIdx))
 }
+
+type ShardingKey uint32

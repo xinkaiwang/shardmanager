@@ -14,7 +14,7 @@ IMAGE_NAME := unicorn
 FULL_IMAGE_NAME := $(DOCKER_REPO)/$(IMAGE_NAME):$(VERSION)
 
 .PHONY: all
-all: fmt lint test
+all: fmt lint test hello
 
 .PHONY: build
 build:
@@ -65,6 +65,12 @@ run: build
 	@echo "Running unicorn service..."
 	./bin/unicorn
 
+.PHONY: hello
+hello:
+	@echo "Building hello demo..."
+	@mkdir -p bin
+	go build -o bin/hello ./cmd/hello
+
 .PHONY: help
 help:
 	@echo "Available targets:"
@@ -77,6 +83,7 @@ help:
 	@echo "  docker-build   - Build Docker image"
 	@echo "  docker-push    - Push Docker image to registry"
 	@echo "  run            - Build and run the service"
+	@echo "  hello          - Build the hello demo (cmd/hello)"
 	@echo "  help           - Show this help message"
 	@echo ""
 	@echo "Variables:"

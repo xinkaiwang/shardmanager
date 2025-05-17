@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/ksysmetrics"
@@ -26,16 +26,7 @@ var (
 	BuildTime = "unknown"
 )
 
-func getEnvInt(key string, defaultValue int) int {
-	if value, exists := os.LookupEnv(key); exists {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}
-
-func runLoadTest(ctx context.Context, app *biz.App, targetURL string, loopSleepMs int, wg *sync.WaitGroup) {
+func runLoadTest(ctx context.Context, app *biz.UnicornBlitzApp, loopSleepMs int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
@@ -43,18 +34,8 @@ func runLoadTest(ctx context.Context, app *biz.App, targetURL string, loopSleepM
 		case <-ctx.Done():
 			return
 		default:
-			result := app.RunLoadTest(ctx, targetURL)
-
-			// 记录结果
-			if result.Error != "" {
-				klogging.Error(ctx).With("latency_ms", result.LatencyMs).
-					With("status_code", result.StatusCode).
-					Log("LoadTestError", result.Error)
-			} else {
-				klogging.Info(ctx).With("latency_ms", result.LatencyMs).
-					With("status_code", result.StatusCode).
-					Log("LoadTestSuccess", "Request completed successfully")
-			}
+			key := kcommon.RandomUint64(ctx, 1<<32)
+			app.RunLoadTest(ctx, uint32(key))
 
 			// 如果需要，在请求之间休眠
 			if loopSleepMs > 0 {
@@ -84,10 +65,7 @@ func main() {
 	klogging.Info(ctx).With("logLevel", logLevel).With("logFormat", logFormat).Log("LogLevelSet", "")
 
 	// 记录启动信息
-	klogging.Info(ctx).With("version", Version).
-		With("commit", GitCommit).
-		With("buildTime", BuildTime).
-		Log("Starting", "Starting helloblitz load test driver")
+	klogging.Info(ctx).Log("Starting", "Starting helloblitz load test driver")
 
 	// 创建 Prometheus 导出器
 	pe, err := prometheus.NewExporter(prometheus.Options{
@@ -108,7 +86,7 @@ func main() {
 	ksysmetrics.StartSysMetricsCollector(ctx, 15*time.Second, Version)
 
 	// 获取 metrics 端口配置
-	metricsPort := getEnvInt("METRICS_PORT", 9090)
+	metricsPort := kcommon.GetEnvInt("METRICS_PORT", 9090)
 
 	// 创建 metrics 服务器
 	metricsMux := http.NewServeMux()
@@ -127,21 +105,15 @@ func main() {
 	}()
 
 	// 获取环境变量配置
-	threadCount := getEnvInt("BLITZ_THREAD_COUNT", 3)
-	loopSleepMs := getEnvInt("BLITZ_LOOP_SLEEP_MS", 0)
-	targetURL := os.Getenv("BLITZ_TARGET_URL")
-	if targetURL == "" {
-		targetURL = "http://localhost:8080/api/ping"
-	}
+	threadCount := kcommon.GetEnvInt("BLITZ_THREAD_COUNT", 3)
+	loopSleepMs := kcommon.GetEnvInt("BLITZ_LOOP_SLEEP_MS", 0)
 
 	klogging.Info(ctx).With("thread_count", threadCount).
 		With("loop_sleep_ms", loopSleepMs).
-		With("target_url", targetURL).
 		With("metrics_port", metricsPort).
 		Log("Config", "Load test configuration")
 
-	// 创建应用实例
-	app := biz.NewApp()
+	app := biz.NewUnicornBlitzApp(ctx)
 
 	// 设置信号处理
 	sigChan := make(chan os.Signal, 1)
@@ -155,7 +127,7 @@ func main() {
 	var wg sync.WaitGroup
 	for i := 0; i < threadCount; i++ {
 		wg.Add(1)
-		go runLoadTest(ctx, app, targetURL, loopSleepMs, &wg)
+		go runLoadTest(ctx, app, loopSleepMs, &wg)
 	}
 
 	// 等待信号
