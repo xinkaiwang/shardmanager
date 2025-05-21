@@ -50,14 +50,14 @@ func (app *MyCougarApp) DropShard(ctx context.Context, shardId data.ShardId, chD
 
 func (app *MyCougarApp) GetShard(ctx context.Context, shardId data.ShardId) *MyAppShard {
 	if shardId == "" {
-		ke := kerror.Create("MyCougarApp", "shardIdEmpty").WithErrorCode(kerror.EC_INVALID_PARAMETER)
+		ke := kerror.Create("shardIdEmpty", "").WithErrorCode(kerror.EC_INVALID_PARAMETER)
 		panic(ke)
 	}
 	app.Mu.Lock()
 	defer app.Mu.Unlock()
 	shard, ok := app.Shards[shardId]
 	if !ok {
-		ke := kerror.Create("MyCougarApp", "ShardId not found").With("shardId", shardId).WithErrorCode(kerror.EC_INTERNAL_ERROR)
+		ke := kerror.Create("MyCougarApp", "Shard not found").With("shardId", shardId).WithErrorCode(kerror.EC_INTERNAL_ERROR)
 		panic(ke)
 	}
 	return shard

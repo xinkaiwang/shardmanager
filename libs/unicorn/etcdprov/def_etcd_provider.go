@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	etcdQueryTimeoutMs = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 3*1000)
+	etcdQueryTimeoutMs = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 5*1000)
 )
 
 // etcdDefaultProvider 是默认的 etcd 客户端实现
@@ -56,10 +56,8 @@ func NewDefaultEtcdProvider(_ context.Context) EtcdProvider {
 // - 如果设置了 ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
 // - 否则返回默认值 ["localhost:2379"]
 func getEndpointsFromEnv() []string {
-	if endpoints := os.Getenv("ETCD_ENDPOINTS"); endpoints != "" {
-		return strings.Split(endpoints, ",")
-	}
-	return []string{"localhost:2379"}
+	endpoints := kcommon.GetEnvString("ETCD_ENDPOINTS", "localhost:2379")
+	return strings.Split(endpoints, ",")
 }
 
 // getDialTimeoutFromEnv 从环境变量获取连接超时配置

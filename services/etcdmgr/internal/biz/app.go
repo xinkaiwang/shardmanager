@@ -80,9 +80,9 @@ func (app *App) DeleteKey(ctx context.Context, key string) error {
 	return nil
 }
 
-// ListKeys 列出指定前缀的所有 key
-func (app *App) ListKeys(ctx context.Context, prefix string) (*api.EtcdKeysResponse, error) {
-	items := app.provider.List(ctx, prefix, 0)
+// ListKeys 列出指定前缀的所有 key，支持分页
+func (app *App) ListKeys(ctx context.Context, prefix string, limit int, nextToken string) (*api.EtcdKeysResponse, error) {
+	items, next := app.provider.List(ctx, prefix, limit, nextToken)
 	keys := make([]api.EtcdKeyResponse, 0, len(items))
 	for _, item := range items {
 		keys = append(keys, api.EtcdKeyResponse{
@@ -91,6 +91,5 @@ func (app *App) ListKeys(ctx context.Context, prefix string) (*api.EtcdKeysRespo
 			Version: item.ModRevision,
 		})
 	}
-
-	return &api.EtcdKeysResponse{Keys: keys}, nil
+	return &api.EtcdKeysResponse{Keys: keys, NextToken: next}, nil
 }

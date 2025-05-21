@@ -98,7 +98,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 			// 等待提案接受
 			waitSucc, elapsedMs := WaitUntil(t, func() (bool, string) {
 				if ss.AcceptedCount == 1 {
-					return true, ""
+					return true, "accept数目正确"
 				}
 				return false, "accept数目未达预期"
 			}, 1000, 100)
@@ -108,7 +108,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 			// 等待 move
 			waitSucc, elapsedMs := WaitUntil(t, func() (bool, string) {
 				if len(ss.AllMoves) == 1 {
-					return true, ""
+					return true, "in-flight move 数目正确"
 				}
 				return false, "in-flight move 数目未达预期"
 			}, 1000, 10)
@@ -122,7 +122,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 					return false, "pilot node 不存在"
 				}
 				if len(pilotNode.Assignments) == 1 {
-					return true, ""
+					return true, "pilot assignment 数目正确"
 				}
 				return false, "assignment 数目未达预期"
 			}, 1000, 10)

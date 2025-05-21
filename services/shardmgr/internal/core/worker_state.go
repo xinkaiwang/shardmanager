@@ -2,11 +2,13 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
@@ -133,6 +135,28 @@ func (ws *WorkerState) GetShutdownPermited() bool {
 		ws.State == data.WS_Deleted
 }
 
+func (ss *WorkerState) ToFullString() string {
+	dict := make(map[string]interface{})
+	dict["WorkerId"] = ss.WorkerId
+	dict["SessionId"] = ss.SessionId
+	dict["State"] = ss.State
+	dict["ShutdownRequesting"] = ss.ShutdownRequesting
+	dict["ShutdownPermited"] = ss.GetShutdownPermited()
+	var assignments []string
+	for assignId := range ss.Assignments {
+		assignments = append(assignments, string(assignId))
+	}
+	dict["Assignments"] = assignments
+	dict["StatefulType"] = ss.StatefulType
+	dict["WorkerInfo"] = &ss.WorkerInfo
+	data, err := json.Marshal(dict)
+	if err != nil {
+		ke := kerror.Wrap(err, "MarshalError", "failed to marshal WorkerState", false)
+		panic(ke)
+	}
+	return string(data)
+}
+
 func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 	workers := map[data.WorkerFullId]*cougarjson.WorkerEphJson{}
 	for workerId, dict := range ss.EphWorkerStaging {
@@ -154,12 +178,23 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 	}
 	// remaining workers are new
 	for workerFullId, workerEph := range workers {
-		// add
-		workerState := NewWorkerState(ss, data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
-		workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
-		ss.AllWorkers[workerFullId] = workerState
-		ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
+		ss.applyNewWorker(ctx, workerFullId, workerEph, "FirstDigestStagingWorkerEph")
 	}
+}
+
+func (ss *ServiceState) applyNewWorker(ctx context.Context, workerFullId data.WorkerFullId, workerEph *cougarjson.WorkerEphJson, reason string) {
+	// add to ss
+	workerState := NewWorkerState(ss, data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
+	workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
+	ss.AllWorkers[workerFullId] = workerState
+	ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
+	// add to current/future snapshot
+	workerSnap := costfunc.NewWorkerSnap(workerState.GetWorkerFullId())
+	workerSnap.Draining = workerState.ShutdownRequesting
+	fn := func(snapshot *costfunc.Snapshot) {
+		snapshot.AllWorkers.Set(workerFullId, workerSnap)
+	}
+	ss.ModifySnapshot(ctx, fn, reason)
 }
 
 // digestStagingWorkerEph: must be called in runloop.
@@ -183,18 +218,7 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 				// nothing to do
 			} else {
 				// Worker Event: Eph node created, worker becomes online
-				workerState = NewWorkerState(ss, data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
-				workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
-				ss.AllWorkers[workerFullId] = workerState
-				klogging.Info(ctx).With("workerFullId", workerFullId.String()).Log("digestStagingWorkerEph", "新建 worker state")
-				ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
-				// add this new worker in current/future snapshot
-				workerSnap := costfunc.NewWorkerSnap(workerState.GetWorkerFullId())
-				workerSnap.Draining = workerState.ShutdownRequesting
-				fn := func(snapshot *costfunc.Snapshot) {
-					snapshot.AllWorkers.Set(workerFullId, workerSnap)
-				}
-				ss.ModifySnapshot(ctx, fn, "AddWorkerToSnapshot")
+				ss.applyNewWorker(ctx, workerFullId, workerEph, "digestStagingWorkerEph")
 				// dirtyFlag
 				dirtyFlag.AddDirtyFlag("NewWorker:" + workerFullId.String())
 			}

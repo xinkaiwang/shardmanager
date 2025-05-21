@@ -108,7 +108,7 @@ func main() {
 		panic(ke)
 	}
 	sessionId := kcommon.RandomString(ctx, 8)
-	address := os.Getenv("POD_IP")
+	address := kcommon.GetEnvString("POD_IP", "localhost")
 	capacity := getEnvInt("SMG_CAPACITY", 1000)
 	memorySize := getEnvInt("SMG_STORAGE_SIZE_MB", 8*1000)
 	addrPort := fmt.Sprintf("%s:%d", address, apiPort)
@@ -122,6 +122,10 @@ func main() {
 	h := handler.NewHandler(app, cougarApp)
 	mainMux := http.NewServeMux()
 	h.RegisterRoutes(mainMux)
+	go func() {
+		reason := cougar.WaitOnExit()
+		klogging.Fatal(ctx).With("reason", reason).Log("CougarExit", "Cougar exited")
+	}()
 
 	// 创建主 HTTP 服务器
 	mainServer := &http.Server{

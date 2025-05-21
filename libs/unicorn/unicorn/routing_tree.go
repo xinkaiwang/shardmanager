@@ -1,6 +1,10 @@
 package unicorn
 
-import "github.com/xinkaiwang/shardmanager/libs/unicorn/data"
+import (
+	"encoding/json"
+
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
+)
 
 type RoutingTree interface {
 	GetTreeId() string // for logging/debugging use only
@@ -10,4 +14,12 @@ type RoutingTree interface {
 type RoutingTarget struct {
 	ShardId    data.ShardId
 	WorkerInfo *WorkerInfo
+}
+
+func (rt *RoutingTarget) String() string {
+	data, err := json.Marshal(rt)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
 }

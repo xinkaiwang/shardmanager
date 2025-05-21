@@ -29,13 +29,18 @@ var (
 func runLoadTest(ctx context.Context, app *biz.UnicornBlitzApp, loopSleepMs int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	for {
+	objId := kcommon.RandomString(ctx, 8)
+	randomDelay := kcommon.RandomInt(ctx, loopSleepMs)
+	klogging.Info(ctx).With("objId", objId).Log("LoadTestStart", "Starting load test")
+	time.Sleep(time.Duration(randomDelay) * time.Millisecond)
+	stop := false
+	for !stop {
 		select {
 		case <-ctx.Done():
-			return
+			stop = true
+			continue
 		default:
-			key := kcommon.RandomUint64(ctx, 1<<32)
-			app.RunLoadTest(ctx, uint32(key))
+			app.RunLoadTest(ctx, objId)
 
 			// 如果需要，在请求之间休眠
 			if loopSleepMs > 0 {
@@ -43,6 +48,7 @@ func runLoadTest(ctx context.Context, app *biz.UnicornBlitzApp, loopSleepMs int,
 			}
 		}
 	}
+	klogging.Info(ctx).With("objId", objId).Log("LoadTestStop", "Stopping load test")
 }
 
 func main() {
@@ -55,7 +61,7 @@ func main() {
 	}
 	logFormat := os.Getenv("LOG_FORMAT")
 	if logFormat == "" {
-		logFormat = "json" // 默认 JSON 格式
+		logFormat = "simple" // 默认 JSON 格式
 	}
 
 	// 创建并配置 LogrusLogger

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -160,16 +161,44 @@ func (h *Handler) ListKeysHandler(w http.ResponseWriter, r *http.Request) {
 		prefix = "" // 默认列出所有键
 	}
 
+	// 获取分页参数
+	limitStr := r.URL.Query().Get("limit")
+	limit := 0 // 默认不限制
+	if limitStr != "" {
+		var err error
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil {
+			panic(kerror.Create("InvalidParameter", "invalid limit parameter").
+				WithErrorCode(kerror.EC_INVALID_PARAMETER).
+				With("error", err.Error()))
+		}
+	}
+
+	// 设置一个合理的默认值
+	if limit <= 0 {
+		limit = 20 // 默认每页 20 条
+	}
+
+	// 设置一个合理的最大限制，防止请求太大
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	// 获取分页 token
+	nextToken := r.URL.Query().Get("nextToken")
+
 	// 记录请求信息
 	klogging.Verbose(r.Context()).
 		With("prefix", prefix).
+		With("limit", limit).
+		With("hasNextToken", nextToken != "").
 		Log("ListKeysRequest", "received list keys request")
 
 	// 处理请求
 	var resp *api.EtcdKeysResponse
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.ListKeys", func() {
 		var err error
-		resp, err = h.app.ListKeys(r.Context(), prefix)
+		resp, err = h.app.ListKeys(r.Context(), prefix, limit, nextToken)
 		if err != nil {
 			panic(err)
 		}
@@ -179,6 +208,7 @@ func (h *Handler) ListKeysHandler(w http.ResponseWriter, r *http.Request) {
 	klogging.Info(r.Context()).
 		With("prefix", prefix).
 		With("count", len(resp.Keys)).
+		With("hasMore", resp.NextToken != "").
 		Log("ListKeysResponse", "sending list keys response")
 
 	// 返回响应

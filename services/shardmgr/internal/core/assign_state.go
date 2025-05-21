@@ -1,7 +1,10 @@
 package core
 
 import (
+	"encoding/json"
+
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
@@ -25,4 +28,13 @@ func NewAssignmentState(assignmentId data.AssignmentId, shardId data.ShardId, re
 		CurrentConfirmedState: cougarjson.CAS_Unknown,
 		TargetState:           cougarjson.CAS_Unknown,
 	}
+}
+
+func (as *AssignmentState) String() string {
+	data, err := json.Marshal(as)
+	if err != nil {
+		ke := kerror.Wrap(err, "MarshalError", "failed to marshal AssignmentState", false)
+		panic(ke)
+	}
+	return string(data)
 }

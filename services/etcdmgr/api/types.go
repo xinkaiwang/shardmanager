@@ -15,7 +15,8 @@ type EtcdKeyResponse struct {
 
 // EtcdKeysResponse 定义了获取多个 key 的响应
 type EtcdKeysResponse struct {
-	Keys []EtcdKeyResponse `json:"keys"`
+	Keys      []EtcdKeyResponse `json:"keys"`
+	NextToken string            `json:"nextToken,omitempty"`
 }
 
 // StatusResponse 定义了服务状态响应

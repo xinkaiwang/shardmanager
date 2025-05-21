@@ -30,7 +30,9 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	})
 
 	// setp 2: load all worker state
-	ss.LoadAllWorkerState(ctx) // (from /smg/worker_state/ to ss.AllWorkers and ss.AllAssignments)
+	ss.LoadAllWorkerState(ctx)             // (from /smg/worker_state/<workerFullId> to ss.AllWorkers and ss.AllAssignments)
+	pilotNodes := ss.LoadAllPilotNode(ctx) // (from /smg/pilot/<workerFullId>)
+
 	// step 3: load all shard state (note: we need to load workerStates first, because workerState will populate assignments)
 	ss.LoadAllShardState(ctx) // (from /smg/shard_state/ to ss.AllShards)
 	ss.LoadAllMoves(ctx)      // (from /smg/move_state/ to ss.AllMoves)
@@ -44,16 +46,19 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
 	ss.stagingShardPlan = currentShardPlan // staging area, will be used in ss.syncShardPlan
 	ss.digestStagingShardPlan(ctx)         // based on crrentShardPlan, update ss.AllShards, and write to etcd
-	// step 5: load current worker eph
+
+	// step 5: current snapshot and future snapshot
+	ss.ReCreateSnapshot(ctx, "ServiceState.Init")
+	klogging.Info(ctx).Log("ServiceStateInit", "create snapshot done")
+
+	// step 6: load current worker eph (this need to be after first create snapshot, first digest needs to update snapshot)
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
 	ss.batchAddToStagingWorkerEph(ctx, currentWorkerEph) // staging area, will be used in ss.syncEphStagingToWorkerState
-	// step 6: sync workerEph to workerState
+	// step 7: sync workerEph to workerState
 	ss.firstDigestStagingWorkerEph(ctx)
 
-	// step 7: current snapshot and future snapshot
-	ss.ReCreateSnapshot(ctx, "ServiceState.Init")
-
 	// step 8: start listening to shard plan changes/worker eph changes/service config changes
+	klogging.Info(ctx).Log("ServiceStateInit", "start watchers")
 	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision+1) // +1 to skip the current revision
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision+1)
 	ss.ServiceConfigWatcher = NewServiceConfigWatcher(ctx, ss, currentServiceConfigRevision+1)
@@ -63,6 +68,15 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.ServiceConfigWatcher.ShardConfigListener = append(ss.ServiceConfigWatcher.ShardConfigListener, func(sc *config.ShardConfig) {
 		ss.syncShardsBatchManager.TrySchedule(ctx, "ShardConfigWatcher")
 	})
+
+	// step 8b: remove non-referenced pilot nodes
+	for workerFullId := range pilotNodes {
+		if _, ok := ss.AllWorkers[workerFullId]; !ok {
+			klogging.Warning(ctx).With("workerFullId", workerFullId).Log("ServiceStateInit", "pilot node not found in worker state, remove it")
+			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil) // remove pilot node
+			delete(pilotNodes, workerFullId)
+		}
+	}
 
 	// step 9: start housekeeping threads
 	ss.PostEvent(NewHousekeep1sEvent())
@@ -125,6 +139,23 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 			ss.AllAssignments[assignmentId] = NewAssignmentState(assignmentId, assignement.ShardId, assignement.ReplicaIdx, workerFullId)
 		}
 	}
+}
+
+func (ss *ServiceState) LoadAllPilotNode(ctx context.Context) map[data.WorkerFullId]*cougarjson.PilotNodeJson {
+	dict := make(map[data.WorkerFullId]*cougarjson.PilotNodeJson)
+	pathPrefix := ss.PathManager.GetPilotPathPrefix()
+	// load all from etcd
+	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
+	for _, item := range list {
+		pilotNodeJson := cougarjson.ParsePilotNodeJson(item.Value)
+		if pilotNodeJson == nil {
+			klogging.Fatal(ctx).With("item", item).Log("LoadAllPilotNode", "pilot node json parse failed")
+			continue
+		}
+		workerFullId := data.WorkerFullIdParseFromString(item.Key[len(pathPrefix):])
+		dict[workerFullId] = pilotNodeJson
+	}
+	return dict
 }
 
 func (ss *ServiceState) LoadAllMoves(ctx context.Context) {

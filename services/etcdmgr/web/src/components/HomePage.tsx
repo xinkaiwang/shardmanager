@@ -51,37 +51,18 @@ const truncateText = (text: string | undefined | null, maxLength: number = 50): 
 
 // 自定义样式的 ListItem
 const StyledListItem = styled(ListItem)(({ theme }) => ({
-  position: 'relative',
-  padding: theme.spacing(1, 2),
+  borderRadius: theme.shape.borderRadius,
+  marginBottom: theme.spacing(1),
+  transition: 'background-color 0.2s ease',
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
-    '& .action-buttons': {
-      visibility: 'visible',
-      opacity: 1,
-    },
+  },
+  '&:hover .action-buttons': {
+    opacity: 1,
   },
   '& .action-buttons': {
-    position: 'absolute',
-    right: theme.spacing(2),
-    top: '50%',
-    transform: 'translateY(-50%)',
-    visibility: 'hidden',
     opacity: 0,
-    transition: 'all 0.2s ease-in-out',
-    display: 'flex',
-    zIndex: 2,
-  },
-  '& .MuiListItemText-root': {
-    marginRight: theme.spacing(10), // 为按钮预留空间
-    width: '100%',
-  },
-  '& .MuiListItemText-secondary': {
-    whiteSpace: 'pre-line',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
+    transition: 'opacity 0.2s ease',
   },
 }));
 
@@ -98,23 +79,150 @@ const HomePage = () => {
   const [newValue, setNewValue] = useState('');
   const [refreshInterval, setRefreshInterval] = useState<number>(5);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // 分页相关状态
+  const [nextToken, setNextToken] = useState<string | undefined>(undefined);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  
   const lastRefreshTime = useRef<number>(0);
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 添加防抖定时器引用
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadKeys = useCallback(async () => {
-    try {
-      setIsRefreshing(true);
-      const response = await api.getKeys(searchPrefix);
-      setKeys(response.keys);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load keys');
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-      lastRefreshTime.current = Date.now();
-    }
+  // 使用ref存储当前的searchPrefix值，避免依赖项循环
+  const searchPrefixRef = useRef<string>(searchPrefix);
+  
+  // 使用ref存储当前的nextToken值，避免依赖项循环
+  const nextTokenRef = useRef<string | undefined>(nextToken);
+  
+  // 存储最新的loadKeys函数引用 - 修复：初始化为空函数
+  const loadKeysRef = useRef<(reset: boolean) => Promise<void>>((reset: boolean) => Promise.resolve());
+
+  // 定义一个标记来防止多次调用
+  const isLoadingRef = useRef(false);
+
+  // 在一个useEffect中设置loadKeysRef.current，确保只运行一次
+  useEffect(() => {
+    // 加载键（支持重置和加载更多）
+    loadKeysRef.current = async (reset = true) => {
+      // 如果已经在加载中，跳过
+      if (isLoadingRef.current) {
+        console.log('跳过加载：已有加载操作正在进行');
+        return;
+      }
+      
+      try {
+        console.log(`开始加载，reset=${reset}, isRefreshing=${isRefreshing}, loadingMore=${loadingMore}`);
+        isLoadingRef.current = true;
+        
+        // 重置模式或首次加载时
+        if (reset) {
+          setIsRefreshing(true);
+          setLoadingMore(false);
+          // 重置时清除nextToken
+          setNextToken(undefined);
+          nextTokenRef.current = undefined;
+        } else {
+          // 加载更多模式
+          setLoadingMore(true);
+        }
+
+        // 每页加载 20 个条目
+        const pageSize = 20;
+        
+        // 使用ref中的值，避免依赖变化
+        const currentPrefix = searchPrefixRef.current;
+        const tokenToUse = reset ? undefined : nextTokenRef.current;
+        
+        console.log('加载键值对:', {
+          prefix: currentPrefix,
+          pageSize,
+          reset,
+          hasNextToken: !!tokenToUse
+        });
+        
+        // 加载键
+        const response = await api.getKeys(
+          currentPrefix, 
+          pageSize, 
+          tokenToUse
+        );
+        
+        console.log('API 响应:', {
+          keyCount: response.keys.length,
+          hasNextToken: !!response.nextToken
+        });
+        
+        // 更新状态
+        if (reset) {
+          setKeys(response.keys);
+        } else {
+          // 追加到当前列表
+          setKeys(prevKeys => [...prevKeys, ...response.keys]);
+        }
+        
+        // 更新分页状态
+        setNextToken(response.nextToken);
+        nextTokenRef.current = response.nextToken;
+        setHasMore(!!response.nextToken);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load keys');
+      } finally {
+        isLoadingRef.current = false;
+        setLoading(false);
+        setIsRefreshing(false);
+        setLoadingMore(false);
+        lastRefreshTime.current = Date.now();
+      }
+    };
+    
+    // 初始加载
+    loadKeysRef.current(true);
+  }, []);
+  
+  // 更新refs - 使用单独的useEffect，避免与loadKeys逻辑混在一起
+  useEffect(() => {
+    searchPrefixRef.current = searchPrefix;
   }, [searchPrefix]);
+  
+  useEffect(() => {
+    nextTokenRef.current = nextToken;
+  }, [nextToken]);
+
+  // 加载更多
+  const handleLoadMore = () => {
+    if (loadingMore || !hasMore) return;
+    loadKeysRef.current(false);
+  };
+
+  // 处理搜索
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setSearchPrefix(newValue);
+    
+    // 清除之前的定时器
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    
+    // 设置新的定时器，在用户停止输入300毫秒后执行搜索
+    searchDebounceRef.current = setTimeout(() => {
+      console.log('执行实时搜索:', newValue);
+      loadKeysRef.current(true);
+    }, 100);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // 清除可能存在的定时器
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    // 立即执行搜索
+    loadKeysRef.current(true);
+  };
 
   const handleRefreshIntervalChange = (event: SelectChangeEvent<number>) => {
     const newInterval = Number(event.target.value);
@@ -122,37 +230,43 @@ const HomePage = () => {
   };
 
   const handleRefresh = () => {
-    loadKeys();
+    loadKeysRef.current(true);
   };
 
-  // 使用 useEffect 处理自动刷新
+  // 完全独立的自动刷新逻辑，使用intervalId
   useEffect(() => {
-    if (refreshInterval > 0) {
-      const scheduleNextRefresh = () => {
-        const now = Date.now();
-        const timeSinceLastRefresh = now - lastRefreshTime.current;
-        const nextRefreshDelay = Math.max(0, refreshInterval * 1000 - timeSinceLastRefresh);
-        
-        refreshTimeoutRef.current = setTimeout(() => {
-          loadKeys();
-          scheduleNextRefresh();
-        }, nextRefreshDelay);
-      };
-
-      scheduleNextRefresh();
+    // 清除现有定时器
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
     }
-
-    return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
+    
+    // 如果不需要自动刷新，直接返回
+    if (refreshInterval <= 0) {
+      console.log('关闭自动刷新');
+      return;
+    }
+    
+    console.log(`设置自动刷新：${refreshInterval}秒`);
+    
+    // 开始自动刷新
+    const intervalId = setInterval(() => {
+      // 避免重叠刷新
+      if (isRefreshing || loadingMore || isLoadingRef.current) {
+        console.log('跳过自动刷新：之前的操作尚未完成');
+        return;
       }
+      
+      console.log(`执行自动刷新 (间隔: ${refreshInterval}秒)`);
+      loadKeysRef.current(true);
+    }, refreshInterval * 1000);
+    
+    // 清理函数
+    return () => {
+      console.log('清理自动刷新定时器');
+      clearInterval(intervalId);
     };
-  }, [refreshInterval, loadKeys]);
-
-  // 初始加载
-  useEffect(() => {
-    loadKeys();
-  }, [loadKeys]);
+  }, [refreshInterval]);
 
   // 处理编辑
   const handleEdit = async (key: EtcdKeyResponse) => {
@@ -176,7 +290,7 @@ const HomePage = () => {
   const handleDelete = async (key: string) => {
     try {
       await api.deleteKey(key);
-      await loadKeys();
+      await loadKeysRef.current(true);
       setSnackbar({ open: true, message: '删除成功' });
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
@@ -190,7 +304,7 @@ const HomePage = () => {
     try {
       await api.setKey(editKey.key, editValue);
       setEditKey(null);
-      await loadKeys();
+      await loadKeysRef.current(true);
       setSnackbar({ open: true, message: '保存成功' });
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
@@ -209,7 +323,7 @@ const HomePage = () => {
       setShowAddDialog(false);
       setNewKey('');
       setNewValue('');
-      await loadKeys();
+      await loadKeysRef.current(true);
       setSnackbar({ open: true, message: '添加成功' });
     } catch (err) {
       console.error('Failed to add key:', err);
@@ -217,77 +331,165 @@ const HomePage = () => {
     }
   };
 
-  return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <TextField
-          label="Search Prefix"
-          variant="outlined"
-          size="small"
-          value={searchPrefix}
-          onChange={(e) => setSearchPrefix(e.target.value)}
-          sx={{ width: 300 }}
-        />
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Auto Refresh</InputLabel>
-            <Select
-              value={refreshInterval}
-              label="Auto Refresh"
-              onChange={handleRefreshIntervalChange}
-            >
-              {refreshIntervalOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Chip
-            icon={<RefreshIcon />}
-            label="Refresh"
-            onClick={handleRefresh}
-            color="primary"
-            variant="outlined"
-            sx={{ 
-              animation: isRefreshing ? 'pulse 1s infinite' : 'none',
-              '&:hover': {
-                backgroundColor: 'primary.light',
-                color: 'white'
-              }
-            }}
-          />
-        </Box>
-      </Box>
+  // 清理函数 - 确保在组件卸载时清除所有定时器
+  useEffect(() => {
+    return () => {
+      // 清除刷新定时器
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+      
+      // 清除搜索防抖定时器
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+    };
+  }, []);
 
-      {loading && keys.length === 0 ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <CircularProgress />
+  return (
+    <Container maxWidth="lg" sx={{ 
+      mt: 4, 
+      mb: 4,
+      display: 'flex',
+      flexDirection: 'column',
+      height: 'calc(100vh - 64px)' // 减去顶部可能的AppBar高度
+    }}>
+      <Paper sx={{ 
+        p: 2, 
+        display: 'flex', 
+        flexDirection: 'column',
+        flexGrow: 1,
+        height: '100%'
+      }}>
+        <Box sx={{ display: 'flex', mb: 3, alignItems: 'center' }}>
+          <Typography variant="h6" component="h2" sx={{ flexGrow: 1 }}>
+            ETCD 键值浏览器
+          </Typography>
+          <Fab
+            color="primary"
+            size="small"
+            onClick={() => setShowAddDialog(true)}
+            sx={{ ml: 1 }}
+          >
+            <AddIcon />
+          </Fab>
         </Box>
-      ) : error ? (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
-      ) : (
-        <List>
-          {keys.map((kv) => (
-            <StyledListItem key={kv.key}>
-              <ListItemText
-                primary={truncateText(kv.key, 100)}
-                secondary={truncateText(kv.value, 200)}
+
+        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
+          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', width: '100%' }}>
+            <TextField
+              label="Search Prefix"
+              variant="outlined"
+              value={searchPrefix}
+              onChange={handleSearchChange}
+              fullWidth
+              size="small"
+              sx={{ mr: 2 }}
+            />
+          </form>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            <Typography variant="body2" sx={{ mr: 1 }}>
+              Auto Refresh
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <Select
+                value={refreshInterval}
+                onChange={handleRefreshIntervalChange}
+                displayEmpty
+              >
+                {refreshIntervalOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <IconButton 
+              onClick={handleRefresh} 
+              sx={{ ml: 1 }}
+              disabled={isRefreshing}
+            >
+              <RefreshIcon 
+                className={isRefreshing ? 'spin' : ''} 
+                sx={{
+                  animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                  '@keyframes spin': {
+                    '0%': { transform: 'rotate(0deg)' },
+                    '100%': { transform: 'rotate(360deg)' }
+                  }
+                }}
               />
-              <Box className="action-buttons">
-                <IconButton onClick={() => handleEdit(kv)}>
-                  <EditIcon />
-                </IconButton>
-                <IconButton onClick={() => handleDelete(kv.key)}>
-                  <DeleteIcon />
-                </IconButton>
+            </IconButton>
+          </Box>
+        </Box>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {loading && keys.length === 0 ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+            <CircularProgress />
+          </Box>
+        ) : keys.length === 0 ? (
+          <Typography variant="body1" align="center" sx={{ py: 4 }}>
+            No keys found
+          </Typography>
+        ) : (
+          <Box sx={{ 
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            border: '1px solid rgba(0, 0, 0, 0.12)',
+            borderRadius: 1,
+            bgcolor: 'background.paper'
+          }}>
+            <List sx={{ 
+              overflow: 'auto',
+              flexGrow: 1,
+              maxHeight: '100%'
+            }}>
+              {keys.map((kv) => (
+                <StyledListItem key={kv.key} divider>
+                  <ListItemText
+                    primary={truncateText(kv.key, 100)}
+                    secondary={truncateText(kv.value, 200)}
+                  />
+                  <Box className="action-buttons">
+                    <IconButton onClick={() => handleEdit(kv)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(kv.key)}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </Box>
+                </StyledListItem>
+              ))}
+            </List>
+            
+            {/* 加载更多按钮 */}
+            {hasMore && (
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                <Button 
+                  variant="outlined" 
+                  onClick={handleLoadMore} 
+                  disabled={loadingMore}
+                  startIcon={loadingMore ? <CircularProgress size={20} /> : null}
+                >
+                  {loadingMore ? 'Loading more...' : 'Load More'}
+                </Button>
               </Box>
-            </StyledListItem>
-          ))}
-        </List>
-      )}
+            )}
+          </Box>
+        )}
+      </Paper>
 
       {/* 编辑对话框 */}
       <Dialog open={editKey !== null} onClose={() => setEditKey(null)} maxWidth="md" fullWidth>
@@ -319,10 +521,17 @@ const HomePage = () => {
       {/* 消息提示 */}
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={3000}
+        autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        message={snackbar.message}
-      />
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity="success" 
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
 
       {/* 添加键值对的浮动按钮 */}
       <Fab

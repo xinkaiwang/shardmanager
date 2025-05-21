@@ -110,8 +110,15 @@ type DefEtcdSession struct {
 	mu              sync.RWMutex // Mutex to protect state and listener
 	keepAliveCancel context.CancelFunc
 
-	closeOnce sync.Once // To ensure Close actions run only once
-	chClosed  chan struct{}
+	closeOnce   sync.Once // To ensure Close actions run only once
+	closeReason string    // Reason for session closure, if needed
+	chClosed    chan struct{}
+}
+
+func (session *DefEtcdSession) WaitForSessionClose() string {
+	// Wait for the session to close and return the reason
+	<-session.chClosed
+	return session.closeReason
 }
 
 func (session *DefEtcdSession) keepalive(ctx context.Context) {
@@ -131,17 +138,20 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 	session.setState(ESS_Connected, "keepalive started successfully")
 
 	stop := false
+	var reason string
 	for !stop {
 		select {
 		case <-ctx.Done():
 			klogging.Info(ctx).With("sessionId", session.sessionId).Log("EtcdSession", "keepalive context cancelled")
 			stop = true
+			reason = "keepaliveContextCancelled"
 			session.setState(ESS_Disconnected, "keepalive context cancelled")
 			continue
 		case ka, ok := <-keepAliveCh:
 			if !ok { // Check if channel is closed
 				klogging.Info(ctx).With("sessionId", session.sessionId).Log("EtcdSession", "keepalive channel closed")
 				stop = true
+				reason = "LeaseLost"
 				// keepalive channel closed, means the lease is expired or revoked
 				session.setState(ESS_Disconnected, "keepalive channel closed, lease lost")
 				continue
@@ -166,6 +176,7 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 
 	// Ensure the closed channel is signaled when keepalive exits
 	session.closeOnce.Do(func() {
+		session.closeReason = reason
 		close(session.chClosed)
 		klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Closed channel signaled by keepalive exit")
 	})

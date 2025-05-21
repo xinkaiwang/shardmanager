@@ -23,6 +23,9 @@ type CougarImpl struct {
 	cougarState *CougarState
 	runLoop     *krunloop.RunLoop[*CougarImpl]
 
+	exitReason string
+	exitChan   chan struct{}
+
 	cougarApp CougarApp
 }
 
@@ -34,6 +37,7 @@ func NewCougarImpl(ctx context.Context, etcdEndpoint string, workerInfo *WorkerI
 		// notifyChange: notifyChange,
 		workerInfo:  workerInfo,
 		cougarState: NewCougarStates(),
+		exitChan:    make(chan struct{}),
 		cougarApp:   app,
 	}
 	cougarImp.runLoop = krunloop.NewRunLoop(ctx, cougarImp, "cougar")
@@ -46,6 +50,11 @@ func NewCougarImpl(ctx context.Context, etcdEndpoint string, workerInfo *WorkerI
 	pilotPath := cougarImp.pilotPath()
 	ch := cougarImp.etcdSession.WatchByPrefix(ctx, pilotPath, 0)
 	go cougarImp.watchPilotNode(ctx, ch)
+	go func() {
+		// hook for session close
+		reason := etcdSession.WaitForSessionClose()
+		cougarImp.broadcastExit("sessionClosed:" + reason)
+	}()
 	return cougarImp
 }
 
@@ -92,6 +101,18 @@ func (c *CougarImpl) RequestShutdown() chan struct{} {
 		return "requestShutdown"
 	})
 	return ch
+}
+
+func (ci *CougarImpl) broadcastExit(reason string) {
+	ci.exitReason = reason
+	// close the exit channel
+	close(ci.exitChan)
+}
+
+func (ci *CougarImpl) WaitOnExit() string {
+	// wait for the exit
+	<-ci.exitChan
+	return ci.exitReason
 }
 
 // etcd path is "/smg/eph/{worker_id}:{session_id}"
@@ -153,6 +174,7 @@ func (c *CougarImpl) ToEphNode(updateReason string) *cougarjson.WorkerEphJson {
 			ReplicaIdx:   int(shard.ReplicaIdx),
 			AssignmentId: string(shard.AssignmentId),
 			State:        shard.CurrentConfirmedState,
+			Stats:        shard.stats,
 		}
 		assign.Stats = shard.stats
 		ephNode.Assignments = append(ephNode.Assignments, assign)

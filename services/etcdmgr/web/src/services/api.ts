@@ -13,10 +13,28 @@ export const getStatus = async (): Promise<StatusResponse> => {
   return response.data;
 };
 
-export const getKeys = async (prefix?: string): Promise<EtcdKeysResponse> => {
-  const response = await api.get<EtcdKeysResponse>('/list_keys', {
-    params: { prefix },
+export const getKeys = async (prefix?: string, limit?: number, nextToken?: string): Promise<EtcdKeysResponse> => {
+  const params: Record<string, string | number> = {};
+  
+  if (prefix !== undefined && prefix !== null) {
+    params.prefix = prefix;
+  }
+  
+  if (limit !== undefined && limit > 0) {
+    params.limit = limit;
+  }
+  
+  if (nextToken !== undefined && nextToken !== null && nextToken !== '') {
+    params.nextToken = nextToken;
+  }
+  
+  console.log('API 请求参数:', {
+    prefix: params.prefix,
+    limit: params.limit,
+    hasNextToken: params.nextToken ? true : false
   });
+  
+  const response = await api.get<EtcdKeysResponse>('/list_keys', { params });
   return response.data;
 };
 

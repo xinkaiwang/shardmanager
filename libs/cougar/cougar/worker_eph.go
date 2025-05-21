@@ -40,6 +40,7 @@ type Assignment struct {
 	ReplicaIdx  int                              `json:"idx,omitempty"`
 	AsginmentId string                           `json:"asg"`
 	State       cougarjson.CougarAssignmentState `json:"sts"`
+	Stats       *cougarjson.ShardStats           `json:"stats,omitempty"`
 }
 
 func NewWorkerEphNode(workerId data.WorkerId, sessionId data.SessionId, startTimeMs int64, capacity int32) *WorkerEphNode {
@@ -74,12 +75,13 @@ func (ephNode *WorkerEphNode) ToJson() *cougarjson.WorkerEphJson {
 	}
 
 	for _, assignment := range ephNode.Assignments {
-		asg := &cougarjson.AssignmentJson{
-			ShardId:      assignment.ShardId,
-			ReplicaIdx:   assignment.ReplicaIdx,
-			AssignmentId: assignment.AsginmentId,
-			State:        assignment.State,
-		}
+		asg := cougarjson.NewAssignmentJson(
+			assignment.ShardId,
+			assignment.ReplicaIdx,
+			assignment.AsginmentId,
+			assignment.State,
+		)
+		asg.Stats = assignment.Stats
 		wej.Assignments = append(wej.Assignments, asg)
 	}
 
@@ -103,6 +105,7 @@ func WorkerEphNodeFromJson(wej *cougarjson.WorkerEphJson) *WorkerEphNode {
 			ReplicaIdx:  assignment.ReplicaIdx,
 			AsginmentId: assignment.AssignmentId,
 			State:       assignment.State,
+			Stats:       assignment.Stats,
 		}
 		ephNode.Assignments[data.AssignmentId(asg.AsginmentId)] = asg
 	}

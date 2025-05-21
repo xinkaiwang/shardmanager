@@ -13,6 +13,7 @@ export interface EtcdKeyResponse {
 
 export interface EtcdKeysResponse {
   keys: EtcdKeyResponse[];
+  nextToken?: string;
 }
 
 export interface EtcdKeyRequest {

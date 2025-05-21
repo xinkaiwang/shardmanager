@@ -1,6 +1,8 @@
 package smgjson
 
 import (
+	"encoding/json"
+
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -62,4 +64,12 @@ func StringMapEquals(map1 map[string]string, map2 map[string]string) bool {
 		}
 	}
 	return true
+}
+
+func (wi *WorkerInfoJson) ToJson() string {
+	bytes, err := json.Marshal(wi)
+	if err != nil {
+		panic(err)
+	}
+	return string(bytes)
 }

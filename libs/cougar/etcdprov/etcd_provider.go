@@ -44,6 +44,7 @@ type EtcdSession interface {
 	SetStateListener(listener EtcdStateListener)
 	GetCurrentState() EtcdSessionState
 	WatchByPrefix(ctx context.Context, pathPrefix string, revision EtcdRevision) chan EtcdKvItem
+	WaitForSessionClose() string // call to wait for session close, return exit reason
 	// Close 关闭会话，停止租约续约并释放资源
 	Close(ctx context.Context)
 }

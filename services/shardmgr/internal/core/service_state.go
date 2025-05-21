@@ -191,12 +191,12 @@ func (ss *ServiceState) PrintAllShards(ctx context.Context) {
 }
 func (ss *ServiceState) PrintAllWorkers(ctx context.Context) {
 	for id, workerState := range ss.AllWorkers {
-		klogging.Info(ctx).With("workerId", id).With("sessionId", workerState.SessionId).Log("PrintAllWorkers", "worker")
+		klogging.Info(ctx).With("workerId", id).With("sessionId", workerState.SessionId).With("data", workerState.ToFullString()).Log("PrintAllWorkers", "worker")
 	}
 }
 func (ss *ServiceState) PrintAllAssignments(ctx context.Context) {
 	for _, assignment := range ss.AllAssignments {
-		klogging.Info(ctx).With("assignmentId", assignment.AssignmentId).With("shardId", assignment.ShardId).With("replicaIdx", assignment.ReplicaIdx).Log("PrintAllAssignments", "assignment")
+		klogging.Info(ctx).With("assignmentId", assignment.AssignmentId).With("assign", assignment.String()).Log("PrintAllAssignments", "assignment")
 	}
 }
 

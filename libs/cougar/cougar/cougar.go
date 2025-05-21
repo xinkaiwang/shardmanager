@@ -101,4 +101,5 @@ type CougarStateVisitor func(state *CougarState) string
 type Cougar interface {
 	VisitState(visitor CougarStateVisitor)
 	RequestShutdown() chan struct{} // the channel will be closed when shutdown is permitted
+	WaitOnExit() string             // call this to wait for the exit. return the reason for exit
 }

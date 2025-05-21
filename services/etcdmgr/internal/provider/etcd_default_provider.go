@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
 	"strings"
 	"time"
@@ -82,52 +83,144 @@ func (pvd *etcdDefaultProvider) Get(ctx context.Context, key string) EtcdKvItem 
 // List 列出指定前缀的键值对
 // 参数：
 // - ctx: 上下文，用于取消操作
-// - startKey: 起始键（前缀）
-// - maxCount: 最大返回数量，如果为 0 则返回所有匹配的键
+// - prefix: 前缀
+// - limit: 每页返回的最大记录数，0表示不限制
+// - nextToken: 上一页的最后一个key的base64编码，用于分页，空表示从头开始
 // 返回：
-// - 匹配前缀的键值对列表
+// - 当前页的键值对列表和下一页的起始key的base64编码(如果还有更多)
 // 错误处理：
 // - 如果发生网络错误或其他 etcd 错误，将返回 EtcdListError
-func (pvd *etcdDefaultProvider) List(ctx context.Context, startKey string, maxCount int) []EtcdKvItem {
+func (pvd *etcdDefaultProvider) List(ctx context.Context, prefix string, limit int, nextToken string) ([]EtcdKvItem, string) {
+	// 构建基本查询选项
 	opts := []clientv3.OpOption{
-		clientv3.WithPrefix(),
 		clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
 	}
-	if maxCount > 0 {
-		opts = append(opts, clientv3.WithLimit(int64(maxCount)))
+
+	// 处理 nextToken
+	var startKey string
+	var useNextToken bool
+
+	if nextToken != "" {
+		// base64解码nextToken
+		decodedBytes, err := base64.StdEncoding.DecodeString(nextToken)
+		if err != nil {
+			panic(kerror.Create("InvalidNextToken", "failed to decode next token").
+				WithErrorCode(kerror.EC_INVALID_PARAMETER).
+				With("hasNextToken", nextToken != "").
+				With("error", err.Error()))
+		}
+
+		// 正确处理键，确保不再返回token键本身
+		decodedKey := string(decodedBytes)
+		if decodedKey != "" {
+			startKey = decodedKey
+			useNextToken = true
+
+			// 对于分页查询，我们需要查询的是比startKey大的键
+			// 使用clientv3.WithFromKey()让查询从这个键的后继开始
+			opts = append(opts, clientv3.WithFromKey())
+
+			// 当有前缀时，限制查询范围到前缀范围内
+			if prefix != "" {
+				rangeEnd := clientv3.GetPrefixRangeEnd(prefix)
+				opts = append(opts, clientv3.WithRange(rangeEnd))
+			}
+		}
+	} else if prefix != "" {
+		// 首次查询，使用前缀
+		startKey = prefix
+		opts = append(opts, clientv3.WithPrefix())
+	} else {
+		// 没有前缀，从最小的可能键开始查询所有键
+		startKey = "\x00" // 使用最小字节作为起始键
+		opts = append(opts, clientv3.WithFromKey())
+	}
+
+	// 设置限制(多请求一个用于判断是否有下一页)
+	if limit > 0 {
+		opts = append(opts, clientv3.WithLimit(int64(limit+1)))
 	}
 
 	klogging.Info(ctx).
-		With("startKey", startKey).
-		With("maxCount", maxCount).
+		With("prefix", prefix).
+		With("limit", limit).
+		With("hasNextToken", nextToken != "").
+		With("useNextToken", useNextToken).
 		Log("ListKeysRequest", "listing keys from etcd")
 
+	// 查询etcd
 	resp, err := pvd.client.Get(ctx, startKey, opts...)
 	if err != nil {
 		panic(kerror.Create("EtcdListError", "failed to list keys from etcd").
 			WithErrorCode(kerror.EC_INTERNAL_ERROR).
-			With("startKey", startKey).
+			With("prefix", prefix).
+			With("hasStartKey", startKey != "").
 			With("error", err.Error()))
 	}
 
-	klogging.Info(ctx).
-		With("startKey", startKey).
-		With("count", len(resp.Kvs)).
-		Log("ListKeysResponse", "got keys from etcd")
+	// 结果为空时直接返回
+	if len(resp.Kvs) == 0 {
+		return []EtcdKvItem{}, ""
+	}
 
-	items := make([]EtcdKvItem, 0, len(resp.Kvs))
-	for _, kv := range resp.Kvs {
+	// 当使用nextToken时，我们需要跳过第一个结果（这就是token key本身）
+	startIndex := 0
+	if useNextToken && len(resp.Kvs) > 0 && string(resp.Kvs[0].Key) == startKey {
+		startIndex = 1
+	}
+
+	var items []EtcdKvItem
+	var next string
+
+	// 处理分页 - 限制结果数量并计算下一页token
+	actualLimit := limit
+	if actualLimit <= 0 {
+		actualLimit = len(resp.Kvs) - startIndex // 如果没有限制，使用实际结果数
+	}
+
+	// 如果结果数量超过限制，取出多余的一个用于nextToken
+	totalAvailable := len(resp.Kvs) - startIndex
+	hasMore := totalAvailable > actualLimit
+	resultCount := actualLimit
+	if hasMore {
+		nextKeyIndex := startIndex + resultCount
+		if nextKeyIndex < len(resp.Kvs) {
+			nextKey := string(resp.Kvs[nextKeyIndex].Key)
+			// base64编码nextToken
+			next = base64.StdEncoding.EncodeToString([]byte(nextKey))
+		}
+	}
+
+	// 构建结果，不超过限制
+	items = make([]EtcdKvItem, 0, resultCount)
+	endIndex := startIndex + resultCount
+	if endIndex > len(resp.Kvs) {
+		endIndex = len(resp.Kvs)
+	}
+
+	for i := startIndex; i < endIndex; i++ {
+		kv := resp.Kvs[i]
+		keyStr := string(kv.Key)
+
+		// 确保结果与前缀匹配（对于使用WithFromKey的查询很重要）
+		if prefix != "" && !strings.HasPrefix(keyStr, prefix) {
+			continue
+		}
+
 		items = append(items, EtcdKvItem{
-			Key:         string(kv.Key),
+			Key:         keyStr,
 			Value:       string(kv.Value),
 			ModRevision: kv.ModRevision,
 		})
-		klogging.Debug(ctx).
-			With("key", string(kv.Key)).
-			With("value", string(kv.Value)).
-			Log("ListKeysItem", "found key")
 	}
-	return items
+
+	klogging.Info(ctx).
+		With("prefix", prefix).
+		With("count", len(items)).
+		With("hasMore", next != "").
+		Log("ListKeysResponse", "got keys from etcd")
+
+	return items, next
 }
 
 // Set 设置指定键的值

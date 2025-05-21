@@ -23,8 +23,11 @@ type EtcdProvider interface {
 	Get(ctx context.Context, key string) EtcdKvItem
 
 	// List 列出指定前缀的键值对
-	// maxCount 为 0 时返回所有匹配的键
-	List(ctx context.Context, startKey string, maxCount int) []EtcdKvItem
+	// prefix: 前缀
+	// limit: 每页返回的最大记录数，0表示不限制
+	// nextToken: 上一页的最后一个key，用于分页，空表示从头开始
+	// 返回值: 当前页的键值对列表和下一页的起始key(如果还有更多)
+	List(ctx context.Context, prefix string, limit int, nextToken string) ([]EtcdKvItem, string)
 
 	// Set 设置指定键的值
 	Set(ctx context.Context, key, value string)
