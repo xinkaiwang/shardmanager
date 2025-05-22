@@ -41,7 +41,7 @@ func TestFakeEtcdProvider_BasicOperations(t *testing.T) {
 	// 测试删除
 	t.Run("删除键", func(t *testing.T) {
 		provider.Set(ctx, "/test/key2", "value2")
-		provider.Delete(ctx, "/test/key2")
+		provider.Delete(ctx, "/test/key2", false)
 		item := provider.Get(ctx, "/test/key2")
 		assert.Equal(t, "", item.Value)
 		assert.Equal(t, EtcdRevision(0), item.ModRevision)
@@ -50,7 +50,7 @@ func TestFakeEtcdProvider_BasicOperations(t *testing.T) {
 	// 测试删除不存在的键
 	t.Run("删除不存在的键", func(t *testing.T) {
 		assert.Panics(t, func() {
-			provider.Delete(ctx, "/test/not_exist")
+			provider.Delete(ctx, "/test/not_exist", false)
 		})
 	})
 }
@@ -110,7 +110,7 @@ func TestFakeEtcdProvider_Watch(t *testing.T) {
 	go func() {
 		provider.Set(ctx, "/test/key1", "value1")
 		provider.Set(ctx, "/test/key2", "value2")
-		provider.Delete(ctx, "/test/key1")
+		provider.Delete(ctx, "/test/key1", false)
 	}()
 
 	// 验证接收到的事件

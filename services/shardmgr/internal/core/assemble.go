@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/solver"
 )
@@ -16,7 +18,7 @@ func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is 
 	ss.storeProvider = shadowState
 
 	// init
-	ss.Init(ctx)
+	ss.Init(klogging.EmbedTraceId(ctx, "it_"+kcommon.RandomString(ctx, 8))) // it_ = init trace
 
 	// solverGroup
 	sg := solver.NewSolverGroup(ctx, ss.GetSnapshotFutureForClone(), ss.ProposalQueue.Push)
@@ -26,7 +28,7 @@ func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is 
 	ss.SolverGroup = sg
 	ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(), "AssembleSsAll.init")
 
-	go ss.runloop.Run(ctx)
+	go ss.runloop.Run(klogging.EmbedTraceId(ctx, "rl_"+kcommon.RandomString(ctx, 6))) // rl_ = runloop trace
 	return ss
 }
 
@@ -39,8 +41,8 @@ func AssembleSsWithShadowState(ctx context.Context, name string) *ServiceState {
 	ss.storeProvider = shadowState
 
 	// init
-	ss.Init(ctx)
+	ss.Init(klogging.EmbedTraceId(ctx, "it_"+kcommon.RandomString(ctx, 8))) // it_ = init trace
 	// start runloop
-	go ss.runloop.Run(ctx)
+	go ss.runloop.Run(klogging.EmbedTraceId(ctx, "rl_"+kcommon.RandomString(ctx, 6))) // rl_ = runloop trace
 	return ss
 }

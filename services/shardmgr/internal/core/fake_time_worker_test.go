@@ -73,7 +73,7 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 
 		// 删除临时节点，触发临时节点丢失处理
 		t.Logf("从etcd删除worker eph节点: %s", ephPath)
-		setup.FakeEtcd.Delete(ctx, ephPath)
+		setup.FakeEtcd.Delete(ctx, ephPath, false)
 		t.Logf("已删除worker eph节点，等待状态同步")
 
 		// Step 4: 等待worker状态变为离线优雅期状态
@@ -167,7 +167,7 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 
 		// 删除临时节点，触发临时节点丢失处理
 		t.Logf("从etcd删除worker eph节点: %s", ephPath)
-		setup.FakeEtcd.Delete(ctx, ephPath)
+		setup.FakeEtcd.Delete(ctx, ephPath, false)
 		t.Logf("已删除worker eph节点，等待状态同步")
 
 		{

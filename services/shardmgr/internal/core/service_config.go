@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
@@ -30,12 +31,14 @@ func (ss *ServiceState) LoadServiceConfig(ctx context.Context) (*config.ServiceC
 
 // ServiceConfigUpdateEvent: implement IEvent interface
 type ServiceConfigUpdateEvent struct {
+	Ctx    context.Context
 	Parent *ServiceConfigWatcher
 	NewCfg *config.ServiceConfig
 }
 
-func NewServiceConfigUpdateEvent(parent *ServiceConfigWatcher, newCfg *config.ServiceConfig) *ServiceConfigUpdateEvent {
+func NewServiceConfigUpdateEvent(ctx context.Context, parent *ServiceConfigWatcher, newCfg *config.ServiceConfig) *ServiceConfigUpdateEvent {
 	return &ServiceConfigUpdateEvent{
+		Ctx:    ctx,
 		Parent: parent,
 		NewCfg: newCfg,
 	}
@@ -46,7 +49,7 @@ func (e *ServiceConfigUpdateEvent) GetName() string {
 }
 
 func (e *ServiceConfigUpdateEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.onServiceConfigUpdate(ctx, e.NewCfg)
+	ss.onServiceConfigUpdate(e.Ctx, e.NewCfg)
 }
 
 func (ss *ServiceState) onServiceConfigUpdate(ctx context.Context, config *config.ServiceConfig) {
@@ -123,20 +126,22 @@ func (w *ServiceConfigWatcher) Run(ctx context.Context) {
 			klogging.Info(ctx).Log("ServiceConfigWatcherExit", "exit")
 			return
 		case kvItem, ok := <-w.ch:
+			traceId := kcommon.NewTraceId(ctx, "ServiceConfigWatcher", 6)
+			ctx2 := klogging.EmbedTraceId(ctx, traceId)
 			if !ok {
-				klogging.Info(ctx).Log("ServiceConfigWatcherExit", "exit")
+				klogging.Info(ctx2).Log("ServiceConfigWatcherExit", "exit")
 				stop = true
 				continue
 			}
 			if kvItem.Value == "" {
 				// this is a delete event
-				klogging.Info(ctx).With("path", kvItem.Key).Log("ServiceConfigWatcher", "观察到服务配置已删除") // this should not happen, we ignore it
+				klogging.Info(ctx2).With("path", kvItem.Key).Log("ServiceConfigWatcher", "观察到服务配置已删除") // this should not happen, we ignore it
 				continue
 			}
 			// this is a add or update event
-			klogging.Info(ctx).With("serviceConfig", kvItem.Value).With("revision", kvItem.ModRevision).Log("ServiceConfigWatcher", "观察到服务配置已更新")
+			klogging.Info(ctx2).With("serviceConfig", kvItem.Value).With("revision", kvItem.ModRevision).Log("ServiceConfigWatcher", "观察到服务配置已更新")
 			cfg := config.ParseServiceConfigFromJson(kvItem.Value)
-			w.parent.PostEvent(NewServiceConfigUpdateEvent(w, cfg))
+			w.parent.PostEvent(NewServiceConfigUpdateEvent(ctx, w, cfg))
 		}
 	}
 }

@@ -245,6 +245,11 @@ func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
 	klogging.Info(ctx).With("workerId", ws.WorkerId).With("boxId", currentBox.BoxId).With("reason", reason).With("notifyId", currentBox.NofityId).Log("signalAll", "worker state changed")
 }
 
+func (ws *WorkerState) setWorkerState(ctx context.Context, newState data.WorkerStateEnum, reason string) {
+	klogging.Info(ctx).With("workerId", ws.GetWorkerFullId().String()).With("oldState", ws.State).With("newState", newState).With("reason", reason).Log("setWorkerState", "worker state changed")
+	ws.State = newState
+}
+
 // onEphNodeLost: must be called in runloop
 func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *DirtyFlag {
 	ws.EphNode = nil
@@ -252,17 +257,17 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 	switch ws.State {
 	case data.WS_Online_healthy:
 		// Worker Event: Eph node lost, worker becomes offline
-		ws.State = data.WS_Offline_graceful_period
+		ws.setWorkerState(ctx, data.WS_Offline_graceful_period, "onEphNodeLost")
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
 		dirty.AddDirtyFlag("WS_Offline_graceful_period")
 	case data.WS_Online_shutdown_req:
 		// Worker Event: Eph node lost, worker becomes offline
-		ws.State = data.WS_Offline_graceful_period
+		ws.setWorkerState(ctx, data.WS_Offline_graceful_period, "onEphNodeLost")
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
 		dirty.AddDirtyFlag("WS_Offline_graceful_period")
 	case data.WS_Online_shutdown_permit:
 		// Worker Event: Eph node lost, worker becomes offline
-		ws.State = data.WS_Offline_draining_complete
+		ws.setWorkerState(ctx, data.WS_Offline_draining_complete, "onEphNodeLost")
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs()
 		dirty.AddDirtyFlag("WS_Offline_draining_complete")
 	case data.WS_Offline_graceful_period:
@@ -270,13 +275,14 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 	case data.WS_Offline_draining_candidate:
 		fallthrough
 	case data.WS_Offline_draining_complete:
-		ws.State = data.WS_Offline_dead
+		ws.setWorkerState(ctx, data.WS_Offline_dead, "onEphNodeLost")
 		dirty.AddDirtyFlag("WS_Offline_dead")
 	case data.WS_Offline_dead:
 		// nothing to do
 	}
-	klogging.Info(ctx).With("workerId", ws.WorkerId).
+	klogging.Info(ctx).With("workerId", ws.WorkerId).With("sessionId", ws.SessionId).
 		With("dirty", dirty.String()).
+		With("state", ws.State).
 		Log("onEphNodeLostDone", "worker eph lost")
 	if dirty.IsDirty() {
 		reason := dirty.String()
@@ -385,7 +391,7 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 		if common.BoolFromInt8(workerEph.ReqShutDown) {
 			ws.ShutdownRequesting = true
 			dirtyFlag.AddDirtyFlag("ReqShutdown")
-			ws.State = data.WS_Online_shutdown_req
+			ws.setWorkerState(ctx, data.WS_Online_shutdown_req, "ReqShutdown")
 			hat := ss.hatTryGet(ctx, ws.GetWorkerFullId())
 			if hat {
 				dirtyFlag.AddDirtyFlag("hat")
@@ -416,7 +422,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 	case data.WS_Online_shutdown_req:
 		// nothing to do
 		if len(ws.Assignments) == 0 {
-			ws.State = data.WS_Online_shutdown_permit
+			ws.setWorkerState(ctx, data.WS_Online_shutdown_permit, "checkWorkerOnTimeout")
 			dirty.AddDirtyFlag("WS_Online_shutdown_permit")
 		}
 	case data.WS_Online_shutdown_permit:
@@ -426,7 +432,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 			break
 		}
 		// Worker Event: Grace period expired, worker becomes offline
-		ws.State = data.WS_Offline_draining_candidate
+		ws.setWorkerState(ctx, data.WS_Offline_draining_candidate, "checkWorkerOnTimeout")
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs() // until grace period expired
 		dirty.AddDirtyFlag("WS_Offline_draining_candidate")
 		if !ws.HasShutdownHat() {
@@ -447,13 +453,13 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 				break
 			}
 			// Grace period expired, DirtyPurge this worker
-			ws.State = data.WS_Offline_dead
+			ws.setWorkerState(ctx, data.WS_Offline_dead, "checkWorkerOnTimeout")
 			passiveMove := costfunc.NewWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
 			passiveMoves = append(passiveMoves, passiveMove)
 			dirty.AddDirtyFlag("WS_Offline_dead")
 		}
 		// Worker Event: Draining complete, worker becomes offline
-		ws.State = data.WS_Offline_draining_complete
+		ws.setWorkerState(ctx, data.WS_Offline_draining_complete, "checkWorkerOnTimeout")
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs() // DeleteGracePeriodSec = 20 seconds, then clean it up
 		dirty.AddDirtyFlag("WS_Offline_draining_complete")
 		fallthrough
@@ -462,7 +468,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 			break
 		}
 		// Worker Event: Grace period expired, worker becomes offline
-		ws.State = data.WS_Offline_dead
+		ws.setWorkerState(ctx, data.WS_Offline_dead, "checkWorkerOnTimeout")
 		passiveMove := costfunc.NewWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
 		passiveMoves = append(passiveMoves, passiveMove)
 		dirty.AddDirtyFlag("WS_Offline_dead")

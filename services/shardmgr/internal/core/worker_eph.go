@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
@@ -21,7 +22,7 @@ func NewWorkerEphWatcher(ctx context.Context, ss *ServiceState, currentWorkerEph
 		ss: ss,
 	}
 	watcher.ch = etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, ss.PathManager.GetWorkerEphPathPrefix(), currentWorkerEphRevision)
-	go watcher.Run(ctx)
+	go watcher.Run(klogging.EmbedTraceId(ctx, "wew_")) // wew = worker eph watcher
 	return watcher
 }
 
@@ -33,25 +34,27 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 			klogging.Info(ctx).Log("WorkerEphWatcher", "CtxDone.Exit")
 			return
 		case kvItem := <-w.ch:
+			traceId := kcommon.NewTraceId(ctx, "wew_", 8) // wew = worker eph watcher
+			ctx2 := klogging.EmbedTraceId(ctx, traceId)
 			if kvItem.Value == "" {
 				// this is a delete event
 				// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
 				workerId := w.workerIdFromPath(kvItem.Key)
-				klogging.Info(ctx).With("workerId", workerId).With("path", kvItem.Key).
+				klogging.Info(ctx2).With("workerId", workerId).With("path", kvItem.Key).
 					Log("WorkerEphWatcher", "观察到worker eph已删除")
-				w.ss.PostEvent(NewWorkerEphEvent(workerId, nil))
-				klogging.Info(ctx).With("workerId", workerId).
+				w.ss.PostEvent(NewWorkerEphEvent(ctx2, workerId, nil))
+				klogging.Info(ctx2).With("workerId", workerId).
 					Log("WorkerEphWatcher", "worker eph event posted")
 				continue
 			}
 			// this is a add or update event
-			klogging.Info(ctx).With("workerFullId", kvItem.Key).With("eph", kvItem.Value).
+			klogging.Info(ctx2).With("workerFullId", kvItem.Key).With("eph", kvItem.Value).
 				Log("WorkerEphWatcher", "观察到worker eph已更新")
 			// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
 			workerId := w.workerIdFromPath(kvItem.Key)
 			workerEph := cougarjson.WorkerEphJsonFromJson(kvItem.Value)
-			w.ss.PostEvent(NewWorkerEphEvent(workerId, workerEph))
-			klogging.Info(ctx).With("workerId", workerId).With("eph", workerEph).
+			w.ss.PostEvent(NewWorkerEphEvent(ctx2, workerId, workerEph))
+			klogging.Info(ctx2).With("workerId", workerId).With("eph", workerEph).
 				Log("WorkerEphWatcher", "worker eph event posted")
 		}
 	}
@@ -73,12 +76,14 @@ func (ss *ServiceState) LoadCurrentWorkerEph(ctx context.Context) ([]*cougarjson
 
 // WorkerEphEvent: implements IEvent[*ServiceState]
 type WorkerEphEvent struct {
+	Ctx       context.Context
 	WorkerId  data.WorkerId
 	WorkerEph *cougarjson.WorkerEphJson
 }
 
-func NewWorkerEphEvent(workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) *WorkerEphEvent {
+func NewWorkerEphEvent(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) *WorkerEphEvent {
 	return &WorkerEphEvent{
+		Ctx:       ctx,
 		WorkerId:  workerId,
 		WorkerEph: workerEph,
 	}
@@ -89,7 +94,7 @@ func (e *WorkerEphEvent) GetName() string {
 }
 
 func (e *WorkerEphEvent) Process(ctx context.Context, ss *ServiceState) {
-	ss.StagingWorkerEph(ctx, e.WorkerId, e.WorkerEph)
+	ss.StagingWorkerEph(e.Ctx, e.WorkerId, e.WorkerEph)
 }
 
 // stagingWorkerEph: must call in runloop. Staging area is write by (individual) worker eph event(s), read by digestStagingWorkerEph (in batch)

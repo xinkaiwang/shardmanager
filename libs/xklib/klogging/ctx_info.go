@@ -44,6 +44,13 @@ type CtxInfo struct {
 	writeMutex sync.Mutex // protect Details from concurrent write
 }
 
+func NewCtxInfo(parent *CtxInfo) *CtxInfo {
+	return &CtxInfo{
+		Parent:  parent,
+		Details: map[string]*KVL{},
+	}
+}
+
 // CurrentCtxInfo returns the CtxInfo stored in ctx, if any.
 // Return nil if current ctx does not contains an CtxInfo object
 func GetCurrentCtxInfo(ctx context.Context) *CtxInfo {
@@ -64,6 +71,15 @@ func CreateCtxInfo(ctx context.Context) (context.Context, *CtxInfo) {
 	return newCtx, info
 }
 
+func AttachToCtx(ctx context.Context, ci *CtxInfo) context.Context {
+	if ci == nil {
+		return ctx
+	}
+	newCtx := context.WithValue(ctx, userKey, ci)
+	return newCtx
+}
+
+// GetOrCreateCtxInfo: this is rarely used, most of the time you need GetOrCreateCtxInfo(), which automatically refers to parents for you. You only need this when (in rare cases) you want to attach CtxInfo onto a different ctx chain (which is not in the same ctx chain).
 // get current CtxInfo (if already exists in ctx), otherwise create a new CtxInfo as well as new ctx
 func GetOrCreateCtxInfo(ctx context.Context) (context.Context, *CtxInfo) {
 	info := GetCurrentCtxInfo(ctx)

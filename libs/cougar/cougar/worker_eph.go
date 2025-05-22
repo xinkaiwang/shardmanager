@@ -43,6 +43,15 @@ type Assignment struct {
 	Stats       *cougarjson.ShardStats           `json:"stats,omitempty"`
 }
 
+func NewAssignment(shardId string, replicaIdx int, assignmentId string, state cougarjson.CougarAssignmentState) *Assignment {
+	return &Assignment{
+		ShardId:     shardId,
+		ReplicaIdx:  replicaIdx,
+		AsginmentId: assignmentId,
+		State:       state,
+	}
+}
+
 func NewWorkerEphNode(workerId data.WorkerId, sessionId data.SessionId, startTimeMs int64, capacity int32) *WorkerEphNode {
 	return &WorkerEphNode{
 		WorkerId:         workerId,
@@ -100,13 +109,13 @@ func WorkerEphNodeFromJson(wej *cougarjson.WorkerEphJson) *WorkerEphNode {
 	ephNode.StatefulType = wej.StatefulType
 
 	for _, assignment := range wej.Assignments {
-		asg := &Assignment{
-			ShardId:     assignment.ShardId,
-			ReplicaIdx:  assignment.ReplicaIdx,
-			AsginmentId: assignment.AssignmentId,
-			State:       assignment.State,
-			Stats:       assignment.Stats,
-		}
+		asg := NewAssignment(
+			assignment.ShardId,
+			assignment.ReplicaIdx,
+			assignment.AssignmentId,
+			assignment.State,
+		)
+		asg.Stats = assignment.Stats
 		ephNode.Assignments[data.AssignmentId(asg.AsginmentId)] = asg
 	}
 

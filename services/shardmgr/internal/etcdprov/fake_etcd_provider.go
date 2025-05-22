@@ -93,7 +93,7 @@ func (f *FakeEtcdProvider) Set(ctx context.Context, key, value string) {
 }
 
 // Delete 实现
-func (f *FakeEtcdProvider) Delete(ctx context.Context, key string) {
+func (f *FakeEtcdProvider) Delete(ctx context.Context, key string, strictMode bool) {
 	klogging.Info(ctx).With("key", key).Log("FakeEtcdProviderDelete", "删除键")
 	f.mu.Lock()
 	defer f.mu.Unlock()

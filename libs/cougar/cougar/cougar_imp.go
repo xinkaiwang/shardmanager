@@ -169,13 +169,14 @@ func (c *CougarImpl) ToEphNode(updateReason string) *cougarjson.WorkerEphJson {
 	ephNode.LastUpdateReason = updateReason
 	ephNode.ReqShutDown = kcommon.BoolToInt8(c.cougarState.IsShutdownRequested())
 	for shardId, shard := range c.cougarState.AllShards {
-		assign := &cougarjson.AssignmentJson{
-			ShardId:      string(shardId),
-			ReplicaIdx:   int(shard.ReplicaIdx),
-			AssignmentId: string(shard.AssignmentId),
-			State:        shard.CurrentConfirmedState,
-			Stats:        shard.stats,
-		}
+		// assign := &cougarjson.AssignmentJson{
+		// 	ShardId:      string(shardId),
+		// 	ReplicaIdx:   int(shard.ReplicaIdx),
+		// 	AssignmentId: string(shard.AssignmentId),
+		// 	State:        shard.CurrentConfirmedState,
+		// 	Stats:        shard.stats,
+		// }
+		assign := cougarjson.NewAssignmentJson(string(shardId), int(shard.ReplicaIdx), string(shard.AssignmentId), shard.CurrentConfirmedState)
 		assign.Stats = shard.stats
 		ephNode.Assignments = append(ephNode.Assignments, assign)
 	}

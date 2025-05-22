@@ -82,7 +82,7 @@ func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShard
 		ch:     etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, path, currentShardPlanRevision),
 		path:   path,
 	}
-	go sp.run(ctx)
+	go sp.run(klogging.EmbedTraceId(ctx, "spw")) // spw = ShardPlanWatcher
 	return sp
 }
 
@@ -98,11 +98,13 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 				klogging.Info(ctx).Log("ShardPlanWatcher", "ch closed")
 				return
 			}
-			klogging.Info(ctx).With("path", item.Key).With("len", len(item.Value)).With("revision", item.ModRevision).Log("ShardPlanWatcher", "watcher event")
+			traceId := kcommon.NewTraceId(ctx, "spw_", 8)
+			ctx2 := klogging.EmbedTraceId(ctx, traceId)
+			klogging.Info(ctx2).With("path", item.Key).With("len", len(item.Value)).With("revision", item.ModRevision).Log("ShardPlanWatcher", "watcher event")
 			shardPlan := smgjson.ParseShardPlan(item.Value)
 			krunloop.VisitResource(sp.parent, func(ss *ServiceState) {
 				ss.stagingShardPlan = shardPlan
-				ss.syncShardsBatchManager.TrySchedule(ctx, "ShardPlanWatcher")
+				ss.syncShardsBatchManager.TrySchedule(ctx2, "ShardPlanWatcher")
 			})
 		}
 	}

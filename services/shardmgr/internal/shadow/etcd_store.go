@@ -196,7 +196,7 @@ func (eve *WriteEvent) Process(ctx context.Context, resource *BufferedEtcdStore)
 	klogging.Debug(ctx).With("key", eve.Key).With("len", len(eve.Value)).With("name", eve.Name).Log("WriteEventProcess", "处理写入请求")
 	if eve.Value == "" {
 		klogging.Info(ctx).With("key", eve.Key).Log("WriteEventDelete", "从etcd中删除键")
-		resource.etcd.Delete(ctx, eve.Key)
+		resource.etcd.Delete(ctx, eve.Key, false)
 		return
 	}
 	klogging.Debug(ctx).With("key", eve.Key).With("len", len(eve.Value)).Log("WriteEventProcess", "向etcd写入数据")

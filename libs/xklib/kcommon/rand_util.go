@@ -82,3 +82,7 @@ func RandomlizeValueByRatio(ctx context.Context, value int, ratio float32) int {
 	max := int(float32(value) * (1. + ratio))
 	return RandomInt(ctx, max-min) + min
 }
+
+func NewTraceId(ctx context.Context, prefix string, size int) string {
+	return prefix + RandomString(ctx, size)
+}

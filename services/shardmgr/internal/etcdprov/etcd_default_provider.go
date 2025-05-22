@@ -168,7 +168,7 @@ func (pvd *etcdDefaultProvider) Set(ctx context.Context, key, value string) {
 // 错误处理：
 // - 如果发生网络错误或其他 etcd 错误，将返回 EtcdDeleteError
 // - 如果键不存在，将返回 KeyNotFound
-func (pvd *etcdDefaultProvider) Delete(ctx context.Context, key string) {
+func (pvd *etcdDefaultProvider) Delete(ctx context.Context, key string, structMode bool) {
 	resp, err := pvd.client.Delete(ctx, key)
 	if err != nil {
 		panic(kerror.Create("EtcdDeleteError", "failed to delete key from etcd").
@@ -180,9 +180,11 @@ func (pvd *etcdDefaultProvider) Delete(ctx context.Context, key string) {
 
 	// 删除时键必须存在
 	if resp.Deleted == 0 {
-		panic(kerror.Create("KeyNotFound", "key not found in etcd").
-			WithErrorCode(kerror.EC_NOT_FOUND).
-			With("key", key))
+		if structMode {
+			panic(kerror.Create("KeyNotFound", "key not found in etcd").
+				WithErrorCode(kerror.EC_NOT_FOUND).
+				With("key", key))
+		}
 	}
 }
 

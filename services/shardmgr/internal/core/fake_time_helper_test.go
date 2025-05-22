@@ -519,7 +519,7 @@ func (setup *FakeTimeTestSetup) UpdateEphNode(workerFullId data.WorkerFullId, fn
 	eph := cougarjson.WorkerEphJsonFromJson(item.Value)
 	newNode := fn(eph)
 	if newNode == nil {
-		setup.FakeEtcd.Delete(setup.ctx, path)
+		setup.FakeEtcd.Delete(setup.ctx, path, false)
 		return
 	}
 	setup.FakeEtcd.Set(setup.ctx, path, newNode.ToJson())

@@ -37,6 +37,7 @@ func NewHousekeep5sEvent() *Housekeep5sEvent {
 }
 
 func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
+	var passiveMoves []costfunc.PassiveMove
 	for workerFullId, workerState := range ss.AllWorkers {
 		// check assignments tombstone
 		for assignId := range workerState.Assignments {
@@ -49,6 +50,10 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 				delete(workerState.Assignments, assignId)
 				delete(ss.AllAssignments, assignId)
 				delete(ss.AllShards[assignment.ShardId].Replicas[assignment.ReplicaIdx].Assignments, assignId)
+				passiveMove := costfunc.NewWorkerSnapUpdate(workerFullId, func(ws *costfunc.WorkerSnap) {
+					delete(ws.Assignments, assignment.ShardId)
+				}, "hard delete assignment")
+				passiveMoves = append(passiveMoves, passiveMove)
 				klogging.Info(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "delete assignment")
 			}
 		}
@@ -78,11 +83,19 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 			ss.storeProvider.StoreWorkerState(workerFullId, nil)
 			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
 			ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
+			passiveMove := costfunc.NewWorkerSnapAddRemove(workerFullId, nil, "hardDeleteWorker")
+			passiveMoves = append(passiveMoves, passiveMove)
 			klogging.Info(ctx).With("workerFullId", workerFullId).Log("checkWorkerTombStone", "delete workerState")
 			continue
 		}
 	}
+	if len(passiveMoves) > 0 {
+		for _, passiveMove := range passiveMoves {
+			ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteWorker")
+		}
+	}
 }
+
 func (ss *ServiceState) checkWorkerHats(ctx context.Context) {
 	// for workerFullId, workerState := range ss.AllWorkers {
 	// 	if workerState.IsWaitingForHat() {

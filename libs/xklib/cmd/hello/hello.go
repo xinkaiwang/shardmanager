@@ -29,8 +29,9 @@ func main() {
 	ctx := context.TODO()
 	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "json"))
 	fmt.Println("hello")
-	testKerror()
+	// testKerror()
 	// testKlogging()
+	testLoggingCtx(ctx)
 }
 
 func testKerror() {
@@ -47,4 +48,21 @@ func testKlogging() {
 func testTimer(ctx context.Context) {
 	kcommon.TryCatchRun(ctx, func() {})
 	// klogging.Info(context.Background()).With("key", 1028).Log("serverSend", "")
+}
+
+func testLoggingCtx(ctx context.Context) {
+	// log with context
+	klogging.Info(ctx).With("key", 1028).Log("serverSend", "")
+	// attach traceId to ctx
+	traceId2 := kcommon.RandomString(ctx, 8)
+	traceId3 := kcommon.RandomString(ctx, 8)
+	{
+		ctx2 := klogging.EmbedTraceId(ctx, traceId2)
+		klogging.Info(ctx2).With("key", 1028).Log("serverSend", "")
+	}
+	{
+		ctx3 := klogging.EmbedTraceId(ctx, traceId3)
+		klogging.Info(ctx3).With("key", 1028).Log("serverSend", "")
+	}
+	klogging.Info(ctx).With("key", 1028).Log("serverSend", "")
 }

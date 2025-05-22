@@ -34,7 +34,7 @@ type EtcdProvider interface {
 	Set(ctx context.Context, key, value string)
 
 	// Delete 删除指定的键
-	Delete(ctx context.Context, key string)
+	Delete(ctx context.Context, key string, strictMode bool)
 
 	// LoadAllByPrefix
 	LoadAllByPrefix(ctx context.Context, pathPrefix string) ([]EtcdKvItem, EtcdRevision)
