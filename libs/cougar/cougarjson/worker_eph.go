@@ -128,7 +128,7 @@ func (obj *AssignmentJson) ToJson() string {
 }
 
 type ShardStats struct {
-	Qpm   int64 `json:"qpm,omitempty"`    // query per minute
+	Qpm   int64 `json:"qpm"`              // query per minute
 	MemMb int64 `json:"mem_mb,omitempty"` // memory usage
 }
 

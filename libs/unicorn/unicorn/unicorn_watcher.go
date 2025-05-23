@@ -5,6 +5,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/etcdprov"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // RoutingEvent implements IEvent interface
@@ -46,6 +47,7 @@ func (w *UnicornWatcher) Run(ctx context.Context) {
 	for {
 		select {
 		case item := <-w.ch:
+			klogging.Info(ctx).With("key", item.Key).With("value", item.Value).Log("UnicornWatcher", "观察到路由表已更新")
 			if item.Key == "" {
 				continue
 			}

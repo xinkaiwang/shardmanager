@@ -40,7 +40,14 @@ func runLoadTest(ctx context.Context, app *biz.UnicornBlitzApp, loopSleepMs int,
 			stop = true
 			continue
 		default:
-			app.RunLoadTest(ctx, objId)
+			ke := kcommon.TryCatchRun(ctx, func() {
+				app.RunLoadTest(ctx, objId)
+			})
+			if ke != nil {
+				klogging.Error(ctx).With("objId", objId).With("error", ke).Log("LoadTestError", "Error during load test")
+			} else {
+				klogging.Debug(ctx).With("objId", objId).Log("LoadTestSuccess", "Load test successful")
+			}
 
 			// 如果需要，在请求之间休眠
 			if loopSleepMs > 0 {

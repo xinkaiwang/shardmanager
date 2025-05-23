@@ -18,7 +18,7 @@ export LOG_LEVEL=debug
 
 ## Run unicornblitz locally?
 ```
-export BLITZ_THREAD_COUNT=10
+export BLITZ_THREAD_COUNT=1
 export BLITZ_LOOP_SLEEP_MS=5000
 export LOG_LEVEL=debug
 ./bin/unicornblitz

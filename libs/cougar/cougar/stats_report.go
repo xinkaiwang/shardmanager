@@ -7,9 +7,15 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 )
 
+func GetStatsReportIntervalMs() int {
+	intervalSec := kcommon.GetEnvInt("COUGAR_STATS_REPORT_INTERVAL_S", 30)
+	return intervalSec * 1000
+}
+
 func (c *CougarImpl) StatsReport(ctx context.Context) {
 	c.statsReportInternal(ctx)
-	kcommon.ScheduleRun(30*1000, func() {
+	intervalMs := GetStatsReportIntervalMs()
+	kcommon.ScheduleRun(intervalMs, func() {
 		c.StatsReport(ctx)
 	})
 }

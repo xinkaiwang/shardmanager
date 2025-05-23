@@ -12,6 +12,7 @@ import (
 )
 
 type Move interface {
+	String() string
 	GetSignature() string
 	Apply(snapshot *Snapshot, mode ApplyMode)
 	GetActions(cfg config.ShardConfig) []*Action
@@ -49,6 +50,10 @@ func NewSimpleMove(replica data.ReplicaFullId, srcAssignmentId data.AssignmentId
 		Src:              src,
 		Dst:              dst,
 	}
+}
+
+func (move *SimpleMove) String() string {
+	return move.Src.String() + "/" + move.Replica.String() + ":" + string(move.SrcAssignmentId) + "/" + move.Dst.String() + ":" + string(move.DestAssignmentId)
 }
 
 func (move *SimpleMove) GetSignature() string {
@@ -159,6 +164,10 @@ func NewAssignMove(replica data.ReplicaFullId, assignmentId data.AssignmentId, w
 	}
 }
 
+func (move *AssignMove) String() string {
+	return move.Replica.String() + ":" + string(move.AssignmentId) + "/" + move.Worker.String()
+}
+
 func (move *AssignMove) GetSignature() string {
 	return "/" + move.Replica.String() + "/" + move.Worker.String()
 }
@@ -202,6 +211,10 @@ func NewUnassignMove(worker data.WorkerFullId, replica data.ReplicaFullId, assig
 		Replica:      replica,
 		AssignmentId: assignmentId,
 	}
+}
+
+func (move *UnassignMove) String() string {
+	return move.Worker.String() + "/" + move.Replica.String() + ":" + string(move.AssignmentId)
 }
 
 func (move *UnassignMove) GetSignature() string {

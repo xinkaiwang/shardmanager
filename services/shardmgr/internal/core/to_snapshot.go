@@ -29,6 +29,7 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 	for workerId, workerState := range ss.AllWorkers {
 		workerSnap := costfunc.NewWorkerSnap(workerId)
 		workerSnap.Draining = workerState.IsDaining()
+		workerSnap.Offline = workerState.IsOffline()
 		for assignmentId := range workerState.Assignments {
 			assignment, ok := ss.AllAssignments[assignmentId]
 			if !ok {
@@ -60,6 +61,13 @@ func (ws *WorkerState) IsDaining() bool {
 		return true
 	}
 	if ws.State == data.WS_Online_shutdown_permit || ws.State == data.WS_Offline_draining_complete || ws.State == data.WS_Offline_dead || ws.State == data.WS_Deleted {
+		return true
+	}
+	return false
+}
+
+func (ws *WorkerState) IsOffline() bool {
+	if ws.State == data.WS_Offline_graceful_period || ws.State == data.WS_Offline_draining_candidate || ws.State == data.WS_Offline_draining_complete || ws.State == data.WS_Offline_dead || ws.State == data.WS_Deleted {
 		return true
 	}
 	return false

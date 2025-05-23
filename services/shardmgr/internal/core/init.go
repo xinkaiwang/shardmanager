@@ -227,6 +227,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 		}
 		workerSnap := costfunc.NewWorkerSnap(workerId)
 		workerSnap.Draining = worker.IsDaining()
+		workerSnap.Offline = worker.IsOffline()
 		for assignId := range worker.Assignments {
 			assignmentState, ok := ss.AllAssignments[assignId]
 			if !ok {
@@ -263,7 +264,10 @@ func shouldWorkerIncludeInSnapshot(workerState *WorkerState) bool {
 func shouldAssignIncludeInSnapshot(assignmentState *AssignmentState, snapshotType costfunc.SnapshotType) bool {
 	switch snapshotType {
 	case costfunc.ST_Current:
-		return assignmentState.CurrentConfirmedState == cougarjson.CAS_Ready || assignmentState.CurrentConfirmedState == cougarjson.CAS_Dropping
+		// Note: CAS_Unknown typically means the eph is lost (we don't know what happened), in this case, we need include it in the snapshot
+		// 1) we should assume the assign is still exists, otherwise assign-solver will create new assign which is not what we want,
+		// 2) we should allow soft-solver to move it to another healthy worker.
+		return assignmentState.CurrentConfirmedState == cougarjson.CAS_Ready || assignmentState.CurrentConfirmedState == cougarjson.CAS_Dropping || assignmentState.CurrentConfirmedState == cougarjson.CAS_Unknown
 	case costfunc.ST_Future:
 		return assignmentState.TargetState == cougarjson.CAS_Ready
 	default:

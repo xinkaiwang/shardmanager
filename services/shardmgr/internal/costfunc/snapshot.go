@@ -271,6 +271,7 @@ func (asgn *AssignmentSnap) ToJson() map[string]interface{} {
 type WorkerSnap struct {
 	WorkerFullId data.WorkerFullId
 	Draining     bool
+	Offline      bool
 	Assignments  map[data.ShardId]data.AssignmentId
 }
 

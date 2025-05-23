@@ -94,7 +94,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc.Proposal) {
 	now := kcommon.GetWallTimeMs()
 	threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
-	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentThreadshold", threshold).With("base", proposal.BasedOn).Log("AcceptEvent", "接受提案")
+	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentThreadshold", threshold).With("base", proposal.BasedOn).With("proposal", proposal.Move.String()).Log("AcceptEvent", "接受提案")
 	ss.AcceptedCount++
 	acceptSoftGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.SoftScore))
 	acceptHardGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.HardScore))

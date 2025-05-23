@@ -55,6 +55,11 @@ func NewCougarImpl(ctx context.Context, etcdEndpoint string, workerInfo *WorkerI
 		reason := etcdSession.WaitForSessionClose()
 		cougarImp.broadcastExit("sessionClosed:" + reason)
 	}()
+	// start stats report thread
+	intervalMs := GetStatsReportIntervalMs()
+	kcommon.ScheduleRun(intervalMs, func() {
+		cougarImp.StatsReport(ctx)
+	})
 	return cougarImp
 }
 

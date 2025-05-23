@@ -72,7 +72,11 @@ func (sq *ShardQpm) GetQpm() int64 {
 	if len(sq.blockChain) > 6 {
 		return Sum(sq.blockChain)
 	}
-	return Sum(sq.blockChain[len(sq.blockChain)-6:])
+	startPos := len(sq.blockChain) - 6
+	if startPos < 0 {
+		startPos = 0
+	}
+	return Sum(sq.blockChain[startPos:])
 }
 
 func Sum(list []int64) int64 {

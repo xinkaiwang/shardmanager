@@ -120,7 +120,7 @@ func (rbs RangeBasedShardIdRoutingTree) FindShardByShardingKey(shardingKey data.
 			}
 		}
 	}
-	ke := kerror.Create("NotFound", "sharding key not found").With("shardingKey", shardingKey)
+	ke := kerror.Create("NotFound", "found no shard for this key").With("shardingKey", shardingKey)
 	panic(ke)
 }
 

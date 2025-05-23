@@ -119,6 +119,58 @@ func (setup *FakeTimeTestSetup) SetShardPlan(ctx context.Context, shardPlan []st
 	setup.FakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlanStr)
 }
 
+func (setup *FakeTimeTestSetup) ModifyWorkerState(ctx context.Context, workerFullId data.WorkerFullId, fn func(*smgjson.WorkerStateJson) *smgjson.WorkerStateJson) {
+	path := setup.PathManager.FmtWorkerStatePath(workerFullId)
+	item := setup.FakeEtcd.Get(ctx, path)
+	var wsj *smgjson.WorkerStateJson
+	if item.Value != "" {
+		wsj = smgjson.WorkerStateJsonFromJson(item.Value)
+	}
+	newWsj := fn(wsj)
+	setup.FakeEtcd.Set(ctx, path, newWsj.ToJson())
+}
+
+func (setup *FakeTimeTestSetup) ModifyRoutingEntry(ctx context.Context, workerFullId data.WorkerFullId, fn func(*unicornjson.WorkerEntryJson) *unicornjson.WorkerEntryJson) {
+	path := setup.PathManager.FmtRoutingPath(workerFullId)
+	item := setup.FakeEtcd.Get(ctx, path)
+	var entry *unicornjson.WorkerEntryJson
+	if item.Value != "" {
+		entry = unicornjson.WorkerEntryJsonFromJson(item.Value)
+	}
+	newEntry := fn(entry)
+	if newEntry != nil {
+		setup.FakeEtcd.Set(ctx, path, newEntry.ToJson())
+	} else {
+		setup.FakeEtcd.Delete(ctx, path, false)
+	}
+}
+
+func (setup *FakeTimeTestSetup) ModifyPilotNode(ctx context.Context, workerFullId data.WorkerFullId, fn func(*cougarjson.PilotNodeJson) *cougarjson.PilotNodeJson) {
+	path := setup.PathManager.FmtPilotPath(workerFullId)
+	item := setup.FakeEtcd.Get(ctx, path)
+	var pilotNode *cougarjson.PilotNodeJson
+	if item.Value != "" {
+		pilotNode = cougarjson.ParsePilotNodeJson(item.Value)
+	}
+	newPilotNode := fn(pilotNode)
+	if newPilotNode != nil {
+		setup.FakeEtcd.Set(ctx, path, newPilotNode.ToJson())
+	} else {
+		setup.FakeEtcd.Delete(ctx, path, false)
+	}
+}
+
+func (setup *FakeTimeTestSetup) ModifyShardState(ctx context.Context, shardId data.ShardId, fn func(*smgjson.ShardStateJson) *smgjson.ShardStateJson) {
+	path := setup.PathManager.FmtShardStatePath(shardId)
+	item := setup.FakeEtcd.Get(ctx, path)
+	var shardState *smgjson.ShardStateJson
+	if item.Value != "" {
+		shardState = smgjson.ShardStateJsonFromJson(item.Value)
+	}
+	newShardState := fn(shardState)
+	setup.FakeEtcd.Set(ctx, path, newShardState.ToJson())
+}
+
 // func (setup *FakeTimeTestSetup) UpdateEphNode(ctx context.Context, workerFullId data.WorkerFullId, fn func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson) {
 // 	path := setup.ServiceState.PathManager.FmtWorkerEphPath(workerFullId)
 // 	item := setup.FakeEtcd.Get(ctx, path)
@@ -324,7 +376,7 @@ func (setup *FakeTimeTestSetup) WaitUntilSs(t *testing.T, fn func(ss *ServiceSta
 	return ret, elapsedMs
 }
 
-func (setup *FakeTimeTestSetup) WaitUntilWorkerState(t *testing.T, workerFullId data.WorkerFullId, fn func(pilot *WorkerState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
+func (setup *FakeTimeTestSetup) WaitUntilWorkerState(t *testing.T, workerFullId data.WorkerFullId, fn func(workerState *WorkerState) (bool, string), maxWaitMs int, intervalMs int) (bool, int64) {
 	ret, elapsedMs := WaitUntil(t, func() (bool, string) {
 		var result bool
 		var reason string
