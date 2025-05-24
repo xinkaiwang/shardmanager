@@ -100,7 +100,8 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 	acceptHardGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.HardScore))
 
 	moveState := NewMoveStateFromProposal(ss, proposal)
-	minion := NewActionMinion(ctx, ss, moveState)
+	ctx2 := klogging.EmbedTraceId(ctx, "am_"+string(proposal.ProposalId))
+	minion := NewActionMinion(ctx2, ss, moveState)
 	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson("accepted"))
 	ss.DynamicThreshold.UpdateThreshold(now, proposal.ProposalSize)
 	ss.AllMoves[proposal.ProposalId] = minion

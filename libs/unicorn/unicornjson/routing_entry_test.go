@@ -17,6 +17,7 @@ func TestWorkerEntryJsonMarshal(t *testing.T) {
 			input: func() *WorkerEntryJson {
 				worker := NewWorkerEntryJson(
 					"unicorn-worker-75fffc88f9-fkbcm",
+					"session-1",
 					"10.0.0.32:8080",
 					"update",
 				)
@@ -35,6 +36,7 @@ func TestWorkerEntryJsonMarshal(t *testing.T) {
 			input: func() *WorkerEntryJson {
 				worker := NewWorkerEntryJson(
 					"unicorn-worker-75fffc88f9-xj9n2",
+					"session-1",
 					"10.0.0.33:8080",
 					"update",
 				)
@@ -70,6 +72,7 @@ func TestWorkerEntryJsonUnmarshal(t *testing.T) {
 			want: func() *WorkerEntryJson {
 				worker := NewWorkerEntryJson(
 					"unicorn-worker-75fffc88f9-fkbcm",
+					"session-1",
 					"10.0.0.32:8080",
 					"update",
 				)
@@ -86,6 +89,7 @@ func TestWorkerEntryJsonUnmarshal(t *testing.T) {
 			input: `{"worker_id":"unicorn-worker-75fffc88f9-xj9n2","addr_port":"10.0.0.33:8080"}`,
 			want: NewWorkerEntryJson(
 				"unicorn-worker-75fffc88f9-xj9n2",
+				"session-1",
 				"10.0.0.33:8080",
 				"",
 			),
@@ -96,6 +100,7 @@ func TestWorkerEntryJsonUnmarshal(t *testing.T) {
 			input: `{"worker_id":"unicorn-worker-75fffc88f9-r8t3v"}`,
 			want: NewWorkerEntryJson(
 				"unicorn-worker-75fffc88f9-r8t3v",
+				"session-1",
 				"",
 				"",
 			),
@@ -172,6 +177,7 @@ func TestWorkerEntryJsonRoundTrip(t *testing.T) {
 	original := func() *WorkerEntryJson {
 		worker := NewWorkerEntryJson(
 			"unicorn-worker-75fffc88f9-fkbcm",
+			"session-1",
 			"10.0.0.32:8080",
 			"update",
 		)

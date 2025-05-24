@@ -127,17 +127,22 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
 		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
-		WorkerState := NewWorkerStateFromJson(ss, workerStateJson)
+		workerState := NewWorkerStateFromJson(ss, workerStateJson)
+		workerState.Journal(ctx, "NewWorkerStateFromJson")
+
 		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), data.StatefulType(workerStateJson.StatefulType))
 		if common.BoolFromInt8(workerStateJson.Hat) {
 			ss.ShutdownHat[workerFullId] = common.Unit{}
 		}
 		ss.ShadowState.InitWorkerState(workerFullId, workerStateJson)
-		ss.AllWorkers[workerFullId] = WorkerState
+		ss.AllWorkers[workerFullId] = workerState
 		// assignments
-		for assignmentId, assignement := range workerStateJson.Assignments {
-			ss.AllAssignments[assignmentId] = NewAssignmentState(assignmentId, assignement.ShardId, assignement.ReplicaIdx, workerFullId)
-		}
+		// if !workerState.shouldWorkerIncludeInSnapshot() {
+		// 	continue
+		// }
+		// for assignmentId, assignement := range workerStateJson.Assignments {
+		// 	ss.AllAssignments[assignmentId] = NewAssignmentState(assignmentId, assignement.ShardId, assignement.ReplicaIdx, workerFullId)
+		// }
 	}
 }
 
@@ -165,7 +170,8 @@ func (ss *ServiceState) LoadAllMoves(ctx context.Context) {
 	for _, item := range list {
 		moveStateJson := smgjson.MoveStateJsonParse(item.Value)
 		moveState := MoveStateFromJson(moveStateJson)
-		minion := NewActionMinion(ctx, ss, moveState)
+		ctx2 := klogging.EmbedTraceId(ctx, "am_"+string(moveState.ProposalId))
+		minion := NewActionMinion(ctx2, ss, moveState)
 		ss.AllMoves[moveState.ProposalId] = minion
 	}
 }
@@ -222,7 +228,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 	}
 	// all worker/assignments
 	for workerId, worker := range ss.AllWorkers {
-		if !shouldWorkerIncludeInSnapshot(worker) {
+		if !worker.shouldWorkerIncludeInSnapshot() {
 			continue
 		}
 		workerSnap := costfunc.NewWorkerSnap(workerId)
@@ -247,7 +253,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 	return snapshot.CompactAndFreeze()
 }
 
-func shouldWorkerIncludeInSnapshot(workerState *WorkerState) bool {
+func (workerState *WorkerState) shouldWorkerIncludeInSnapshot() bool {
 	switch workerState.State {
 	case data.WS_Online_healthy, data.WS_Online_shutdown_req, data.WS_Online_shutdown_permit:
 		return true

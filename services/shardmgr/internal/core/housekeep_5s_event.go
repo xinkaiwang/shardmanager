@@ -50,7 +50,7 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 				delete(workerState.Assignments, assignId)
 				delete(ss.AllAssignments, assignId)
 				delete(ss.AllShards[assignment.ShardId].Replicas[assignment.ReplicaIdx].Assignments, assignId)
-				passiveMove := costfunc.NewWorkerSnapUpdate(workerFullId, func(ws *costfunc.WorkerSnap) {
+				passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(workerFullId, func(ws *costfunc.WorkerSnap) {
 					delete(ws.Assignments, assignment.ShardId)
 				}, "hard delete assignment")
 				passiveMoves = append(passiveMoves, passiveMove)
@@ -59,23 +59,26 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 		}
 		// check worker tombstone
 		if workerState.State == data.WS_Offline_dead {
-			// delete all assignments (if any) (rare case, since we should have drained them already. The only case we need to do this when DirtyPurge happened)
+			// [defensive coding] delete all assignments (if any) (rare case, since we should have drained them already. The only case we need to do this when DirtyPurge happened)
 			for assignId := range workerState.Assignments {
+				// delete(workerState.Assignments, assignId)
 				assignment, ok := ss.AllAssignments[assignId]
-				delete(workerState.Assignments, assignId)
 				if !ok {
 					continue
 				}
-				delete(ss.AllAssignments, assignId)
-				shardState, ok := ss.AllShards[assignment.ShardId]
-				if !ok {
-					continue
-				}
-				replicaState, ok := shardState.Replicas[assignment.ReplicaIdx]
-				if !ok {
-					continue
-				}
-				delete(replicaState.Assignments, assignId)
+				passiveMove := NewPasMoveRemoveAssignment(assignId, assignment.ShardId, assignment.ReplicaIdx, assignment.WorkerFullId)
+				passiveMove.ApplyToSs(ss)
+				passiveMoves = append(passiveMoves, passiveMove)
+				// delete(ss.AllAssignments, assignId)
+				// shardState, ok := ss.AllShards[assignment.ShardId]
+				// if !ok {
+				// 	continue
+				// }
+				// replicaState, ok := shardState.Replicas[assignment.ReplicaIdx]
+				// if !ok {
+				// 	continue
+				// }
+				// delete(replicaState.Assignments, assignId)
 			}
 			// delete this worker
 			delete(ss.AllWorkers, workerFullId)
@@ -83,7 +86,7 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 			ss.storeProvider.StoreWorkerState(workerFullId, nil)
 			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil)
 			ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
-			passiveMove := costfunc.NewWorkerSnapAddRemove(workerFullId, nil, "hardDeleteWorker")
+			passiveMove := costfunc.NewPasMoveWorkerSnapAddRemove(workerFullId, nil, "hardDeleteWorker")
 			passiveMoves = append(passiveMoves, passiveMove)
 			klogging.Info(ctx).With("workerFullId", workerFullId).Log("checkWorkerTombStone", "delete workerState")
 			continue
@@ -124,7 +127,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 					// delete this replica
 					// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
 					delete(shard.Replicas, replica.ReplicaIdx)
-					passiveMove := costfunc.NewReplicaSnapAddRemove(shard.ShardId, replica.ReplicaIdx, false)
+					passiveMove := costfunc.NewPasMoveReplicaSnapAddRemove(shard.ShardId, replica.ReplicaIdx, false)
 					ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteReplica")
 					dirtyFlag.AddDirtyFlag("hardDeleteReplica:" + string(shard.ShardId) + ":" + strconv.Itoa(int(replica.ReplicaIdx)))
 				}
@@ -136,7 +139,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			ss.storeProvider.StoreShardState(shard.ShardId, nil)
 			klogging.Info(ctx).With("shardId", shard.ShardId).Log("hardDeleteShardState", "delete shardState")
 			// delete from snapshot
-			passiveMove := costfunc.NewShardStateAddRemove(shard.ShardId, nil, "hardDeleteShard")
+			passiveMove := costfunc.NewPasMoveShardStateAddRemove(shard.ShardId, nil, "hardDeleteShard")
 			ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteShard")
 		} else if dirtyFlag.IsDirty() {
 			// shard is dirty, update it

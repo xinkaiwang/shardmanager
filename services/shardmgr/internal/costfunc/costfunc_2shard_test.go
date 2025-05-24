@@ -26,8 +26,8 @@ func TestCostfunc_2shard(t *testing.T) {
 	{
 		shard1 := NewShardSnap(shardId1, 1)
 		shard2 := NewShardSnap(shardId2, 1)
-		NewShardStateAddRemove(shardId1, shard1, "").Apply(snap2)
-		NewShardStateAddRemove(shardId2, shard2, "").Apply(snap2)
+		NewPasMoveShardStateAddRemove(shardId1, shard1, "").Apply(snap2)
+		NewPasMoveShardStateAddRemove(shardId2, shard2, "").Apply(snap2)
 
 		cost2 := snap2.GetCost()
 		assert.Greater(t, cost2.HardScore, int32(0), "添加shard后硬成本应大于0")
@@ -38,8 +38,8 @@ func TestCostfunc_2shard(t *testing.T) {
 	workerFullId1 := data.WorkerFullIdParseFromString("worker-1:session-1")
 	workerFullId2 := data.WorkerFullIdParseFromString("worker-2:session-2")
 	{
-		NewWorkerSnapAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
-		NewWorkerSnapAddRemove(workerFullId2, NewWorkerSnap(workerFullId2), "").Apply(snap3)
+		NewPasMoveWorkerSnapAddRemove(workerFullId1, NewWorkerSnap(workerFullId1), "").Apply(snap3)
+		NewPasMoveWorkerSnapAddRemove(workerFullId2, NewWorkerSnap(workerFullId2), "").Apply(snap3)
 		cost3 := snap3.GetCost()
 		assert.Greater(t, cost3.HardScore, int32(0), "添加worker后硬成本应大于0")
 	}

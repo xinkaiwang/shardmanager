@@ -89,6 +89,10 @@ func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerSta
 	return workerState
 }
 
+func (ws *WorkerState) Journal(ctx context.Context, reason string) {
+	klogging.Info(ctx).With("workerId", ws.GetWorkerFullId().String()).With("workerState", ws.ToFullString()).With("state", ws.State).With("reason", reason).Log("WorkerJournal", "")
+}
+
 func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, updateReason string) *smgjson.WorkerStateJson {
 	obj := &smgjson.WorkerStateJson{
 		WorkerId:         ws.WorkerId,
@@ -186,8 +190,9 @@ func (ss *ServiceState) applyNewWorker(ctx context.Context, workerFullId data.Wo
 	// add to ss
 	workerState := NewWorkerState(ss, data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
 	workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
+	workerState.Journal(ctx, "NewWorkerFromEph")
 	ss.AllWorkers[workerFullId] = workerState
-	ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorker")
+	ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "NewWorkerFromEph")
 	// add to current/future snapshot
 	workerSnap := costfunc.NewWorkerSnap(workerState.GetWorkerFullId())
 	workerSnap.Draining = workerState.ShutdownRequesting
@@ -275,12 +280,13 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 	case data.WS_Offline_draining_candidate:
 		fallthrough
 	case data.WS_Offline_draining_complete:
-		ws.setWorkerState(ctx, data.WS_Offline_dead, "onEphNodeLost")
-		dirty.AddDirtyFlag("WS_Offline_dead")
+		// ws.setWorkerState(ctx, data.WS_Offline_dead, "onEphNodeLost")
+		// dirty.AddDirtyFlag("WS_Offline_dead")
+		fallthrough
 	case data.WS_Offline_dead:
 		// nothing to do
 	}
-	klogging.Info(ctx).With("workerId", ws.WorkerId).With("sessionId", ws.SessionId).
+	klogging.Info(ctx).With("workerId", ws.GetWorkerFullId().String()).With("sessionId", ws.SessionId).
 		With("dirty", dirty.String()).
 		With("state", ws.State).
 		Log("onEphNodeLostDone", "worker eph lost")
@@ -396,14 +402,14 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 			if hat {
 				dirtyFlag.AddDirtyFlag("hat")
 			}
-			if shouldWorkerIncludeInSnapshot(ws) {
+			if ws.shouldWorkerIncludeInSnapshot() {
 				drain := ws.HasShutdownHat()
-				passiveMove := costfunc.NewWorkerSnapUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
+				passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
 					ws.Draining = drain
 				}, "WorkerStateUpdate")
 				moves = append(moves, passiveMove)
 			} else {
-				passiveMove := costfunc.NewWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WorkerStateAddRemove")
+				passiveMove := costfunc.NewPasMoveWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WorkerStateAddRemove")
 				moves = append(moves, passiveMove)
 			}
 		}
@@ -439,7 +445,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 			hat := ss.hatTryGet(ctx, ws.GetWorkerFullId())
 			if hat {
 				dirty.AddDirtyFlag("hat")
-				passiveMove := costfunc.NewWorkerSnapUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
+				passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
 					ws.Draining = true
 				}, "drainingHat")
 				passiveMoves = append(passiveMoves, passiveMove)
@@ -447,19 +453,32 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		}
 		fallthrough
 	case data.WS_Offline_draining_candidate:
-		// try to see if the worker is already empty (no assignments)
+		reason := "checkWorkerOnTimeout"
+		// clean purge = this worker don't have any assignments
 		if len(ws.Assignments) > 0 {
+			// dirty purge = this worker has assignments, we will wait for the grace period until force (dirty) purge
 			if kcommon.GetWallTimeMs() < ws.GracePeriodStartTimeMs+int64(ss.ServiceConfig.FaultToleranceConfig.GracePeriodSecBeforeDirtyPurge)*1000 {
 				break
 			}
 			// Grace period expired, DirtyPurge this worker
-			ws.setWorkerState(ctx, data.WS_Offline_dead, "checkWorkerOnTimeout")
-			passiveMove := costfunc.NewWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
-			passiveMoves = append(passiveMoves, passiveMove)
-			dirty.AddDirtyFlag("WS_Offline_dead")
+			// ws.setWorkerState(ctx, data.WS_Offline_dead, "checkWorkerOnTimeout")
+			// remove all assignments
+			for assignId := range ws.Assignments {
+				assignState, ok := ss.AllAssignments[assignId]
+				if !ok {
+					continue
+				}
+				passiveMove := NewPasMoveRemoveAssignment(assignState.AssignmentId, assignState.ShardId, assignState.ReplicaIdx, ws.GetWorkerFullId())
+				passiveMoves = append(passiveMoves, passiveMove)
+				passiveMove.ApplyToSs(ss)
+			}
+			reason = "checkWorkerOnTimeout_DirtyPurge"
+			// passiveMove := costfunc.NewPasMoveWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
+			// passiveMoves = append(passiveMoves, passiveMove)
+			// dirty.AddDirtyFlag("WS_Offline_dead")
 		}
 		// Worker Event: Draining complete, worker becomes offline
-		ws.setWorkerState(ctx, data.WS_Offline_draining_complete, "checkWorkerOnTimeout")
+		ws.setWorkerState(ctx, data.WS_Offline_draining_complete, reason)
 		ws.GracePeriodStartTimeMs = kcommon.GetWallTimeMs() // DeleteGracePeriodSec = 20 seconds, then clean it up
 		dirty.AddDirtyFlag("WS_Offline_draining_complete")
 		fallthrough
@@ -469,7 +488,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		}
 		// Worker Event: Grace period expired, worker becomes offline
 		ws.setWorkerState(ctx, data.WS_Offline_dead, "checkWorkerOnTimeout")
-		passiveMove := costfunc.NewWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
+		passiveMove := costfunc.NewPasMoveWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
 		passiveMoves = append(passiveMoves, passiveMove)
 		dirty.AddDirtyFlag("WS_Offline_dead")
 		needsDelete = true
@@ -575,6 +594,7 @@ func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, upd
 	// 创建WorkerEntryJson对象
 	entry := unicornjson.NewWorkerEntryJson(
 		string(ws.WorkerId),
+		string(ws.SessionId),
 		ws.WorkerInfo.AddressPort,
 		updateReason)
 

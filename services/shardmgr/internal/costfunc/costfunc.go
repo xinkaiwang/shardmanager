@@ -72,7 +72,7 @@ func (snap *Snapshot) CollectAssignments(assigns map[data.AssignmentId]common.Un
 		}
 		worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
 		if !ok {
-			klogging.Fatal(context.Background()).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "worker not found")
+			klogging.Fatal(context.Background()).With("assignId", assignmentId).With("workerId", assignment.WorkerFullId.String()).Log("CostFuncSimpleProvider", "worker not found")
 			continue
 		}
 		av := &AssignmentView{

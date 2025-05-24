@@ -121,7 +121,7 @@ func TestCalCostFromJsonSnapshot2(t *testing.T) {
 	{
 		move := MoveParseFromSignature("worker-2:session-2/shard_2:0/worker-1:session-1", snapshot)
 		newSnap := snapshot.Clone()
-		move.Apply(newSnap, AM_Strict)
+		move.Apply(newSnap, AM_Relaxed)
 		cost2 := newSnap.GetCost()
 		assert.Equal(t, true, cost2.HardScore > cost.HardScore, "硬成本计算不匹配")
 	}

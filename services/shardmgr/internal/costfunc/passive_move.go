@@ -31,7 +31,7 @@ type WorkerSnapAddRemove struct {
 	reason     string
 }
 
-func NewWorkerSnapAddRemove(workerId data.WorkerFullId, workerSnap *WorkerSnap, reason string) *WorkerSnapAddRemove {
+func NewPasMoveWorkerSnapAddRemove(workerId data.WorkerFullId, workerSnap *WorkerSnap, reason string) *WorkerSnapAddRemove {
 	return &WorkerSnapAddRemove{
 		WorkerId:   workerId,
 		WorkerSnap: workerSnap,
@@ -81,7 +81,7 @@ type WorkerSnapUpdate struct {
 	reason   string
 }
 
-func NewWorkerSnapUpdate(workerId data.WorkerFullId, fn func(*WorkerSnap), reason string) *WorkerSnapUpdate {
+func NewPasMoveWorkerSnapUpdate(workerId data.WorkerFullId, fn func(*WorkerSnap), reason string) *WorkerSnapUpdate {
 	return &WorkerSnapUpdate{
 		WorkerId: workerId,
 		fn:       fn,
@@ -114,7 +114,7 @@ type ShardStateAddRemove struct {
 	reason  string
 }
 
-func NewShardStateAddRemove(shardId data.ShardId, snap *ShardSnap, reason string) *ShardStateAddRemove {
+func NewPasMoveShardStateAddRemove(shardId data.ShardId, snap *ShardSnap, reason string) *ShardStateAddRemove {
 	return &ShardStateAddRemove{
 		ShardId: shardId,
 		snap:    snap,
@@ -143,7 +143,7 @@ type ShardSnapUpdate struct {
 	reason  string
 }
 
-func NewShardSnapUpdate(shardId data.ShardId, fn func(*ShardSnap), reason string) *ShardSnapUpdate {
+func NewPasMoveShardSnapUpdate(shardId data.ShardId, fn func(*ShardSnap), reason string) *ShardSnapUpdate {
 	return &ShardSnapUpdate{
 		ShardId: shardId,
 		fn:      fn,
@@ -175,7 +175,7 @@ type ReplicaSnapAddRemove struct {
 	NewState   bool // true: add, false: delete
 }
 
-func NewReplicaSnapAddRemove(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaSnapAddRemove {
+func NewPasMoveReplicaSnapAddRemove(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaSnapAddRemove {
 	return &ReplicaSnapAddRemove{
 		ShardId:    shardId,
 		ReplicaIdx: replicaIdx,
@@ -222,7 +222,7 @@ type ReplicaSnapUpdate struct {
 	reason     string
 }
 
-func NewReplicaSnapUpdate(shardId data.ShardId, replicaIdx data.ReplicaIdx, fn func(*ReplicaSnap), reason string) *ReplicaSnapUpdate {
+func NewPasMoveReplicaSnapUpdate(shardId data.ShardId, replicaIdx data.ReplicaIdx, fn func(*ReplicaSnap), reason string) *ReplicaSnapUpdate {
 	return &ReplicaSnapUpdate{
 		ShardId:    shardId,
 		ReplicaIdx: replicaIdx,

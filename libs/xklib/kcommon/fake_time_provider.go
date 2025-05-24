@@ -94,7 +94,7 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 			}
 		})
 		if needSleep {
-			time.Sleep(time.Microsecond * 10)
+			time.Sleep(time.Microsecond * 30)
 			continue
 		}
 		if needRunTask != nil {

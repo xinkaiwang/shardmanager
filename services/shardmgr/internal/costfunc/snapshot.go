@@ -431,6 +431,18 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
 		}
 	}
+	// dest worker should be in good state
+	if workerSnap.Draining || workerSnap.Offline {
+		if mode == AM_Strict {
+			ke := kerror.Create("WorkerNotInGoodState", "worker not in good state").With("workerFullId", workerFullId).With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
+			panic(ke)
+		} else if mode == AM_Relaxed {
+			klogging.Warning(context.Background()).With("workerFullId", workerFullId).With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId).Log("WorkerNotInGoodState", "this should never happen")
+			return
+		} else {
+			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+		}
+	}
 	if oldAssignId, ok := workerSnap.Assignments[shardId]; ok {
 		if mode == AM_Strict {
 			ke := kerror.Create("WorkerAlreadyHasShard", "worker already has shard").With("workerFullId", workerFullId).With("shardId", shardId).With("newReplica", replicaIdx).With("oldAssigId", oldAssignId).With("newAssigId", assignmentId)

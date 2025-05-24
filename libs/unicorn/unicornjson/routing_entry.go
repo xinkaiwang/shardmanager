@@ -10,7 +10,8 @@ import (
 // key="/smg/routing/{worker_id}"
 type WorkerEntryJson struct {
 	// WorkerId 是工作节点的唯一标识符
-	WorkerId string `json:"worker_id"`
+	WorkerId  string `json:"worker_id"`
+	SessionId string `json:"session_id,omitempty"` // unique ID to identity current process, changes in each restart/reboot.
 
 	AddressPort string `json:"addr_port"` // for exp: "10.0.0.32:8080"
 
@@ -23,9 +24,10 @@ type WorkerEntryJson struct {
 	LastUpdateReason string `json:"update_reason,omitempty"`
 }
 
-func NewWorkerEntryJson(workerId string, addressPort string, updateReason string) *WorkerEntryJson {
+func NewWorkerEntryJson(workerId string, sessionId string, addressPort string, updateReason string) *WorkerEntryJson {
 	return &WorkerEntryJson{
 		WorkerId:    workerId,
+		SessionId:   sessionId,
 		AddressPort: addressPort,
 		// Capacity:         capacity,
 		Assignments:      make([]*AssignmentJson, 0),

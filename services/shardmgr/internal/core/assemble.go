@@ -28,7 +28,7 @@ func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is 
 	ss.SolverGroup = sg
 	ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(), "AssembleSsAll.init")
 
-	go ss.runloop.Run(klogging.EmbedTraceId(ctx, "rl_"+kcommon.RandomString(ctx, 6))) // rl_ = runloop trace
+	go ss.runloop.Run(ctx) // rl_ = runloop trace
 	return ss
 }
 

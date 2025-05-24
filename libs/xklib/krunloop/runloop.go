@@ -2,6 +2,7 @@ package krunloop
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,6 +45,7 @@ type RunLoop[T CriticalResource] struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
 	exited           chan struct{}
+	epochId          int64 // 事件循环的时间戳
 }
 
 // NewRunLoop creates a new RunLoop for the given resource.
@@ -54,6 +56,7 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 		resource: resource,
 		queue:    NewUnboundedQueue[T](ctx),
 		exited:   make(chan struct{}), // 初始化 exited 通道
+		epochId:  0,
 	}
 	rl.sampler = NewRunloopSampler(ctx, func() string {
 		val := rl.currentEventName.Load()
@@ -68,6 +71,12 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 // PostEvent: Enqueue an event to the run loop. This call never blocks.
 func (rl *RunLoop[T]) PostEvent(event IEvent[T]) {
 	rl.queue.Enqueue(event)
+}
+
+func (rl *RunLoop[T]) GetNextEpochId() string {
+	// 使用原子操作获取 epochId
+	id := atomic.AddInt64(&rl.epochId, 1)
+	return fmt.Sprintf("%d", id)
 }
 
 func (rl *RunLoop[T]) Run(ctx context.Context) {
@@ -103,7 +112,8 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 				elapsedMs := kcommon.GetMonoTimeMs() - start
 				RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
 			}()
-			event.Process(ctx, rl.resource)
+			ctx2 := klogging.EmbedTraceId(ctx, "rl_"+rl.GetNextEpochId())
+			event.Process(ctx2, rl.resource)
 		}
 	}
 }

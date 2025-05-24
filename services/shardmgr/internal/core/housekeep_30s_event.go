@@ -47,10 +47,12 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	// compare with existing snapshot
 	diffs := compareSnapshot(ctx, ss.SnapshotCurrent, newSnapshotCurrent)
 	if len(diffs) > 0 {
+		oldStr := ss.SnapshotCurrent.ToJsonString()
+		newStr := newSnapshotCurrent.ToJsonString()
 		if !inFlightMove {
-			klogging.Fatal(ctx).With("diffs", diffs).With("current", ss.SnapshotCurrent.ToJsonString()).With("newCurrent", newSnapshotCurrent.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+			klogging.Fatal(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).Log("annualCheckSnapshot", "found diffs")
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("current", ss.SnapshotCurrent.ToJsonString()).With("newCurrent", newSnapshotCurrent.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+			klogging.Warning(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).Log("annualCheckSnapshot", "found diffs")
 		}
 	}
 	diffs = compareSnapshot(ctx, ss.GetSnapshotFutureForAny(), newSnapshotFuture)
