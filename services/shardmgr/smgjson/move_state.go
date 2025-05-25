@@ -66,6 +66,6 @@ type ActionType string
 const (
 	AT_RemoveFromRoutingAndSleep ActionType = "remove_from_routing"
 	AT_AddToRouting              ActionType = "add_to_routing"
-	AT_DropShard                 ActionType = "move_shard"
+	AT_DropShard                 ActionType = "drop_shard"
 	AT_AddShard                  ActionType = "add_shard"
 )

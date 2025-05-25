@@ -3,6 +3,7 @@ package unicorn
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/etcdprov"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -19,7 +20,19 @@ func (e *RoutingEvent) GetName() string {
 }
 
 func (e *RoutingEvent) Process(ctx context.Context, resource *Unicorn) {
-	// TODO
+	if e.data == nil {
+		// delete
+		klogging.Info(ctx).With("key", e.key).Log("RoutingEvent", "删除路由表项")
+		workerId := data.WorkerId(e.key)
+		delete(resource.currentRputingTable, workerId)
+		resource.batchMgr.TryScheduleInternal(ctx, "workerDelete:"+e.key)
+	} else {
+		// update
+		klogging.Info(ctx).With("key", e.key).With("data", e.data).Log("RoutingEvent", "更新路由表项")
+		workerId := data.WorkerId(e.key)
+		resource.stagingArea[workerId] = e.data
+		resource.batchMgr.TryScheduleInternal(ctx, "workerUpdated:"+e.key)
+	}
 }
 
 func NewRoutingEvent(key string, data *unicornjson.WorkerEntryJson) *RoutingEvent {

@@ -292,6 +292,9 @@ func (ss WorkerSnap) CompareWith(other TypeT2) []string {
 }
 
 func (worker *WorkerSnap) CanAcceptAssignment(shardId data.ShardId) bool {
+	if worker.Draining || worker.Offline {
+		return false
+	}
 	// in case this worker already has this shard (maybe from antoher replica)
 	_, ok := worker.Assignments[shardId]
 	return !ok
@@ -331,6 +334,7 @@ func (worker *WorkerSnap) ToJson() map[string]interface{} {
 	obj := make(map[string]interface{})
 	obj["WorkerFullId"] = worker.WorkerFullId
 	obj["Draining"] = common.Int8FromBool(worker.Draining)
+	obj["Offline"] = common.Int8FromBool(worker.Offline)
 	obj["Assignments"] = make([]map[string]interface{}, 0)
 	for shardId, assignmentId := range worker.Assignments {
 		assignObj := make(map[string]interface{})

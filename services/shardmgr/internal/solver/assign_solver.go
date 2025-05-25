@@ -87,7 +87,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 				// step 3b: is this move valid?
 				// check if the replica is already assigned to the dest worker
 				workerSnap, _ := snapshot.AllWorkers.Get(destWorkerId)
-				if _, ok := workerSnap.Assignments[replicaCandidate.ShardId]; ok {
+				if !workerSnap.CanAcceptAssignment(replicaCandidate.ShardId) {
 					return // not valid
 				}
 			}

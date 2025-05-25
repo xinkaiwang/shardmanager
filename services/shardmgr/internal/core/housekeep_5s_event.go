@@ -46,13 +46,15 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 				klogging.Fatal(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "assignment not found")
 			}
 			if assignment.TargetState == cougarjson.CAS_Dropped && assignment.CurrentConfirmedState == cougarjson.CAS_Dropped {
-				// delete this assignment
-				delete(workerState.Assignments, assignId)
-				delete(ss.AllAssignments, assignId)
-				delete(ss.AllShards[assignment.ShardId].Replicas[assignment.ReplicaIdx].Assignments, assignId)
-				passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(workerFullId, func(ws *costfunc.WorkerSnap) {
-					delete(ws.Assignments, assignment.ShardId)
-				}, "hard delete assignment")
+				// // delete this assignment
+				// delete(workerState.Assignments, assignId)
+				// delete(ss.AllAssignments, assignId)
+				// delete(ss.AllShards[assignment.ShardId].Replicas[assignment.ReplicaIdx].Assignments, assignId)
+				// passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(workerFullId, func(ws *costfunc.WorkerSnap) {
+				// 	delete(ws.Assignments, assignment.ShardId)
+				// }, "hard delete assignment")
+				passiveMove := NewPasMoveRemoveAssignment(assignId, assignment.ShardId, assignment.ReplicaIdx, workerFullId)
+				passiveMove.ApplyToSs(ss)
 				passiveMoves = append(passiveMoves, passiveMove)
 				klogging.Info(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "delete assignment")
 			}
