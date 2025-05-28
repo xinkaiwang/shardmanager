@@ -8,8 +8,8 @@ RUN apk add --no-cache git make
 
 # 复制依赖库
 COPY libs/xklib ./libs/xklib/
-COPY services/cougar ./services/cougar/
-COPY services/unicorn ./services/unicorn/
+COPY libs/cougar ./libs/cougar/
+COPY libs/unicorn ./libs/unicorn/
 
 # 复制服务代码
 COPY services/shardmgr ./services/shardmgr/

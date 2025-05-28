@@ -4,22 +4,30 @@ import (
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/api"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/core"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"go.opencensus.io/metric"
 )
 
 type App struct {
-	ss *core.ServiceState
+	registry *metric.Registry
+	ss       *core.ServiceState
 }
 
-func NewApp(ctx context.Context) *App {
-	ss := core.AssembleSsAll(ctx, "app")
+func NewApp(ctx context.Context, name string) *App {
+	ss := core.AssembleSsAll(ctx, name)
 	app := &App{
-		ss: ss,
+		registry: metric.NewRegistry(),
+		ss:       ss,
 	}
 	return app
+}
+
+func (app *App) GetRegistry() *metric.Registry {
+	return app.registry
 }
 
 func (app *App) Ping(ctx context.Context) string {
@@ -33,6 +41,95 @@ func (app *App) GetStatus(ctx context.Context, req *api.GetStateRequest) *api.Ge
 	eve := NewGetStateEvent()
 	app.ss.PostEvent(eve)
 	return <-eve.resp
+}
+
+func (app *App) StartAppMetrics(ctx context.Context) {
+	// 启动应用级别的指标收集
+	klogging.Info(ctx).Log("app.StartAppMetrics", "Starting application metrics")
+	// dynamic threashold
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueDynamicThreshold.Load() },
+		"dynamic_threshold",
+		"Dynamic threshold for accepting ",
+		map[string]string{"smg": app.ss.Name},
+	)
+	// worker count
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueWorkerCount_total.Load() },
+		"worker_count_total",
+		"Total number of workers in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueWorkerCount_online.Load() },
+		"worker_count_online",
+		"Number of active workers in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueWorkerCount_offline.Load() },
+		"worker_count_offline",
+		"Number of active workers in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueWorkerCount_draining.Load() },
+		"worker_count_draining",
+		"Number of active workers in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueWorkerCount_shutdownReq.Load() },
+		"worker_count_shutdownReq",
+		"Number of active workers in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	// shard count
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueShardCount.Load() },
+		"shard_count",
+		"Total number of shards in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	// replica count
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueReplicaCount.Load() },
+		"replica_count",
+		"Total number of replicas in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	// assignment count
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueAssignmentCount.Load() },
+		"assignment_count",
+		"Total number of assignments in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	// soft/hard score
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueCurrentSoftCost.Load() },
+		"cost_current_soft",
+		"Current soft cost of the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueCurrentHardCost.Load() },
+		"cost_current_hard",
+		"Current hard cost of the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueFutureSoftCost.Load() },
+		"cost_future_soft",
+		"Future soft cost of the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValueFutureHardCost.Load() },
+		"cost_future_hard",
+		"Future hard cost of the system",
+		map[string]string{"smg": app.ss.Name},
+	)
 }
 
 // GetStateEvent: implement IEvent[*core.ServiceState]

@@ -389,6 +389,8 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 	for _, assignState := range dict {
 		if assignState.CurrentConfirmedState != cougarjson.CAS_Dropped {
 			assignState.CurrentConfirmedState = cougarjson.CAS_Dropped
+			passiveMove := NewPasMoveRemoveAssignment(assignState.AssignmentId, assignState.ShardId, assignState.ReplicaIdx, ws.GetWorkerFullId())
+			moves = append(moves, passiveMove)
 			dirtyFlag.AddDirtyFlag("unassign:" + string(assignState.AssignmentId) + ":" + string(assignState.CurrentConfirmedState))
 		}
 	}

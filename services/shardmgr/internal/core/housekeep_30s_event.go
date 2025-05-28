@@ -50,9 +50,10 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 		oldStr := ss.SnapshotCurrent.ToJsonString()
 		newStr := newSnapshotCurrent.ToJsonString()
 		if !inFlightMove {
+			ss.CreateSnapshotFromCurrentState(ctx) // redo for debug
 			klogging.Fatal(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).Log("annualCheckSnapshot", "found diffs")
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).Log("annualCheckSnapshot", "found diffs")
+			klogging.Warning(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).With("inflight", len(ss.AllMoves)).Log("annualCheckSnapshot", "found diffs")
 		}
 	}
 	diffs = compareSnapshot(ctx, ss.GetSnapshotFutureForAny(), newSnapshotFuture)
@@ -60,7 +61,7 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 		if !inFlightMove {
 			klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).With("inflight", len(ss.AllMoves)).Log("annualCheckSnapshot", "found diffs")
 		}
 	}
 	ss.SnapshotCurrent = newSnapshotCurrent

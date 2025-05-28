@@ -154,6 +154,7 @@ func NewBufferedEtcdStore(ctx context.Context) *BufferedEtcdStore {
 	store.runloop = krunloop.NewRunLoop(ctx, store, "etcdstore")
 	go store.runloop.Run(ctx)
 	klogging.Info(ctx).Log("NewBufferedEtcdStore", "BufferedEtcdStore创建完成")
+	store.initMetrics(ctx)
 	return store
 }
 
@@ -169,6 +170,13 @@ func (store *BufferedEtcdStore) IsResource() {}
 func (store *BufferedEtcdStore) Shutdown(ctx context.Context) {
 	klogging.Info(ctx).Log("BufferedEtcdStoreShutdown", "关闭BufferedEtcdStore")
 	store.runloop.StopAndWaitForExit()
+}
+
+func (store *BufferedEtcdStore) initMetrics(ctx context.Context) {
+	// 初始化指标
+	EtcdStoreWriteSizeMetrics.GetTimeSequence(ctx, "WorkerState").Touch()
+	EtcdStoreWriteSizeMetrics.GetTimeSequence(ctx, "RoutingEntry").Touch()
+	EtcdStoreWriteSizeMetrics.GetTimeSequence(ctx, "PilotNode").Touch()
 }
 
 // WriteEvent implements IEvent[*BufferedEtcdStore]

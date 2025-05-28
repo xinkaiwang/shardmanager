@@ -36,6 +36,7 @@ func NewShadowState(ctx context.Context, pm *config.PathManager) *ShadowState {
 	}
 	shadow.runloop = krunloop.NewRunLoop(ctx, shadow, "shadow")
 	go shadow.runloop.Run(ctx)
+	GetCurrentEtcdStore(ctx) // Initialize the etcd store if not already done, this will init metrics and start output metrics
 	return shadow
 }
 

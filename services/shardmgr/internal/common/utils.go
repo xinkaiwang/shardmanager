@@ -14,3 +14,10 @@ func GetEnvInt(key string, defaultValue int) int {
 	}
 	return defaultValue
 }
+
+func GetEnvStr(key string, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}

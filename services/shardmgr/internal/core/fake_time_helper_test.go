@@ -558,7 +558,7 @@ func verifyAllShardsInStorage(t *testing.T, setup *FakeTimeTestSetup, expectedSt
 /******************************* UpdateEphNode *******************************/
 
 func (setup *FakeTimeTestSetup) UpdateEphNode(workerFullId data.WorkerFullId, fn func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson) {
-	path := setup.ServiceState.PathManager.FmtWorkerEphPath(workerFullId)
+	path := setup.PathManager.FmtWorkerEphPath(workerFullId)
 	item := setup.FakeEtcd.Get(setup.ctx, path)
 	if item.Value == "" {
 		newNode := fn(nil)

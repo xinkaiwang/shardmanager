@@ -106,14 +106,11 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			eveName := event.GetName()
 			// 使用原子操作存储当前事件名
 			rl.currentEventName.Store(eveName)
-			defer func() {
-				// 使用原子操作清除当前事件名
-				rl.currentEventName.Store("")
-				elapsedMs := kcommon.GetMonoTimeMs() - start
-				RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
-			}()
 			ctx2 := klogging.EmbedTraceId(ctx, "rl_"+rl.GetNextEpochId())
 			event.Process(ctx2, rl.resource)
+			rl.currentEventName.Store("")
+			elapsedMs := kcommon.GetMonoTimeMs() - start
+			RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
 		}
 	}
 }

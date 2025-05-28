@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -59,6 +60,21 @@ type ServiceState struct {
 	syncShardsBatchManager        *BatchManager // enqueue when 1) shard plan new/changed, 2) shard config changed, etc. dequeue=trigger ss.syncShardPlan()
 	boardcastSnapshotBatchManager *BatchManager // dequeue=trigger snapshot broadcast
 	// snapshotOperationManager      *SnapshotOperationManager // enqueue when any snapshot operation need to apply, dequeue=apply all operations to snapshot as batch, then broadcast snapshot
+
+	// for metrics collection use only
+	MetricsValueDynamicThreshold        atomic.Int64
+	MetricsValueWorkerCount_total       atomic.Int64
+	MetricsValueWorkerCount_online      atomic.Int64
+	MetricsValueWorkerCount_offline     atomic.Int64
+	MetricsValueWorkerCount_shutdownReq atomic.Int64
+	MetricsValueWorkerCount_draining    atomic.Int64
+	MetricsValueShardCount              atomic.Int64
+	MetricsValueReplicaCount            atomic.Int64
+	MetricsValueAssignmentCount         atomic.Int64
+	MetricsValueCurrentSoftCost         atomic.Int64 // soft cost for current snapshot
+	MetricsValueCurrentHardCost         atomic.Int64 // hard cost for current snapshot
+	MetricsValueFutureSoftCost          atomic.Int64 // soft cost for future snapshot
+	MetricsValueFutureHardCost          atomic.Int64 // hard cost for future snapshot
 }
 
 func NewServiceState(ctx context.Context, name string) *ServiceState {

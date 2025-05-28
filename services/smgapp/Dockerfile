@@ -1,5 +1,5 @@
 # 构建阶段
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # 设置工作目录
 WORKDIR /src/shardmanager
@@ -9,6 +9,8 @@ RUN apk add --no-cache git make
 
 # 复制 libs/xklib
 COPY libs/xklib ./libs/xklib/
+COPY libs/cougar ./libs/cougar/
+COPY libs/unicorn ./libs/unicorn/
 
 # 复制服务代码
 COPY services/smgapp ./services/smgapp/

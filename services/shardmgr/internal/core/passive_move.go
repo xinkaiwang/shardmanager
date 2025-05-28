@@ -53,20 +53,17 @@ func (move *RemoveAssignment) Apply(snapshot *costfunc.Snapshot) {
 	delete(replicaSnap.Assignments, move.AssignmentId)
 	// remove assignment from AllAssignments
 	_, ok = snapshot.AllAssignments.Get(move.AssignmentId)
-	if !ok {
-		ke := kerror.Create("RemoveAssignmentApplyFailed", "assignment not found in snapshot").With("assignmentId", move.AssignmentId).With("move", move.Signature())
-		panic(ke)
+	if ok {
+		// relax mode: if assignment not found, it's ok. For example, when the assignment is already in the process of being removed. in this case, it does not exist in future, but the passive move (triggered by apply eph update) is still trying to remove it.
+		snapshot.AllAssignments.Delete(move.AssignmentId)
 	}
-	snapshot.AllAssignments.Delete(move.AssignmentId)
 	// remove assignment from worker
 	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
-	if !ok {
-		ke := kerror.Create("RemoveAssignmentApplyFailed", "worker not found in snapshot").With("workerId", move.WorkerId).With("move", move.Signature())
-		panic(ke)
+	if ok {
+		workerSnap = workerSnap.Clone()
+		snapshot.AllWorkers.Set(move.WorkerId, workerSnap)
+		delete(workerSnap.Assignments, move.ShardId)
 	}
-	workerSnap = workerSnap.Clone()
-	snapshot.AllWorkers.Set(move.WorkerId, workerSnap)
-	delete(workerSnap.Assignments, move.ShardId)
 }
 
 func (move *RemoveAssignment) ApplyToSs(ss *ServiceState) {

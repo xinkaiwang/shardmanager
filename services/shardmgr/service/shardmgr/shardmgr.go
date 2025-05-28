@@ -67,6 +67,7 @@ func main() {
 	// 获取端口配置
 	apiPort := common.GetEnvInt("API_PORT", 8081)
 	metricsPort := common.GetEnvInt("METRICS_PORT", 9091)
+	appName := common.GetEnvStr("SMGAPP_NAME", "smgapp")
 
 	// 创建 metrics 路由
 	metricsMux := http.NewServeMux()
@@ -74,8 +75,10 @@ func main() {
 
 	// 创建业务逻辑层
 	klogging.Info(ctx).Log("AppStarting", "Creating app instance")
-	app := biz.NewApp(ctx)
+	app := biz.NewApp(ctx, appName)
 	klogging.Info(ctx).Log("AppCreated", "App instance created")
+	app.StartAppMetrics(ctx)
+	metricproducer.GlobalManager().AddProducer(app.GetRegistry())
 
 	// 创建主路由
 	h := handler.NewHandler(app)

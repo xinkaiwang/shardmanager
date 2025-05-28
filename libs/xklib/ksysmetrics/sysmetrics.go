@@ -51,6 +51,14 @@ var (
 	currentVersion = "unknown"
 )
 
+func GetCurrentRegistry() *metric.Registry {
+	if registry == nil {
+		klogging.Error(context.Background()).Log("MetricsRegistryNotInitialized", "The metrics registry is not initialized")
+		return nil
+	}
+	return registry
+}
+
 // SetVersion 设置服务版本号
 func SetVersion(version string) {
 	if version != "" {
@@ -61,18 +69,18 @@ func SetVersion(version string) {
 func init() {
 	registry = metric.NewRegistry()
 
-	// 创建 CPU 指标
-	userCPUGauge, _ = registry.AddFloat64DerivedGauge(
-		"process_user_cpu_seconds",
-		metric.WithDescription("User CPU time spent in seconds"),
-		metric.WithUnit("seconds"))
-	userCPUGauge.UpsertEntry(func() float64 { return currentUserCPU })
+	// // 创建 CPU 指标
+	// userCPUGauge, _ = registry.AddFloat64DerivedGauge(
+	// 	"process_user_cpu_seconds",
+	// 	metric.WithDescription("User CPU time spent in seconds"),
+	// 	metric.WithUnit("seconds"))
+	// userCPUGauge.UpsertEntry(func() float64 { return currentUserCPU })
 
-	systemCPUGauge, _ = registry.AddFloat64DerivedGauge(
-		"process_system_cpu_seconds",
-		metric.WithDescription("System CPU time spent in seconds"),
-		metric.WithUnit("seconds"))
-	systemCPUGauge.UpsertEntry(func() float64 { return currentSystemCPU })
+	// systemCPUGauge, _ = registry.AddFloat64DerivedGauge(
+	// 	"process_system_cpu_seconds",
+	// 	metric.WithDescription("System CPU time spent in seconds"),
+	// 	metric.WithUnit("seconds"))
+	// systemCPUGauge.UpsertEntry(func() float64 { return currentSystemCPU })
 
 	// 创建内存指标
 	heapAllocGauge, _ = registry.AddInt64DerivedGauge(
