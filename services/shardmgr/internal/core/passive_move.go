@@ -50,6 +50,7 @@ func (move *RemoveAssignment) Apply(snapshot *costfunc.Snapshot) {
 	}
 	replicaSnap = replicaSnap.Clone()
 	shardSnap.Replicas[move.ReplicaIdx] = replicaSnap
+	replicaSnap.LameDuck = true
 	delete(replicaSnap.Assignments, move.AssignmentId)
 	// remove assignment from AllAssignments
 	_, ok = snapshot.AllAssignments.Get(move.AssignmentId)
@@ -78,6 +79,7 @@ func (move *RemoveAssignment) ApplyToSs(ss *ServiceState) {
 			return
 		}
 		delete(replica.Assignments, move.AssignmentId)
+		replica.LameDuck = true
 	}()
 	// remove assignment from AllAssignments
 	func() {

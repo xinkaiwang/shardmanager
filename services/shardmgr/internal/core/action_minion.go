@@ -80,10 +80,10 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 				ke = kerror.Create("SrcWorkerNotFound", "worker not found").With("workerFullId", workerFullId).With("proposalId", am.moveState.ProposalId)
 				return
 			}
-			assign, ok := ss.AllAssignments[action.AssignmentId]
+			assign, ok := ss.AllAssignments[action.SrcAssignmentId]
 			if !ok {
 				succ = false
-				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId).With("proposalId", am.moveState.ProposalId)
+				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.SrcAssignmentId).With("proposalId", am.moveState.ProposalId)
 				return
 			}
 			// update routing table
@@ -118,9 +118,9 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
-			assign, ok := ss.AllAssignments[action.AssignmentId]
+			assign, ok := ss.AllAssignments[action.DestAssignmentId]
 			if !ok {
-				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId).With("proposalId", am.moveState.ProposalId)
+				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.DestAssignmentId).With("proposalId", am.moveState.ProposalId)
 				status = AS_Failed
 				return
 			}
@@ -160,12 +160,12 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			snapshot := ss.GetSnapshotCurrentForClone().Clone()
 			{
 				shardSnap := snapshot.AllShards.GetOrPanic(action.ShardId)
-				replicaSnap := shardSnap.Replicas[action.ReplicaIdx]
+				replicaSnap := shardSnap.Replicas[action.DestReplicaIdx]
 				if replicaSnap == nil {
-					replicaSnap = costfunc.NewReplicaSnap(action.ShardId, action.ReplicaIdx)
-					shardSnap.Replicas[action.ReplicaIdx] = replicaSnap
+					replicaSnap = costfunc.NewReplicaSnap(action.ShardId, action.DestReplicaIdx)
+					shardSnap.Replicas[action.DestReplicaIdx] = replicaSnap
 					newShardSnap := shardSnap.Clone()
-					newShardSnap.Replicas[action.ReplicaIdx] = replicaSnap
+					newShardSnap.Replicas[action.DestReplicaIdx] = replicaSnap
 					snapshot.AllShards.Set(action.ShardId, newShardSnap)
 				}
 			}
@@ -178,9 +178,9 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
-			_, ok = ss.AllAssignments[action.AssignmentId]
+			_, ok = ss.AllAssignments[action.DestAssignmentId]
 			if ok {
-				ke = kerror.Create("AssignmentAlreadyExist", "assignment already exist").With("assignmentId", action.AssignmentId).With("proposalId", am.moveState.ProposalId)
+				ke = kerror.Create("AssignmentAlreadyExist", "assignment already exist").With("assignmentId", action.DestAssignmentId).With("proposalId", am.moveState.ProposalId)
 				status = AS_Failed
 				return
 			}
@@ -190,20 +190,20 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
-			replicaState, ok := shardState.Replicas[action.ReplicaIdx]
+			replicaState, ok := shardState.Replicas[action.DestReplicaIdx]
 			if !ok {
 				// replica not exist yet, create it
-				replicaState = NewReplicaState(action.ShardId, action.ReplicaIdx)
-				shardState.Replicas[action.ReplicaIdx] = replicaState
+				replicaState = NewReplicaState(action.ShardId, action.DestReplicaIdx)
+				shardState.Replicas[action.DestReplicaIdx] = replicaState
 			}
 			// commit to snapshot+ss
 			ss.SetSnapshotCurrent(ctx, snapshot.Freeze(), "minion add shard")
-			assign := NewAssignmentState(action.AssignmentId, shardId, action.ReplicaIdx, workerFullId)
+			assign := NewAssignmentState(action.DestAssignmentId, shardId, action.DestReplicaIdx, workerFullId)
 			assign.TargetState = cougarjson.CAS_Ready
 			assign.ShouldInPilot = true
-			ss.AllAssignments[action.AssignmentId] = assign
-			replicaState.Assignments[action.AssignmentId] = common.Unit{}
-			workerState.Assignments[action.AssignmentId] = common.Unit{}
+			ss.AllAssignments[action.DestAssignmentId] = assign
+			replicaState.Assignments[action.DestAssignmentId] = common.Unit{}
+			workerState.Assignments[action.DestAssignmentId] = common.Unit{}
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "addShard")
 			// wait on signal box
@@ -246,7 +246,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			signalBox = workerState.SignalBox
-			assign, ok := ss.AllAssignments[action.AssignmentId]
+			assign, ok := ss.AllAssignments[action.DestAssignmentId]
 			if !ok {
 				reason = "assignment not found"
 				return
@@ -305,20 +305,20 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				return
 			}
-			replicaState, ok := shardState.Replicas[action.ReplicaIdx]
+			replicaState, ok := shardState.Replicas[action.SrcReplicaIdx]
 			if !ok {
-				ke = kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", action.ReplicaIdx)
+				ke = kerror.Create("ReplicaNotFound", "replica not found").With("shardId", shardId).With("replicaIdx", action.SrcReplicaIdx)
 				status = AS_Failed
 				return
 			}
-			if _, ok := replicaState.Assignments[action.AssignmentId]; !ok {
-				ke = kerror.Create("AssignmentNotFound", "assignment not found in replica").With("assignmentId", action.AssignmentId)
+			if _, ok := replicaState.Assignments[action.SrcAssignmentId]; !ok {
+				ke = kerror.Create("AssignmentNotFound", "assignment not found in replica").With("assignmentId", action.SrcAssignmentId)
 				status = AS_Failed
 				return
 			}
-			assign, ok := ss.AllAssignments[action.AssignmentId]
+			assign, ok := ss.AllAssignments[action.SrcAssignmentId]
 			if !ok {
-				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.AssignmentId)
+				ke = kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", action.SrcAssignmentId)
 				status = AS_Failed
 				return
 			}
@@ -375,7 +375,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				applyToSnapshot()
 				return
 			}
-			assign, ok := ss.AllAssignments[action.AssignmentId]
+			assign, ok := ss.AllAssignments[action.SrcAssignmentId]
 			if !ok {
 				status = AS_Completed
 				applyToSnapshot()

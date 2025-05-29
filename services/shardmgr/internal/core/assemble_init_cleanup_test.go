@@ -68,6 +68,7 @@ func TestAssembleWorkerInitCleanup(t *testing.T) {
 		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
 
 		// Step 3: will not cleanup, since unable to find new home for those shards
+		klogging.Info(ctx).Log("Step3", "等待 VirtualTimeForward")
 		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
 		{
 			var acceptCount int

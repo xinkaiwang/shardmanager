@@ -40,11 +40,13 @@ func NewProposal(ctx context.Context, solverType string, gain Gain, basedOn Snap
 type Action struct {
 	ActionType           smgjson.ActionType
 	ShardId              data.ShardId
-	ReplicaIdx           data.ReplicaIdx
-	AssignmentId         data.AssignmentId
 	From                 data.WorkerFullId
-	To                   data.WorkerFullId
+	SrcReplicaIdx        data.ReplicaIdx
+	SrcAssignmentId      data.AssignmentId
 	RemoveSrcFromRouting bool
+	To                   data.WorkerFullId
+	DestReplicaIdx       data.ReplicaIdx
+	DestAssignmentId     data.AssignmentId
 	AddDestToRouting     bool
 	SleepMs              int
 	ActionStage          smgjson.ActionStage
@@ -62,11 +64,13 @@ func (action *Action) ToJson() *smgjson.ActionJson {
 	actionJson := &smgjson.ActionJson{
 		ActionType:           action.ActionType,
 		ShardId:              action.ShardId,
-		ReplicaIdx:           action.ReplicaIdx,
-		AssignmentId:         action.AssignmentId,
 		From:                 action.From.String(),
-		To:                   action.To.String(),
+		SrcReplicaIdx:        action.SrcReplicaIdx,
+		SrcAssignmentId:      action.SrcAssignmentId,
 		RemoveSrcFromRouting: 0,
+		To:                   action.To.String(),
+		DestReplicaIdx:       action.DestReplicaIdx,
+		DestAssignmentId:     action.DestAssignmentId,
 		AddDestToRouting:     0,
 		SleepMs:              action.SleepMs,
 		Stage:                action.ActionStage,
@@ -82,11 +86,13 @@ func ActionFromJson(actionJson *smgjson.ActionJson) *Action {
 	action := &Action{
 		ActionType:           actionJson.ActionType,
 		ShardId:              actionJson.ShardId,
-		ReplicaIdx:           actionJson.ReplicaIdx,
-		AssignmentId:         actionJson.AssignmentId,
 		From:                 data.WorkerFullIdParseFromString(actionJson.From),
-		To:                   data.WorkerFullIdParseFromString(actionJson.To),
+		SrcReplicaIdx:        actionJson.SrcReplicaIdx,
+		SrcAssignmentId:      actionJson.SrcAssignmentId,
 		RemoveSrcFromRouting: common.BoolFromInt8(actionJson.RemoveSrcFromRouting),
+		To:                   data.WorkerFullIdParseFromString(actionJson.To),
+		DestReplicaIdx:       actionJson.DestReplicaIdx,
+		DestAssignmentId:     actionJson.DestAssignmentId,
 		AddDestToRouting:     common.BoolFromInt8(actionJson.AddDestToRouting),
 		SleepMs:              actionJson.SleepMs,
 		ActionStage:          actionJson.Stage,
@@ -131,27 +137,27 @@ func (action *Action) applyAddShard(snapshot *Snapshot, mode ApplyMode) {
 			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
 		}
 	}
-	replicaState, ok := shardState.Replicas[action.ReplicaIdx]
+	replicaState, ok := shardState.Replicas[action.DestReplicaIdx]
 	if !ok {
 		// replica not found, create a new one
-		replicaState = NewReplicaSnap(action.ShardId, action.ReplicaIdx)
+		replicaState = NewReplicaSnap(action.ShardId, action.DestReplicaIdx)
 	}
 	// when reach here, the destWorker/shard/replica confirmed exist
 	// copy on write (workerSnap)
 	newWorkerSnap := workerState.Clone()
-	newWorkerSnap.Assignments[action.ShardId] = action.AssignmentId
+	newWorkerSnap.Assignments[action.ShardId] = action.DestAssignmentId
 	snapshot.AllWorkers.Set(action.To, newWorkerSnap)
 	// copy on write (shardSnap)
 	newReplicaSnap := replicaState.Clone()
-	newReplicaSnap.Assignments[action.AssignmentId] = common.Unit{}
+	newReplicaSnap.Assignments[action.DestAssignmentId] = common.Unit{}
 	newShardSnap := shardState.Clone()
-	newShardSnap.Replicas[action.ReplicaIdx] = newReplicaSnap
+	newShardSnap.Replicas[action.DestReplicaIdx] = newReplicaSnap
 	snapshot.AllShards.Set(action.ShardId, newShardSnap)
 
-	snapshot.AllAssignments.Set(action.AssignmentId, &AssignmentSnap{
+	snapshot.AllAssignments.Set(action.DestAssignmentId, &AssignmentSnap{
 		ShardId:      action.ShardId,
-		ReplicaIdx:   action.ReplicaIdx,
-		AssignmentId: action.AssignmentId,
+		ReplicaIdx:   action.DestReplicaIdx,
+		AssignmentId: action.DestAssignmentId,
 		WorkerFullId: action.To,
 	})
 }
@@ -179,9 +185,9 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
 		}
 	}
-	if assignmentId != action.AssignmentId {
+	if assignmentId != action.SrcAssignmentId {
 		if mode == AM_Strict {
-			ke := kerror.Create("AssignmentIdMismatch", "assignment id mismatch").With("shardId", action.ShardId).With("assignmentId", assignmentId).With("expectedAssignmentId", action.AssignmentId)
+			ke := kerror.Create("AssignmentIdMismatch", "assignment id mismatch").With("shardId", action.ShardId).With("assignmentId", assignmentId).With("expectedAssignmentId", action.SrcAssignmentId)
 			panic(ke)
 		} else if mode == AM_Relaxed {
 			return
@@ -200,10 +206,10 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
 		}
 	}
-	replicaState, ok := shardState.Replicas[action.ReplicaIdx]
+	replicaState, ok := shardState.Replicas[action.SrcReplicaIdx]
 	if !ok {
 		if mode == AM_Strict {
-			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", action.ShardId).With("replicaIdx", action.ReplicaIdx)
+			ke := kerror.Create("ReplicaNotFound", "replica not found").With("shardId", action.ShardId).With("replicaIdx", action.SrcReplicaIdx)
 			panic(ke)
 		} else if mode == AM_Relaxed {
 			return
@@ -222,10 +228,10 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 	if action.DeleteReplica {
 		newReplicaSnap.LameDuck = true
 	}
-	newShardSnap.Replicas[action.ReplicaIdx] = newReplicaSnap
+	newShardSnap.Replicas[action.SrcReplicaIdx] = newReplicaSnap
 	snapshot.AllShards.Set(action.ShardId, newShardSnap)
-	delete(newReplicaSnap.Assignments, action.AssignmentId)
-	snapshot.AllAssignments.Delete(action.AssignmentId)
+	delete(newReplicaSnap.Assignments, action.SrcAssignmentId)
+	snapshot.AllAssignments.Delete(action.SrcAssignmentId)
 }
 
 // implemnts OrderedListItem

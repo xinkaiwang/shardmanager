@@ -26,6 +26,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	// baseCost := costProvider.CalCost(snapshot)
 	baseCost := snapshot.GetCost()
 	asCfg := GetCurrentSolverConfigProvider().GetAssignSolverConfig()
+	klogging.Info(ctx).With("baseCost", baseCost).With("solver", "AssignSolver").Log("FindProposal", "start")
 
 	var bestMove *costfunc.AssignMove
 	bestCost := baseCost
@@ -57,7 +58,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 					if costfunc.CountReplicas(replicaViews, func(rv *costfunc.ReplicaView) bool {
 						return !rv.LameDuck
 					}) < shard.TargetReplicaCount {
-						candidateReplicas = append(candidateReplicas, data.NewReplicaFullId(shardId, -1)) // replicaIdx will be set later, -1 is just a placeholder
+						candidateReplicas = append(candidateReplicas, data.NewReplicaFullId(shardId, -1)) // replicaIdx will be set later, -1 means placeholder
 					}
 					for replicaIdx, replicaView := range replicaViews {
 						if replicaView.LameDuck {
@@ -121,12 +122,13 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	if bestMove.Replica.ReplicaIdx == -1 {
 		// find the next available replicaIdx
 		shardSnap, _ := snapshot.AllShards.Get(bestMove.Replica.ShardId)
-		replicas := shardSnap.Replicas
-		firstAvailableIdx := 0
-		for replicas[data.ReplicaIdx(firstAvailableIdx)] != nil {
-			firstAvailableIdx++
-		}
-		bestMove.Replica.ReplicaIdx = data.ReplicaIdx(firstAvailableIdx)
+		// replicas := shardSnap.Replicas
+		// firstAvailableIdx := 0
+		// for replicas[data.ReplicaIdx(firstAvailableIdx)] != nil {
+		// 	firstAvailableIdx++
+		// }
+		// bestMove.Replica.ReplicaIdx = data.ReplicaIdx(firstAvailableIdx)
+		bestMove.Replica.ReplicaIdx = shardSnap.FindNextAvaReplicaIdx()
 	}
 
 	// step 6: create a proposal
@@ -137,5 +139,6 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
 		klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "AssignSolver").Log("ProposalClosed", "")
 	}
+	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solver", "AssignSolver").With("signature", proposal.GetSignature()).Log("ProposalCreated", "")
 	return proposal
 }

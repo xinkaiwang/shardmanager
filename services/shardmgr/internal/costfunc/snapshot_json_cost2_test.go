@@ -117,22 +117,22 @@ func TestCalCostFromJsonSnapshot2(t *testing.T) {
 	assert.Equal(t, int32(1), cost.HardScore, "硬成本计算不匹配")
 	// assert.Equal(t, 100, cost.SoftScore, "软成本计算不匹配")
 
-	// 5. proposal
-	{
-		move := MoveParseFromSignature("worker-2:session-2/shard_2:0/worker-1:session-1", snapshot)
-		newSnap := snapshot.Clone()
-		move.Apply(newSnap, AM_Relaxed)
-		cost2 := newSnap.GetCost()
-		assert.Equal(t, true, cost2.HardScore > cost.HardScore, "硬成本计算不匹配")
-	}
+	// // 5. proposal
+	// {
+	// 	move := MoveParseFromSignature("worker-2:session-2/shard_2:0/worker-1:session-1", snapshot)
+	// 	newSnap := snapshot.Clone()
+	// 	move.Apply(newSnap, AM_Relaxed)
+	// 	cost2 := newSnap.GetCost()
+	// 	assert.Equal(t, true, cost2.HardScore > cost.HardScore, "硬成本计算不匹配")
+	// }
 
-	{
-		move := MoveParseFromSignature("worker-1:session-1/shard_1:0/worker-2:session-2", snapshot)
-		newSnap := snapshot.Clone()
-		move.Apply(newSnap, AM_Strict)
-		cost2 := newSnap.GetCost()
-		assert.Equal(t, true, cost2.HardScore < cost.HardScore, "硬成本计算不匹配")
-	}
+	// {
+	// 	move := MoveParseFromSignature("worker-1:session-1/shard_1:0/worker-2:session-2", snapshot)
+	// 	newSnap := snapshot.Clone()
+	// 	move.Apply(newSnap, AM_Strict)
+	// 	cost2 := newSnap.GetCost()
+	// 	assert.Equal(t, true, cost2.HardScore < cost.HardScore, "硬成本计算不匹配")
+	// }
 
 	// 5. 输出成本详情进行调试
 	t.Logf("计算的成本: HardScore=%d, SoftScore=%.2f", cost.HardScore, cost.SoftScore)

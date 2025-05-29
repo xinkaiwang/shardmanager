@@ -89,13 +89,14 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 
 			// Step 6: ok, now we have src/shard/dest, is this a good move?
 			snapshotCopy := snapshot.Clone()
-			move := &costfunc.SimpleMove{
-				Replica:          assignment.GetReplicaFullId(),
-				SrcAssignmentId:  assignment.AssignmentId,
-				DestAssignmentId: data.AssignmentId(kcommon.RandomString(ctx, 8)),
-				Src:              srcWorkerId,
-				Dst:              destWorkerId,
-			}
+			move := costfunc.NewSimpleMove(assignment.ShardId, assignment.ReplicaIdx, -1, assignment.AssignmentId, data.AssignmentId(kcommon.RandomString(ctx, 8)), srcWorkerId, destWorkerId) // destReplicaIdx will be set later, -1 is placeholder
+			// move := &costfunc.SimpleMove{
+			// 	Replica:          assignment.GetReplicaFullId(),
+			// 	SrcAssignmentId:  assignment.AssignmentId,
+			// 	DestAssignmentId: data.AssignmentId(kcommon.RandomString(ctx, 8)),
+			// 	Src:              srcWorkerId,
+			// 	Dst:              destWorkerId,
+			// }
 			move.Apply(snapshotCopy, costfunc.AM_Strict)
 			newCost := snapshotCopy.GetCost()
 			if !newCost.IsLowerThan(bestCost) {
@@ -111,6 +112,12 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 	}
 	if bestMove == nil {
 		return nil
+	}
+	// step 5: remember the replicaIdx is not set yet?
+	if bestMove.DestReplicaIdx == -1 {
+		// find the next available replicaIdx
+		shardSnap, _ := snapshot.AllShards.Get(bestMove.ShardId)
+		bestMove.DestReplicaIdx = shardSnap.FindNextAvaReplicaIdx()
 	}
 	proposal := costfunc.NewProposal(ctx, "SoftSolver", baseCost.Substract(bestCost), snapshot.SnapshotId)
 	proposal.Move = bestMove

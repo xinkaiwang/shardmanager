@@ -130,6 +130,16 @@ func (ss *ShardSnap) String() string {
 	return string(jsonStr)
 }
 
+func (shardSnap *ShardSnap) FindNextAvaReplicaIdx() data.ReplicaIdx {
+	// find the next available replica index
+	replicas := shardSnap.Replicas
+	firstAvailableIdx := 0
+	for replicas[data.ReplicaIdx(firstAvailableIdx)] != nil {
+		firstAvailableIdx++
+	}
+	return data.ReplicaIdx(firstAvailableIdx)
+}
+
 /*********************** ReplicaSnap **********************/
 type ReplicaSnap struct {
 	ShardId     data.ShardId
@@ -304,6 +314,7 @@ func (worker *WorkerSnap) Clone() *WorkerSnap {
 	clone := &WorkerSnap{
 		WorkerFullId: worker.WorkerFullId,
 		Draining:     worker.Draining,
+		Offline:      worker.Offline,
 		Assignments:  make(map[data.ShardId]data.AssignmentId),
 	}
 	for shardId, assignmentId := range worker.Assignments {
@@ -533,6 +544,7 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 		newReplicaSnap.LameDuck = true
 	}
 	delete(newReplicaSnap.Assignments, assignmentId)
+	newReplicaSnap.LameDuck = true
 	newShardSnap := shardSnap.Clone()
 	newShardSnap.Replicas[replicaIdx] = newReplicaSnap
 	snap.AllShards.Set(shardId, newShardSnap)

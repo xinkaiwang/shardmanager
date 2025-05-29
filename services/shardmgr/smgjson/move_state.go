@@ -19,11 +19,13 @@ type MoveStateJson struct {
 type ActionJson struct {
 	ActionType           ActionType        `json:"name,omitempty"`
 	ShardId              data.ShardId      `json:"shard,omitempty"`
-	ReplicaIdx           data.ReplicaIdx   `json:"replica,omitempty"`
-	AssignmentId         data.AssignmentId `json:"assignment,omitempty"`
 	From                 string            `json:"from,omitempty"` // WorkerFullId
-	To                   string            `json:"to,omitempty"`   // WorkerFullId
+	SrcReplicaIdx        data.ReplicaIdx   `json:"src_replica,omitempty"`
+	SrcAssignmentId      data.AssignmentId `json:"src_assignment,omitempty"`
 	RemoveSrcFromRouting int8              `json:"remove_src_from_routing,omitempty"`
+	To                   string            `json:"to,omitempty"` // WorkerFullId
+	DestReplicaIdx       data.ReplicaIdx   `json:"dest_replica,omitempty"`
+	DestAssignmentId     data.AssignmentId `json:"dest_assignment,omitempty"`
 	AddDestToRouting     int8              `json:"add_dest_to_routing,omitempty"`
 	SleepMs              int               `json:"sleep_ms,omitempty"`
 	Stage                ActionStage       `json:"stage,omitempty"` //
