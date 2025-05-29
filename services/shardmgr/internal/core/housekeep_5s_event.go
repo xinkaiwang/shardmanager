@@ -105,70 +105,6 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 	}
 }
 
-func (ss *ServiceState) collectWorkerStats(ctx context.Context) {
-	var workerCountTotal int64
-	var workerCountShutdownReq int64
-	var workerCountDraining int64
-	var workerCountOffline int64
-	var workerCountOnline int64
-
-	for _, workerState := range ss.AllWorkers {
-		// metrics
-		workerCountTotal++
-		if workerState.IsOnline() {
-			workerCountOnline++
-		}
-		if workerState.IsOffline() {
-			workerCountOffline++
-		}
-		if workerState.ShutdownRequesting {
-			workerCountShutdownReq++
-		}
-		if workerState.HasShutdownHat() {
-			workerCountDraining++
-		}
-	}
-
-	ss.MetricsValueWorkerCount_total.Store(workerCountTotal)
-	ss.MetricsValueWorkerCount_online.Store(workerCountOnline)
-	ss.MetricsValueWorkerCount_offline.Store(workerCountOffline)
-	ss.MetricsValueWorkerCount_draining.Store(workerCountDraining)
-	ss.MetricsValueWorkerCount_shutdownReq.Store(workerCountShutdownReq)
-}
-
-func (ss *ServiceState) collectShardStats(ctx context.Context) {
-	shardCountTotal := int64(len(ss.AllShards))
-	var replicaCountTotal int64
-	assignmentCount := int64(len(ss.AllAssignments))
-
-	for _, shardState := range ss.AllShards {
-		replicaCountTotal += int64(len(shardState.Replicas))
-	}
-	ss.MetricsValueShardCount.Store(shardCountTotal)
-	ss.MetricsValueReplicaCount.Store(replicaCountTotal)
-	ss.MetricsValueAssignmentCount.Store(assignmentCount)
-}
-
-func (ss *ServiceState) collectCurrentScore(ctx context.Context) {
-	// collect current score
-	if ss.SnapshotCurrent != nil {
-		currentCost := ss.SnapshotCurrent.GetCost()
-		ss.MetricsValueCurrentSoftCost.Store(int64(currentCost.SoftScore))
-		ss.MetricsValueCurrentHardCost.Store(int64(currentCost.HardScore))
-	} else {
-		ss.MetricsValueCurrentSoftCost.Store(0)
-		ss.MetricsValueCurrentHardCost.Store(0)
-	}
-	if ss.SnapshotFuture != nil {
-		futureCost := ss.SnapshotFuture.GetCost()
-		ss.MetricsValueFutureSoftCost.Store(int64(futureCost.SoftScore))
-		ss.MetricsValueFutureHardCost.Store(int64(futureCost.HardScore))
-	} else {
-		ss.MetricsValueFutureSoftCost.Store(0)
-		ss.MetricsValueFutureHardCost.Store(0)
-	}
-}
-
 func (ss *ServiceState) checkWorkerHats(ctx context.Context) {
 	// for workerFullId, workerState := range ss.AllWorkers {
 	// 	if workerState.IsWaitingForHat() {
@@ -194,12 +130,16 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			if replica.LameDuck {
 				// hard delete this if no assignment left
 				if len(replica.Assignments) == 0 {
-					// delete this replica
-					// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
-					delete(shard.Replicas, replica.ReplicaIdx)
-					passiveMove := costfunc.NewPasMoveReplicaSnapAddRemove(shard.ShardId, replica.ReplicaIdx, false)
-					ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteReplica")
-					dirtyFlag.AddDirtyFlag("hardDeleteReplica:" + string(shard.ShardId) + ":" + strconv.Itoa(int(replica.ReplicaIdx)))
+					if replica.cleanupStartTimeMs == 0 {
+						replica.cleanupStartTimeMs = kcommon.GetWallTimeMs()
+					} else if kcommon.GetWallTimeMs()-replica.cleanupStartTimeMs > 30*1000 { // hard-delete lameduck replica after 30s
+						// delete this replica
+						// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
+						delete(shard.Replicas, replica.ReplicaIdx)
+						passiveMove := costfunc.NewPasMoveReplicaSnapAddRemove(shard.ShardId, replica.ReplicaIdx, false)
+						ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteReplica")
+						dirtyFlag.AddDirtyFlag("hardDeleteReplica:" + string(shard.ShardId) + ":" + strconv.Itoa(int(replica.ReplicaIdx)))
+					}
 				}
 			}
 		}

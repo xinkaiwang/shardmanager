@@ -45,7 +45,7 @@ type WorkerState struct {
 
 	NotifyReason string
 	SignalBox    *SignalBox
-	WorkerInfo   smgjson.WorkerInfoJson
+	WorkerInfo   *smgjson.WorkerInfoJson
 	// WorkerReportedAssignments map[data.AssignmentId]common.Unit
 	StatefulType data.StatefulType
 }
@@ -60,7 +60,7 @@ func NewWorkerState(ss *ServiceState, workerId data.WorkerId, sessionId data.Ses
 		// ShutdownPermited:          false,
 		Assignments: make(map[data.AssignmentId]common.Unit),
 		SignalBox:   NewSignalBox(),
-		WorkerInfo:  smgjson.WorkerInfoJson{},
+		WorkerInfo:  nil,
 		// WorkerReportedAssignments: make(map[data.AssignmentId]common.Unit),
 		StatefulType: statefulType,
 	}
@@ -74,14 +74,18 @@ func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerSta
 		State:       workerStateJson.WorkerState,
 		Assignments: make(map[data.AssignmentId]common.Unit),
 		SignalBox:   NewSignalBox(),
-		WorkerInfo:  smgjson.WorkerInfoJson{},
+		WorkerInfo:  workerStateJson.WorkerInfo,
+	}
+	if workerState.WorkerInfo == nil {
+		workerState.WorkerInfo = smgjson.NewWorkerInfoJson()
 	}
 	workerState.StatefulType = data.StatefulTypeParseFromString(workerStateJson.StatefulType)
 	for assignId, assignmentJson := range workerStateJson.Assignments {
 		assignmentId := data.AssignmentId(assignId)
 		assignmentState := NewAssignmentState(assignmentId, assignmentJson.ShardId, assignmentJson.ReplicaIdx, workerState.GetWorkerFullId())
 		assignmentState.TargetState = assignmentJson.TargetState
-		assignmentState.CurrentConfirmedState = assignmentJson.TargetState
+		assignmentState.CurrentConfirmedState = assignmentJson.CurrentState
+		assignmentState.ShouldInPilot = common.BoolFromInt8(assignmentJson.InPilot)
 		assignmentState.ShouldInRoutingTable = common.BoolFromInt8(assignmentJson.InRouting)
 		workerState.Assignments[assignmentId] = common.Unit{}
 		ss.AllAssignments[assignmentId] = assignmentState
@@ -97,6 +101,7 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 	obj := &smgjson.WorkerStateJson{
 		WorkerId:         ws.WorkerId,
 		SessionId:        ws.SessionId,
+		WorkerInfo:       ws.WorkerInfo,
 		WorkerState:      ws.State,
 		Assignments:      map[data.AssignmentId]*smgjson.AssignmentStateJson{},
 		LastUpdateAtMs:   kcommon.GetWallTimeMs(),
@@ -115,6 +120,7 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 		assignJson := smgjson.NewAssignmentStateJson(assignState.ShardId, assignState.ReplicaIdx)
 		assignJson.TargetState = assignState.TargetState
 		assignJson.CurrentState = assignState.CurrentConfirmedState
+		assignJson.InPilot = common.Int8FromBool(assignState.ShouldInPilot)
 		assignJson.InRouting = common.Int8FromBool(assignState.ShouldInRoutingTable)
 		obj.Assignments[assignmentId] = assignJson
 	}
@@ -188,7 +194,8 @@ func (ss *ServiceState) firstDigestStagingWorkerEph(ctx context.Context) {
 
 func (ss *ServiceState) applyNewWorker(ctx context.Context, workerFullId data.WorkerFullId, workerEph *cougarjson.WorkerEphJson, reason string) {
 	// add to ss
-	workerState := NewWorkerState(ss, data.WorkerId(workerEph.WorkerId), data.SessionId(workerEph.SessionId), data.StatefulType(workerEph.StatefulType))
+	workerState := NewWorkerState(ss, workerFullId.WorkerId, workerFullId.SessionId, data.StatefulType(workerEph.StatefulType))
+	workerState.WorkerInfo = smgjson.WorkerInfoFromWorkerEph(workerEph)
 	workerState.applyNewEph(ctx, ss, workerEph, map[data.AssignmentId]*AssignmentState{})
 	workerState.Journal(ctx, "NewWorkerFromEph")
 	ss.AllWorkers[workerFullId] = workerState
@@ -364,7 +371,7 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 	dirtyFlag = NewDirtyFlag()
 	// WorkerInfo
 	newWorkerInfo := smgjson.WorkerInfoFromWorkerEph(workerEph)
-	if !ws.WorkerInfo.Equals(&newWorkerInfo) {
+	if !ws.WorkerInfo.Equals(newWorkerInfo) {
 		ws.WorkerInfo = newWorkerInfo
 		dirtyFlag.AddDirtyFlag("WorkerInfo")
 	}

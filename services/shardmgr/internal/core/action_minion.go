@@ -335,8 +335,10 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			}
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_Most, "dropShard")
-			if workerState.IsOnline() {
-				signalBox = workerState.SignalBox
+			if workerState.IsOnline() { // in case worker is not online or already dropped, we don't need to wait for signal box
+				if assign.CurrentConfirmedState != cougarjson.CAS_Dropped && assign.CurrentConfirmedState != cougarjson.CAS_Unknown {
+					signalBox = workerState.SignalBox
+				}
 			}
 			status = AS_Wait
 		})
@@ -387,7 +389,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				applyToSnapshot()
 				return
 			}
-			if assign.CurrentConfirmedState == cougarjson.CAS_Dropped {
+			if assign.CurrentConfirmedState == cougarjson.CAS_Dropped || assign.CurrentConfirmedState == cougarjson.CAS_Unknown {
 				status = AS_Completed
 				applyToSnapshot()
 				return

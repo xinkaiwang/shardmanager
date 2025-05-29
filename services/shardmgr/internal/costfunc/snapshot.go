@@ -186,7 +186,7 @@ func (rep *ReplicaSnap) Compare(other *ReplicaSnap) []string {
 		diff = append(diff, "ReplicaIdx")
 	}
 	if rep.LameDuck != other.LameDuck {
-		diff = append(diff, "ReplicaSnap:LameDuck:"+string(rep.ShardId))
+		diff = append(diff, "ReplicaSnap:LameDuck:"+string(rep.ShardId)+":"+strconv.Itoa(int(rep.ReplicaIdx)))
 	}
 	for assignmentId := range rep.Assignments {
 		if _, ok := other.Assignments[assignmentId]; !ok {

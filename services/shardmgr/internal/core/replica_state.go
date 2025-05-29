@@ -11,9 +11,10 @@ import (
 )
 
 type ReplicaState struct {
-	ShardId    data.ShardId
-	ReplicaIdx data.ReplicaIdx
-	LameDuck   bool // soft delete, we will delete this replica (in housekeeping) when assignments are gone
+	ShardId            data.ShardId
+	ReplicaIdx         data.ReplicaIdx
+	LameDuck           bool  // soft delete, we will delete this replica (in housekeeping) when assignments are gone
+	cleanupStartTimeMs int64 // only used when LameDuck is true, the time when we start to clean up this replica
 
 	Assignments map[data.AssignmentId]common.Unit
 }

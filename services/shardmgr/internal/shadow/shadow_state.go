@@ -163,7 +163,8 @@ func (eve *WorkerStateJsonEvent) Process(ctx context.Context, shadow *ShadowStat
 	shadow.AllWorkers[eve.WorkerFullId] = eve.WorkerState
 	// write to etcd
 	value := eve.WorkerState.ToJson()
-	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "WorkerState")
+	currentEtcdStore := GetCurrentEtcdStore(ctx)
+	currentEtcdStore.Put(ctx, key, value, "WorkerState")
 }
 
 // ExecutionPlanJsonEvent implements krunloop.IEvent[*ShadowState]

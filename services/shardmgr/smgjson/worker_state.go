@@ -10,9 +10,9 @@ import (
 // path is "/smg/worker_state/{worker_full_id}"
 type WorkerStateJson struct {
 	// WorkerId
-	WorkerId data.WorkerId `json:"worker_id"`
-
-	SessionId data.SessionId `json:"session_id"`
+	WorkerId   data.WorkerId   `json:"worker_id"`
+	SessionId  data.SessionId  `json:"session_id"`
+	WorkerInfo *WorkerInfoJson `json:"worker_info"` // WorkerInfoJson contains AddressPort, StartTimeMs, Capacity, MemorySizeMB, Properties
 
 	WorkerState data.WorkerStateEnum `json:"worker_state,omitempty"`
 
@@ -74,10 +74,14 @@ func (obj *WorkerStateJson) Equals(other *WorkerStateJson) bool {
 		return false
 	}
 
+	if obj.WorkerId != other.WorkerId || obj.SessionId != other.SessionId {
+		return false
+	}
+	if obj.WorkerInfo != nil && !obj.WorkerInfo.Equals(other.WorkerInfo) {
+		return false
+	}
 	// 比较基本字段
-	if obj.WorkerId != other.WorkerId ||
-		obj.SessionId != other.SessionId ||
-		obj.WorkerState != other.WorkerState ||
+	if obj.WorkerState != other.WorkerState ||
 		obj.LastUpdateAtMs != other.LastUpdateAtMs ||
 		obj.LastUpdateReason != other.LastUpdateReason {
 		return false

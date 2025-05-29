@@ -96,8 +96,11 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 	threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
 	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentThreadshold", threshold).With("base", proposal.BasedOn).With("proposal", proposal.Move.String()).Log("AcceptEvent", "接受提案")
 	ss.AcceptedCount++
-	acceptSoftGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.SoftScore))
-	acceptHardGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.HardScore))
+	if proposal.Gain.HardScore > 0 {
+		acceptHardGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.HardScore))
+	} else {
+		acceptSoftGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.SoftScore))
+	}
 
 	moveState := NewMoveStateFromProposal(ss, proposal)
 	ctx2 := klogging.EmbedTraceId(ctx, "am_"+string(proposal.ProposalId))

@@ -42,6 +42,19 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.PrintAllAssignments(ctx)
 	klogging.Info(ctx).Log("ServiceStateInit", "load all shard and worker state done")
 
+	// step 3b: remove non-referenced pilot nodes
+	for workerFullId := range pilotNodes {
+		if _, ok := ss.AllWorkers[workerFullId]; !ok {
+			klogging.Warning(ctx).With("workerFullId", workerFullId).Log("ServiceStateInit", "pilot node not found in worker state, remove it")
+			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil) // remove pilot node
+			delete(pilotNodes, workerFullId)
+		}
+	}
+	for workerFullId, workerState := range ss.AllWorkers {
+		newPilotNode := workerState.ToPilotNode(ctx, ss, "init")
+		ss.pilotProvider.StorePilotNode(ctx, workerFullId, newPilotNode)
+	}
+
 	// step 4: load current shard plan
 	currentShardPlan, currentShardPlanRevision := ss.LoadCurrentShardPlan(ctx)
 	ss.stagingShardPlan = currentShardPlan // staging area, will be used in ss.syncShardPlan
@@ -68,15 +81,6 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.ServiceConfigWatcher.ShardConfigListener = append(ss.ServiceConfigWatcher.ShardConfigListener, func(sc *config.ShardConfig) {
 		ss.syncShardsBatchManager.TrySchedule(ctx, "ShardConfigWatcher")
 	})
-
-	// step 8b: remove non-referenced pilot nodes
-	for workerFullId := range pilotNodes {
-		if _, ok := ss.AllWorkers[workerFullId]; !ok {
-			klogging.Warning(ctx).With("workerFullId", workerFullId).Log("ServiceStateInit", "pilot node not found in worker state, remove it")
-			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil) // remove pilot node
-			delete(pilotNodes, workerFullId)
-		}
-	}
 
 	// step 9: start housekeeping threads
 	ss.PostEvent(NewHousekeep1sEvent())
@@ -119,6 +123,15 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 		}
 		replicaState.Assignments[assignId] = common.Unit{}
 	}
+	// mark all empty replicas as lame duck
+	for _, shardState := range ss.AllShards {
+		for replicaIdx, replicaState := range shardState.Replicas {
+			if len(replicaState.Assignments) == 0 && !replicaState.LameDuck {
+				replicaState.LameDuck = true // mark as lame duck
+				klogging.Info(ctx).With("shardId", shardState.ShardId).With("replicaIdx", replicaIdx).Log("LoadAllShardState", "mark empty replica as lame duck")
+			}
+		}
+	}
 }
 
 func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
@@ -130,7 +143,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 		workerState := NewWorkerStateFromJson(ss, workerStateJson)
 		workerState.Journal(ctx, "NewWorkerStateFromJson")
 
-		workerFullId := data.NewWorkerFullId(data.WorkerId(workerStateJson.WorkerId), data.SessionId(workerStateJson.SessionId), data.StatefulType(workerStateJson.StatefulType))
+		workerFullId := data.NewWorkerFullId(workerStateJson.WorkerId, workerStateJson.SessionId, data.StatefulType(workerStateJson.StatefulType))
 		if common.BoolFromInt8(workerStateJson.Hat) {
 			ss.ShutdownHat[workerFullId] = common.Unit{}
 		}
