@@ -21,12 +21,12 @@ func AssembleSsAll(ctx context.Context, name string) *ServiceState { // name is 
 	ss.Init(klogging.EmbedTraceId(ctx, "it_"+kcommon.RandomString(ctx, 8))) // it_ = init trace
 
 	// solverGroup
-	sg := solver.NewSolverGroup(ctx, ss.GetSnapshotFutureForClone(), ss.ProposalQueue.Push)
+	sg := solver.NewSolverGroup(ctx, ss.GetSnapshotFutureForClone(ctx), ss.ProposalQueue.Push)
 	sg.AddSolver(ctx, solver.NewSoftSolver())
 	sg.AddSolver(ctx, solver.NewAssignSolver())
 	sg.AddSolver(ctx, solver.NewUnassignSolver())
 	ss.SolverGroup = sg
-	ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(), "AssembleSsAll.init")
+	ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(ctx), "AssembleSsAll.init")
 
 	go ss.runloop.Run(ctx) // rl_ = runloop trace
 	return ss

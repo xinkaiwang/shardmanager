@@ -127,8 +127,9 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 	for _, shardState := range ss.AllShards {
 		for replicaIdx, replicaState := range shardState.Replicas {
 			if len(replicaState.Assignments) == 0 && !replicaState.LameDuck {
-				replicaState.LameDuck = true // mark as lame duck
-				klogging.Info(ctx).With("shardId", shardState.ShardId).With("replicaIdx", replicaIdx).Log("LoadAllShardState", "mark empty replica as lame duck")
+				// replicaState.LameDuck = true // mark as lame duck
+				delete(shardState.Replicas, replicaIdx) // remove replica
+				klogging.Info(ctx).With("shardId", shardState.ShardId).With("replicaIdx", replicaIdx).Log("LoadAllShardState", "delete empty replica")
 			}
 		}
 	}
@@ -140,7 +141,7 @@ func (ss *ServiceState) LoadAllWorkerState(ctx context.Context) {
 	list, _ := etcdprov.GetCurrentEtcdProvider(ctx).LoadAllByPrefix(ctx, pathPrefix)
 	for _, item := range list {
 		workerStateJson := smgjson.WorkerStateJsonFromJson(item.Value)
-		workerState := NewWorkerStateFromJson(ss, workerStateJson)
+		workerState := NewWorkerStateFromJson(ctx, ss, workerStateJson)
 		workerState.Journal(ctx, "NewWorkerStateFromJson")
 
 		workerFullId := data.NewWorkerFullId(workerStateJson.WorkerId, workerStateJson.SessionId, data.StatefulType(workerStateJson.StatefulType))
@@ -221,10 +222,8 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 		shardSnap := costfunc.NewShardSnap(shard.ShardId, 0)
 		shardSnap.TargetReplicaCount = shard.TargetReplicaCount
 		for replicaIdx, replica := range shard.Replicas {
-			// Note: snapshot needs to include all replicas, even if they are lame duck. This is because assign solver needs to know what are the available replica Idxs
 			replicaSnap := costfunc.NewReplicaSnap(shard.ShardId, replicaIdx)
 			replicaSnap.LameDuck = replica.LameDuck
-			shardSnap.Replicas[replicaIdx] = replicaSnap
 			for assignId := range replica.Assignments {
 				assignmentState, ok := ss.AllAssignments[assignId]
 				if !ok {
@@ -235,6 +234,10 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 					continue
 				}
 				replicaSnap.Assignments[assignId] = common.Unit{}
+			}
+			if replicaSnap.LameDuck || len(replicaSnap.Assignments) >= 0 {
+				// Note: snapshot needs to include healthy replicas or lame duck replicas. This is because assign solver needs to know what are the available replica Idxs
+				shardSnap.Replicas[replicaIdx] = replicaSnap
 			}
 		}
 		snapshot.AllShards.Set(data.ShardId(shard.ShardId), shardSnap)
@@ -247,7 +250,7 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 		workerSnap := costfunc.NewWorkerSnap(workerId)
 		workerSnap.Draining = worker.IsDaining()
 		workerSnap.Offline = worker.IsOffline()
-		for assignId := range worker.Assignments {
+		for _, assignId := range worker.Assignments {
 			assignmentState, ok := ss.AllAssignments[assignId]
 			if !ok {
 				ke := kerror.Create("AssignmentNotFound", "assignment not found").With("assignmentId", assignId).With("workerId", workerId)

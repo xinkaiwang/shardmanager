@@ -6,7 +6,6 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 )
@@ -57,8 +56,8 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 		ss.AllAssignments["shard-2:1"] = assignment2
 
 		// 添加分配任务到 WorkerState
-		workerState.Assignments["shard-1:0"] = common.Unit{}
-		workerState.Assignments["shard-2:1"] = common.Unit{}
+		workerState.Assignments["shard-1"] = "shard-1:0"
+		workerState.Assignments["shard-2"] = "shard-2:1"
 
 		// 测试1：正常状态（不关闭）
 		workerState.ShutdownRequesting = false

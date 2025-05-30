@@ -32,8 +32,11 @@ func TestCostfunc_basic(t *testing.T) {
 	snap3 := snap2.Clone()
 	workerFullId := data.WorkerFullIdParseFromString("worker-1:session-1")
 	{
-		move1 := NewPasMoveReplicaSnapAddRemove(data.ShardId("shard_1"), 0, true)
-		move1.Apply(snap3)
+		move1 := NewPasMoveShardSnapUpdate(data.ShardId("shard_1"), func(shardSnap *ShardSnap) {
+			shardSnap.TargetReplicaCount = 1
+		}, "test")
+		// move1 := NewPasMoveReplicaSnapAddRemove(data.ShardId("shard_1"), 0, true)
+		move1.Apply(snap3, AM_Strict)
 		shard, _ := snap3.AllShards.Get("shard_1")
 		shard.TargetReplicaCount = 1
 		move2 := NewPasMoveWorkerSnapAddRemove(workerFullId, NewWorkerSnap(workerFullId), "")

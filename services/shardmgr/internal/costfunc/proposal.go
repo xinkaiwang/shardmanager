@@ -67,13 +67,14 @@ func (action *Action) ToJson() *smgjson.ActionJson {
 		From:                 action.From.String(),
 		SrcReplicaIdx:        action.SrcReplicaIdx,
 		SrcAssignmentId:      action.SrcAssignmentId,
-		RemoveSrcFromRouting: 0,
+		RemoveSrcFromRouting: common.Int8FromBool(action.RemoveSrcFromRouting),
 		To:                   action.To.String(),
 		DestReplicaIdx:       action.DestReplicaIdx,
 		DestAssignmentId:     action.DestAssignmentId,
-		AddDestToRouting:     0,
+		AddDestToRouting:     common.Int8FromBool(action.AddDestToRouting),
 		SleepMs:              action.SleepMs,
 		Stage:                action.ActionStage,
+		DeleteReplica:        common.Int8FromBool(action.DeleteReplica),
 	}
 	return actionJson
 }
@@ -96,6 +97,7 @@ func ActionFromJson(actionJson *smgjson.ActionJson) *Action {
 		AddDestToRouting:     common.BoolFromInt8(actionJson.AddDestToRouting),
 		SleepMs:              actionJson.SleepMs,
 		ActionStage:          actionJson.Stage,
+		DeleteReplica:        common.BoolFromInt8(actionJson.DeleteReplica),
 	}
 	return action
 }

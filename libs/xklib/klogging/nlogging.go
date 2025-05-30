@@ -172,10 +172,12 @@ func NewEntry(ctx context.Context, level Level) *LogEntry {
 	if entry.ShouldLog {
 		info := GetCurrentCtxInfo(ctx)
 		if info != nil {
-			info.VisitForward(func(k, v string) bool {
-				entry.Details = append(entry.Details, Keypair{k, v})
-				return true
-			}, threshold)
+			dict := info.GetAllValuesAsMap(threshold)
+			for k, v := range dict {
+				if v != "" {
+					entry.Details = append(entry.Details, Keypair{k, v})
+				}
+			}
 		}
 	}
 	return entry

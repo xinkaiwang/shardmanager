@@ -50,7 +50,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 		klogging.Info(ctx).Log("Step3", "创建 ServiceState")
 		ss := AssembleSsWithShadowState(ctx, "TestAssembleFakeSolver")
 		ss.SolverGroup = setup.FakeSnapshotListener
-		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(), "TestAssembleFakeSolver")
+		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(ctx), "TestAssembleFakeSolver")
 		setup.ServiceState = ss
 		t.Logf("ServiceState已创建: %s", ss.Name)
 
@@ -149,7 +149,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 					return false, "worker state 不存在"
 				}
 				if len(ws.Assignments) == 1 {
-					for assignId := range ws.Assignments {
+					for _, assignId := range ws.Assignments {
 						assignState := dict[assignId]
 						if assignState.CurrentConfirmedState == cougarjson.CAS_Ready {
 							return true, ""

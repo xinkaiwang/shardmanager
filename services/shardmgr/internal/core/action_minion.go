@@ -156,19 +156,19 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 		var ke *kerror.Kerror
 		workerFullId := action.To
 		am.ss.PostActionAndWait(func(ss *ServiceState) {
-			// snapshot (add replica)
-			snapshot := ss.GetSnapshotCurrentForClone().Clone()
-			{
-				shardSnap := snapshot.AllShards.GetOrPanic(action.ShardId)
-				replicaSnap := shardSnap.Replicas[action.DestReplicaIdx]
-				if replicaSnap == nil {
-					replicaSnap = costfunc.NewReplicaSnap(action.ShardId, action.DestReplicaIdx)
-					shardSnap.Replicas[action.DestReplicaIdx] = replicaSnap
-					newShardSnap := shardSnap.Clone()
-					newShardSnap.Replicas[action.DestReplicaIdx] = replicaSnap
-					snapshot.AllShards.Set(action.ShardId, newShardSnap)
-				}
-			}
+			// // snapshot (add replica)
+			// snapshot := ss.GetSnapshotCurrentForClone().Clone()
+			// {
+			// 	shardSnap := snapshot.AllShards.GetOrPanic(action.ShardId)
+			// 	replicaSnap := shardSnap.Replicas[action.DestReplicaIdx]
+			// 	if replicaSnap == nil {
+			// 		replicaSnap = costfunc.NewReplicaSnap(action.ShardId, action.DestReplicaIdx)
+			// 		shardSnap.Replicas[action.DestReplicaIdx] = replicaSnap
+			// 		newShardSnap := shardSnap.Clone()
+			// 		newShardSnap.Replicas[action.DestReplicaIdx] = replicaSnap
+			// 		snapshot.AllShards.Set(action.ShardId, newShardSnap)
+			// 	}
+			// }
 
 			// ss
 			shardId := data.ShardId(action.ShardId)
@@ -197,13 +197,13 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				shardState.Replicas[action.DestReplicaIdx] = replicaState
 			}
 			// commit to snapshot+ss
-			ss.SetSnapshotCurrent(ctx, snapshot.Freeze(), "minion add shard")
+			// ss.SetSnapshotCurrent(ctx, snapshot.Freeze(), "minion add shard")
 			assign := NewAssignmentState(action.DestAssignmentId, shardId, action.DestReplicaIdx, workerFullId)
 			assign.TargetState = cougarjson.CAS_Ready
 			assign.ShouldInPilot = true
 			ss.AllAssignments[action.DestAssignmentId] = assign
 			replicaState.Assignments[action.DestAssignmentId] = common.Unit{}
-			workerState.Assignments[action.DestAssignmentId] = common.Unit{}
+			workerState.Assignments[action.ShardId] = action.DestAssignmentId
 			ss.storeProvider.StoreShardState(shardId, shardState.ToJson())
 			ss.FlushWorkerState(ctx, workerFullId, workerState, FS_WorkerState|FS_Pilot, "addShard")
 			// wait on signal box

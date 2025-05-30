@@ -409,7 +409,7 @@ func (setup *FakeTimeTestSetup) WaitUntilWorkerFullState(t *testing.T, workerFul
 		setup.safeAccessServiceState(func(ss *ServiceState) {
 			worker := ss.FindWorkerStateByWorkerFullId(workerFullId)
 			dict := map[data.AssignmentId]*AssignmentState{}
-			for assignId := range worker.Assignments {
+			for _, assignId := range worker.Assignments {
 				dict[assignId] = ss.AllAssignments[assignId]
 			}
 			result, reason = fn(worker, dict)

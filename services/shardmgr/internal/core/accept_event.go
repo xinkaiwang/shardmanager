@@ -44,14 +44,14 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		}
 		proposal := ss.ProposalQueue.Pop()
 		// check 1: is proposal.BasedOn is up to date?
-		if proposal.BasedOn != ss.GetSnapshotFutureForClone().SnapshotId {
+		if proposal.BasedOn != ss.GetSnapshotFutureForClone(ctx).SnapshotId {
 			// re-evaluate the proposal gain (based on the new snapshot)
 			ke := kcommon.TryCatchRun(ctx, func() {
-				currentCost := ss.GetSnapshotFutureForClone().GetCost()
-				newCost := ss.GetSnapshotFutureForClone().Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
+				currentCost := ss.GetSnapshotFutureForClone(ctx).GetCost()
+				newCost := ss.GetSnapshotFutureForClone(ctx).Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
 				gain := currentCost.Substract(newCost)
 				proposal.Gain = gain
-				proposal.BasedOn = ss.GetSnapshotFutureForClone().SnapshotId
+				proposal.BasedOn = ss.GetSnapshotFutureForClone(ctx).SnapshotId
 				// add this proposal back to the queue again
 				ss.ProposalQueue.Push(proposal)
 			})
@@ -84,7 +84,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	}
 	// ss.AcceptedCount += len(accpeted)
 	if len(accpeted) > 0 {
-		future := ss.GetSnapshotFutureForAny()
+		future := ss.GetSnapshotFutureForAny(ctx)
 		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost().String()).Log("AcceptEvent", "broadcastSnapshot")
 		ss.boardcastSnapshotBatchManager.TryScheduleInternal(ctx, "acceptEvent")
 		// ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
@@ -111,7 +111,7 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 
 	// apply this move to future snapshot
 	ke := kcommon.TryCatchRun(ctx, func() {
-		newFuture := ss.GetSnapshotFutureForClone().Clone()
+		newFuture := ss.GetSnapshotFutureForClone(ctx).Clone()
 		newFuture.ApplyMove(proposal.Move, costfunc.AM_Strict)
 		newFuture.Freeze()
 		ss.SetSnapshotFuture(ctx, newFuture, "DoAcceptProposal")

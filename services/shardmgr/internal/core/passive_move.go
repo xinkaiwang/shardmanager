@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -11,7 +12,7 @@ import (
 // PassiveMove represents an operation that can be applied to ss
 type PassiveMove interface {
 	costfunc.PassiveMove
-	ApplyToSs(ss *ServiceState)
+	ApplyToSs(ctx context.Context, ss *ServiceState)
 }
 
 // RemoveAssignment implements Modifier
@@ -67,7 +68,7 @@ func (move *RemoveAssignment) Apply(snapshot *costfunc.Snapshot) {
 	}
 }
 
-func (move *RemoveAssignment) ApplyToSs(ss *ServiceState) {
+func (move *RemoveAssignment) ApplyToSs(ctx context.Context, ss *ServiceState) {
 	// remove assignment from shard/replica
 	func() {
 		shard, ok := ss.AllShards[move.ShardId]
@@ -95,7 +96,8 @@ func (move *RemoveAssignment) ApplyToSs(ss *ServiceState) {
 		if !ok {
 			return
 		}
-		delete(worker.Assignments, move.AssignmentId)
+		worker.RemoveAssignment(ctx, move.ShardId)
+		// delete(worker.Assignments, move.AssignmentId)
 	}()
 }
 

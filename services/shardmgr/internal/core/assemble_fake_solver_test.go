@@ -156,7 +156,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 					return false, "worker state 不存在"
 				}
 				if len(ws.Assignments) == 1 {
-					for assignId := range ws.Assignments {
+					for _, assignId := range ws.Assignments {
 						assignState := dict[assignId]
 						if assignState.CurrentConfirmedState == cougarjson.CAS_Ready {
 							return true, ""

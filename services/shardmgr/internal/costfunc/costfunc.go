@@ -98,6 +98,16 @@ func CountAssignments(assigns map[data.AssignmentId]*AssignmentView, fn func(*As
 
 // CalCost implements the CostFuncProvider interface
 func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
+	{
+		// validate snapshot
+		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
+			for replicaIdx, replica := range shard.Replicas {
+				if !replica.LameDuck && len(replica.Assignments) == 0 {
+					klogging.Fatal(context.Background()).With("shardId", shardId).With("replicaIdx", replicaIdx).Log("CostFuncSimpleProvider", "replica without assignments should be lame duck")
+				}
+			}
+		})
+	}
 	cost := Cost{HardScore: 0, SoftScore: 0}
 
 	// Rule H1: a replica which is unassigned got 2 point <deprecated by H6>
@@ -112,7 +122,7 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
 			// each shard
 			replicas := shard.CollectReplicas(snap)
-			currentReplicaCount := CountReplicas(replicas, func(rv *ReplicaView) bool { return !rv.LameDuck })
+			currentReplicaCount := CountReplicas(replicas, func(rv *ReplicaView) bool { return !rv.LameDuck && len(rv.Assignments) > 0 })
 			if currentReplicaCount < int(shard.TargetReplicaCount) {
 				hard += int32(shard.TargetReplicaCount-currentReplicaCount) * 2 // H6
 			} else if currentReplicaCount > int(shard.TargetReplicaCount) {

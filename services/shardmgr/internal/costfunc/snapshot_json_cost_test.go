@@ -109,13 +109,13 @@ var testEmptySnapshotStr = `
       "Replicas": [
         {
           "Assignments": [],
-          "LameDuck": 0,
+          "LameDuck": 1,
           "ReplicaIdx": 0,
           "ShardId": "shard_1"
         },
         {
           "Assignments": [],
-          "LameDuck": 0,
+          "LameDuck": 1,
           "ReplicaIdx": 1,
           "ShardId": "shard_1"
         }
@@ -212,13 +212,6 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	shard := NewShardSnap("shard_1", 0)
 	snapshot.AllShards.Set("shard_1", shard)
 
-	// 添加副本0
-	replica0 := NewReplicaSnap("shard_1", 0)
-	shard.Replicas[0] = replica0
-
-	// 添加副本1
-	replica1 := NewReplicaSnap("shard_1", 1)
-	shard.Replicas[1] = replica1
 	shard.TargetReplicaCount = 2
 
 	// 添加工作节点1
@@ -238,6 +231,8 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	assignment1 := NewAssignmentSnap("shard_1", 0, "assign-1", worker1.WorkerFullId)
 	snapshot = snapshot.Clone()
 	snapshot.AllAssignments.Set("assign-1", assignment1)
+	replica0 := NewReplicaSnap("shard_1", 0)
+	shard.Replicas[0] = replica0
 	replica0.Assignments["assign-1"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-1"
 
@@ -249,6 +244,9 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	assignment2 := NewAssignmentSnap("shard_1", 1, "assign-2", worker1.WorkerFullId)
 	snapshot = snapshot.Clone()
 	snapshot.AllAssignments.Set("assign-2", assignment2)
+	// 添加副本1
+	replica1 := NewReplicaSnap("shard_1", 1)
+	shard.Replicas[1] = replica1
 	replica1.Assignments["assign-2"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-2" // 这里其实有问题，一个worker不能对同一个shard有多个assignments
 

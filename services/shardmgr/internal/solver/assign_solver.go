@@ -26,7 +26,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	// baseCost := costProvider.CalCost(snapshot)
 	baseCost := snapshot.GetCost()
 	asCfg := GetCurrentSolverConfigProvider().GetAssignSolverConfig()
-	klogging.Info(ctx).With("baseCost", baseCost).With("solver", "AssignSolver").Log("FindProposal", "start")
+	// klogging.Info(ctx).With("baseCost", baseCost).With("solver", "AssignSolver").Log("FindProposal", "start")
 
 	var bestMove *costfunc.AssignMove
 	bestCost := baseCost

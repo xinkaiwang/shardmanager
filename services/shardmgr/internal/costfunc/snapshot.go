@@ -25,15 +25,11 @@ type ShardSnap struct {
 
 func (ss ShardSnap) IsValueTypeT2() {}
 
-func NewShardSnap(shardId data.ShardId, initReplicaCount int) *ShardSnap {
+func NewShardSnap(shardId data.ShardId, targetReplicaCount int) *ShardSnap {
 	shard := &ShardSnap{
 		ShardId:            shardId,
-		TargetReplicaCount: initReplicaCount,
-		Replicas:           make(map[data.ReplicaIdx]*ReplicaSnap, initReplicaCount),
-	}
-	for i := 0; i < initReplicaCount; i++ {
-		replica := NewReplicaSnap(shardId, data.ReplicaIdx(i))
-		shard.Replicas[data.ReplicaIdx(i)] = replica
+		TargetReplicaCount: targetReplicaCount,
+		Replicas:           make(map[data.ReplicaIdx]*ReplicaSnap, targetReplicaCount),
 	}
 	return shard
 }

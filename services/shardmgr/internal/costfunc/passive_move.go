@@ -168,22 +168,21 @@ func (move *ShardSnapUpdate) Signature() string {
 	return move.reason + ":" + string(move.ShardId)
 }
 
-// ReplicaSnapAddRemove implements PassiveMove
-type ReplicaSnapAddRemove struct {
+// ReplicaSnapHardDelete implements PassiveMove
+type ReplicaSnapHardDelete struct {
 	ShardId    data.ShardId
 	ReplicaIdx data.ReplicaIdx
-	NewState   bool // true: add, false: delete
+	// NewState   bool // true: add, false: delete
 }
 
-func NewPasMoveReplicaSnapAddRemove(shardId data.ShardId, replicaIdx data.ReplicaIdx, newState bool) *ReplicaSnapAddRemove {
-	return &ReplicaSnapAddRemove{
+func NewPasMoveReplicaSnapHardDelete(shardId data.ShardId, replicaIdx data.ReplicaIdx) *ReplicaSnapHardDelete {
+	return &ReplicaSnapHardDelete{
 		ShardId:    shardId,
 		ReplicaIdx: replicaIdx,
-		NewState:   newState,
 	}
 }
 
-func (move *ReplicaSnapAddRemove) Apply(snapshot *Snapshot) {
+func (move *ReplicaSnapHardDelete) Apply(snapshot *Snapshot) {
 	if snapshot.Frozen {
 		ke := kerror.Create("ReplicaStateChangeApplyFailed", "snapshot is frozen")
 		panic(ke)
@@ -196,22 +195,14 @@ func (move *ReplicaSnapAddRemove) Apply(snapshot *Snapshot) {
 	shardSnap = shardSnap.Clone()
 	snapshot.AllShards.Set(move.ShardId, shardSnap)
 	_, ok = shardSnap.Replicas[move.ReplicaIdx]
-	if move.NewState {
-		if ok {
-			return
-		}
-		replicaSnap := NewReplicaSnap(move.ShardId, move.ReplicaIdx)
-		shardSnap.Replicas[move.ReplicaIdx] = replicaSnap
-	} else {
-		if !ok {
-			return
-		}
-		delete(shardSnap.Replicas, move.ReplicaIdx)
+	if !ok {
+		return
 	}
+	delete(shardSnap.Replicas, move.ReplicaIdx)
 }
 
-func (move *ReplicaSnapAddRemove) Signature() string {
-	return "ReplicaStateChange: " + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx)) + " -> " + strconv.FormatBool(move.NewState)
+func (move *ReplicaSnapHardDelete) Signature() string {
+	return "ReplicaSnapHardDelete: " + string(move.ShardId) + ":" + strconv.Itoa(int(move.ReplicaIdx))
 }
 
 // ReplicaSnapUpdate implements PassiveMove

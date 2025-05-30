@@ -41,7 +41,8 @@ type WorkerState struct {
 	// ShutdownPermited       bool
 	GracePeriodStartTimeMs int64
 
-	Assignments map[data.AssignmentId]common.Unit
+	Assignments map[data.ShardId]data.AssignmentId
+	// Shards      map[data.ShardId]data.AssignmentId // 1 shard may have multiple replica/assignments, but those multiple assignments should never live on the same worker
 
 	NotifyReason string
 	SignalBox    *SignalBox
@@ -58,39 +59,59 @@ func NewWorkerState(ss *ServiceState, workerId data.WorkerId, sessionId data.Ses
 		State:              data.WS_Online_healthy,
 		ShutdownRequesting: false,
 		// ShutdownPermited:          false,
-		Assignments: make(map[data.AssignmentId]common.Unit),
-		SignalBox:   NewSignalBox(),
-		WorkerInfo:  nil,
+		Assignments: map[data.ShardId]data.AssignmentId{},
+		// Shards:      make(map[data.ShardId]data.AssignmentId), // empty at first
+		SignalBox:  NewSignalBox(),
+		WorkerInfo: nil,
 		// WorkerReportedAssignments: make(map[data.AssignmentId]common.Unit),
 		StatefulType: statefulType,
 	}
 }
 
-func NewWorkerStateFromJson(ss *ServiceState, workerStateJson *smgjson.WorkerStateJson) *WorkerState {
+func NewWorkerStateFromJson(ctx context.Context, ss *ServiceState, workerStateJson *smgjson.WorkerStateJson) *WorkerState {
 	workerState := &WorkerState{
-		parent:      ss,
-		WorkerId:    workerStateJson.WorkerId,
-		SessionId:   workerStateJson.SessionId,
-		State:       workerStateJson.WorkerState,
-		Assignments: make(map[data.AssignmentId]common.Unit),
-		SignalBox:   NewSignalBox(),
-		WorkerInfo:  workerStateJson.WorkerInfo,
+		parent:    ss,
+		WorkerId:  workerStateJson.WorkerId,
+		SessionId: workerStateJson.SessionId,
+		State:     workerStateJson.WorkerState,
+		// Assignments:        make(map[data.AssignmentId]common.Unit),
+		Assignments:        make(map[data.ShardId]data.AssignmentId), // empty at first
+		ShutdownRequesting: common.BoolFromInt8(workerStateJson.RequestShutdown),
+		SignalBox:          NewSignalBox(),
+		WorkerInfo:         workerStateJson.WorkerInfo,
+	}
+	if common.BoolFromInt8(workerStateJson.Hat) {
+		ss.hatTryGet(ctx, workerState.GetWorkerFullId())
 	}
 	if workerState.WorkerInfo == nil {
 		workerState.WorkerInfo = smgjson.NewWorkerInfoJson()
 	}
 	workerState.StatefulType = data.StatefulTypeParseFromString(workerStateJson.StatefulType)
 	for assignId, assignmentJson := range workerStateJson.Assignments {
+		if assignmentJson.CurrentState == cougarjson.CAS_Dropped {
+			continue // skip dropped assignments
+		}
 		assignmentId := data.AssignmentId(assignId)
 		assignmentState := NewAssignmentState(assignmentId, assignmentJson.ShardId, assignmentJson.ReplicaIdx, workerState.GetWorkerFullId())
 		assignmentState.TargetState = assignmentJson.TargetState
 		assignmentState.CurrentConfirmedState = assignmentJson.CurrentState
 		assignmentState.ShouldInPilot = common.BoolFromInt8(assignmentJson.InPilot)
 		assignmentState.ShouldInRoutingTable = common.BoolFromInt8(assignmentJson.InRouting)
-		workerState.Assignments[assignmentId] = common.Unit{}
+		workerState.AddAssignment(ctx, assignmentId, assignmentJson.ShardId)
+		// workerState.Assignments[assignmentId] = common.Unit{}
 		ss.AllAssignments[assignmentId] = assignmentState
 	}
 	return workerState
+}
+
+func (ws *WorkerState) AddAssignment(ctx context.Context, assignmentId data.AssignmentId, shardId data.ShardId) {
+	if oldAssignId, ok := ws.Assignments[shardId]; ok {
+		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("shardId", shardId).With("oldAssignId", oldAssignId).With("assignId", assignmentId).Log("AddAssignment", "shard already exists in worker state")
+	}
+	ws.Assignments[shardId] = assignmentId
+}
+func (ws *WorkerState) RemoveAssignment(ctx context.Context, shardId data.ShardId) {
+	delete(ws.Assignments, shardId)
 }
 
 func (ws *WorkerState) Journal(ctx context.Context, reason string) {
@@ -110,7 +131,7 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 		Hat:              common.Int8FromBool(ws.HasShutdownHat()),
 		StatefulType:     string(ws.StatefulType),
 	}
-	for assignmentId := range ws.Assignments {
+	for _, assignmentId := range ws.Assignments {
 		assignState, ok := ss.AllAssignments[assignmentId]
 		if !ok {
 			klogging.Fatal(ctx).With("assignmentId", assignmentId).
@@ -354,7 +375,7 @@ func (ws *WorkerState) IsOnline() bool {
 // CollectCurrentAssignments: collect current assignments from AllAssignments, fatal if not found
 func (ws *WorkerState) CollectCurrentAssignments(ss *ServiceState) map[data.AssignmentId]*AssignmentState {
 	dict := make(map[data.AssignmentId]*AssignmentState)
-	for assignmentId := range ws.Assignments {
+	for _, assignmentId := range ws.Assignments {
 		assignState, ok := ss.AllAssignments[assignmentId]
 		if !ok {
 			klogging.Fatal(context.Background()).With("workerId", ws.WorkerId).
@@ -472,14 +493,14 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 			// Grace period expired, DirtyPurge this worker
 			// ws.setWorkerState(ctx, data.WS_Offline_dead, "checkWorkerOnTimeout")
 			// remove all assignments
-			for assignId := range ws.Assignments {
+			for _, assignId := range ws.Assignments {
 				assignState, ok := ss.AllAssignments[assignId]
 				if !ok {
 					continue
 				}
 				passiveMove := NewPasMoveRemoveAssignment(assignState.AssignmentId, assignState.ShardId, assignState.ReplicaIdx, ws.GetWorkerFullId())
 				passiveMoves = append(passiveMoves, passiveMove)
-				passiveMove.ApplyToSs(ss)
+				passiveMove.ApplyToSs(ctx, ss)
 			}
 			reason = "checkWorkerOnTimeout_DirtyPurge"
 			// passiveMove := costfunc.NewPasMoveWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WS_Offline_dead")
@@ -571,7 +592,7 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 	pilotNode.Assignments = make([]*cougarjson.PilotAssignmentJson, 0, len(ws.Assignments))
 
 	// 遍历每个分配任务，创建相应的PilotAssignmentJson
-	for assignmentId := range ws.Assignments {
+	for _, assignmentId := range ws.Assignments {
 		assign := ss.AllAssignments[assignmentId]
 		if assign == nil {
 			klogging.Fatal(ctx).
@@ -611,7 +632,7 @@ func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, upd
 	entry.Assignments = make([]*unicornjson.AssignmentJson, 0, len(ws.Assignments))
 
 	// 遍历每个分配任务，创建相应的AssignmentJson
-	for assignmentId := range ws.Assignments {
+	for _, assignmentId := range ws.Assignments {
 		assign := ss.AllAssignments[assignmentId]
 		if assign == nil {
 			klogging.Fatal(ctx).

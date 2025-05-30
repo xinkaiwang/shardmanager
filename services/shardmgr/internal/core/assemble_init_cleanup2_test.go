@@ -34,7 +34,7 @@ func TestAssembleWorkerInitCleanup2(t *testing.T) {
 		{
 			setup.SetShardPlan(ctx, []string{"shard_00_40", "shard_40_80", "shard_80_c0", "shard_c0_00"})
 			setup.ModifyWorkerState(ctx, worker2FullId, func(wej *smgjson.WorkerStateJson) *smgjson.WorkerStateJson {
-				return smgjson.WorkerStateJsonFromJson(`{"worker_id":"worker-2","session_id":"OK19G93V","worker_state":"offline_draining_candidate","assignments":{"3V81NOXK":{"sid":"shard_00_40","current_state":"unkonwn","target_state":"unkonwn"},"5OUUI88T":{"sid":"shard_40_80","current_state":"unkonwn","target_state":"unkonwn"},"KY87YWQW":{"sid":"shard_00_40","current_state":"unkonwn","target_state":"unkonwn"},"YYV972IU":{"sid":"shard_40_80","current_state":"unkonwn","target_state":"unkonwn"}},"update_time_ms":1747894514035,"update_reason":"WS_Offline_draining_candidate","hat":1,"stateful_type":"state_in_mem"}`)
+				return smgjson.WorkerStateJsonFromJson(`{"worker_id":"worker-2","session_id":"OK19G93V","worker_state":"offline_draining_candidate","assignments":{"KY87YWQW":{"sid":"shard_00_40","current_state":"unkonwn","target_state":"unkonwn"},"YYV972IU":{"sid":"shard_40_80","current_state":"unkonwn","target_state":"unkonwn"}},"update_time_ms":1747894514035,"update_reason":"WS_Offline_draining_candidate","hat":1,"stateful_type":"state_in_mem"}`)
 			})
 			setup.ModifyPilotNode(ctx, worker2FullId, func(pnj *cougarjson.PilotNodeJson) *cougarjson.PilotNodeJson {
 				return cougarjson.ParsePilotNodeJson(`{"worker_id":"worker-2","session_id":"OK19G93V","assignments":[],"update_time_ms":1747894514035,"update_reason":"WS_Offline_draining_candidate"}`)

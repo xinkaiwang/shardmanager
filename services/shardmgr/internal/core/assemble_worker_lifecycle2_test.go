@@ -82,6 +82,7 @@ func TestAssembleWorkerLifeCycle2(t *testing.T) {
 		})
 
 		// Step 6: worker_1 unable to shutdown cause that's the only worker, and we won't allow him to shutdown unless shard_1 found another worker to host
+		klogging.Info(ctx).Log("Step6", "VirtualTimeForward 60s, no more new moves should be accepted")
 		setup.FakeTime.VirtualTimeForward(ctx, 60*1000)
 		{
 			acceptCount := 0

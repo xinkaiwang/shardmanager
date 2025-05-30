@@ -44,7 +44,7 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 	for workerFullId, workerState := range ss.AllWorkers {
 
 		// check assignments tombstone
-		for assignId := range workerState.Assignments {
+		for _, assignId := range workerState.Assignments {
 			assignment, ok := ss.AllAssignments[assignId]
 			if !ok {
 				klogging.Fatal(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "assignment not found")
@@ -58,7 +58,7 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 				// 	delete(ws.Assignments, assignment.ShardId)
 				// }, "hard delete assignment")
 				passiveMove := NewPasMoveRemoveAssignment(assignId, assignment.ShardId, assignment.ReplicaIdx, workerFullId)
-				passiveMove.ApplyToSs(ss)
+				passiveMove.ApplyToSs(ctx, ss)
 				passiveMoves = append(passiveMoves, passiveMove)
 				klogging.Info(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "delete assignment")
 			}
@@ -66,14 +66,14 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 		// check worker tombstone
 		if workerState.State == data.WS_Offline_dead {
 			// [defensive coding] delete all assignments (if any) (rare case, since we should have drained them already. The only case we need to do this when DirtyPurge happened)
-			for assignId := range workerState.Assignments {
+			for _, assignId := range workerState.Assignments {
 				// delete(workerState.Assignments, assignId)
 				assignment, ok := ss.AllAssignments[assignId]
 				if !ok {
 					continue
 				}
 				passiveMove := NewPasMoveRemoveAssignment(assignId, assignment.ShardId, assignment.ReplicaIdx, assignment.WorkerFullId)
-				passiveMove.ApplyToSs(ss)
+				passiveMove.ApplyToSs(ctx, ss)
 				passiveMoves = append(passiveMoves, passiveMove)
 				// delete(ss.AllAssignments, assignId)
 				// shardState, ok := ss.AllShards[assignment.ShardId]
@@ -136,7 +136,7 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 						// delete this replica
 						// klogging.Info(ctx).With("shardId", shard.ShardId).With("replicaIdx", replica.ReplicaIdx).Log("checkShardTombStone", "delete replica")
 						delete(shard.Replicas, replica.ReplicaIdx)
-						passiveMove := costfunc.NewPasMoveReplicaSnapAddRemove(shard.ShardId, replica.ReplicaIdx, false)
+						passiveMove := costfunc.NewPasMoveReplicaSnapHardDelete(shard.ShardId, replica.ReplicaIdx)
 						ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteReplica")
 						dirtyFlag.AddDirtyFlag("hardDeleteReplica:" + string(shard.ShardId) + ":" + strconv.Itoa(int(replica.ReplicaIdx)))
 					}

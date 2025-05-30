@@ -56,12 +56,12 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 			klogging.Warning(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).With("inflight", len(ss.AllMoves)).Log("annualCheckSnapshot", "found diffs")
 		}
 	}
-	diffs = compareSnapshot(ctx, ss.GetSnapshotFutureForAny(), newSnapshotFuture)
+	diffs = compareSnapshot(ctx, ss.GetSnapshotFutureForAny(ctx), newSnapshotFuture)
 	if len(diffs) > 0 {
 		if !inFlightMove {
-			klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+			klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny().ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).With("inflight", len(ss.AllMoves)).Log("annualCheckSnapshot", "found diffs")
+			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).With("inflight", len(ss.AllMoves)).Log("annualCheckSnapshot", "found diffs")
 		}
 	}
 	ss.SnapshotCurrent = newSnapshotCurrent
@@ -81,9 +81,9 @@ func compareSnapshot(ctx context.Context, snap1 *costfunc.Snapshot, snap2 *costf
 
 func (ss *ServiceState) broadcastSnapshot(ctx context.Context, reason string) {
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(), reason)
-		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny().ToShortString()).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
+		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(ctx), reason)
+		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString()).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
 	} else {
-		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny().ToShortString()).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString()).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
 	}
 }

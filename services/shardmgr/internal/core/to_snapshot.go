@@ -30,7 +30,7 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 		workerSnap := costfunc.NewWorkerSnap(workerId)
 		workerSnap.Draining = workerState.IsDaining()
 		workerSnap.Offline = workerState.IsOffline()
-		for assignmentId := range workerState.Assignments {
+		for _, assignmentId := range workerState.Assignments {
 			assignment, ok := ss.AllAssignments[assignmentId]
 			if !ok {
 				// assignment not found

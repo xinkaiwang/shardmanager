@@ -28,7 +28,8 @@ type ActionJson struct {
 	DestAssignmentId     data.AssignmentId `json:"dest_assignment,omitempty"`
 	AddDestToRouting     int8              `json:"add_dest_to_routing,omitempty"`
 	SleepMs              int               `json:"sleep_ms,omitempty"`
-	Stage                ActionStage       `json:"stage,omitempty"` //
+	Stage                ActionStage       `json:"stage,omitempty"`          //
+	DeleteReplica        int8              `json:"delete_replica,omitempty"` // whether to delete the replica after the move is completed
 }
 
 type ActionStage string

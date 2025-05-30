@@ -94,7 +94,7 @@ func (move *SimpleMove) GetActions(cfg config.ShardConfig) []*Action {
 			SrcReplicaIdx:   move.SrcReplicaIdx,
 			SrcAssignmentId: move.SrcAssignmentId,
 			From:            move.Src,
-			DeleteReplica:   false,
+			DeleteReplica:   true,
 		})
 		// step 3: add shard
 		list = append(list, &Action{
@@ -149,7 +149,7 @@ func (move *SimpleMove) GetActions(cfg config.ShardConfig) []*Action {
 			SrcReplicaIdx:   move.SrcReplicaIdx,
 			SrcAssignmentId: move.SrcAssignmentId,
 			From:            move.Src,
-			DeleteReplica:   false,
+			DeleteReplica:   true,
 		})
 		return list
 	} else {
