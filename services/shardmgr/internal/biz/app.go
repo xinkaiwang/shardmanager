@@ -2,6 +2,7 @@ package biz
 
 import (
 	"context"
+	"sort"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
@@ -167,8 +168,15 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 			}
 			worker.Assignments = append(worker.Assignments, vm)
 		}
+		sort.Slice(worker.Assignments, func(i, j int) bool {
+			return worker.Assignments[i].ShardId < worker.Assignments[j].ShardId
+		})
 		workers = append(workers, worker)
 	}
+	// sort workers by WorkerFullId
+	sort.Slice(workers, func(i, j int) bool {
+		return workers[i].WorkerFullId < workers[j].WorkerFullId
+	})
 
 	for _, shardState := range ss.AllShards {
 		shard := api.ShardVm{
@@ -186,6 +194,9 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 		}
 		shards = append(shards, shard)
 	}
+	sort.Slice(shards, func(i, j int) bool {
+		return shards[i].ShardId < shards[j].ShardId
+	})
 
 	gse.resp <- &api.GetStateResponse{
 		Workers: workers,
