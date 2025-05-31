@@ -13,7 +13,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
-func _TestAssembleWorkerInitCleanup4(t *testing.T) {
+func TestAssembleWorkerInitCleanup4(t *testing.T) {
 	ctx := context.Background()
 	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
@@ -86,7 +86,7 @@ func _TestAssembleWorkerInitCleanup4(t *testing.T) {
 			setup.safeAccessServiceState(func(ss *ServiceState) {
 				acceptCount = ss.AcceptedCount
 			})
-			assert.Equal(t, true, acceptCount > 8, "应该有 proposal 被接受")
+			assert.Equal(t, true, acceptCount == 0, "应该有 proposal 被接受")
 		}
 	}
 

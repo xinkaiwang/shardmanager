@@ -157,7 +157,7 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 				continue
 			}
 			// Log successful keepalive at Debug level to avoid flooding
-			klogging.Debug(ctx).With("lease", ka.ID).With("sessionId", session.sessionId).With("ttl", ka.TTL).Log("EtcdSession", "keepalive success")
+			klogging.Verbose(ctx).With("lease", ka.ID).With("sessionId", session.sessionId).With("ttl", ka.TTL).Log("EtcdSession", "keepalive success")
 			// Ensure state is connected after a successful keepalive (might have been reconnecting)
 			session.mu.RLock()
 			currentState := session.state

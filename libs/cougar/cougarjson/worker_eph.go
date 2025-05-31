@@ -37,6 +37,8 @@ type WorkerEphJson struct {
 	ReqShutDown int8 `json:"req_shutdown,omitempty"` // if true, worker should drain and shutdown
 
 	StatefulType data.StatefulType `json:"stateful_type"` // stateless, ST_MEMORY, ST_HARD_DRIVE
+
+	PodStats *PodStats `json:"pod_stats,omitempty"` // pod stats, if worker is a pod
 }
 
 func NewWorkerEphJson(workerId string, sessionId string, startTimeMs int64, capacity int32) *WorkerEphJson {
@@ -125,14 +127,4 @@ func (obj *AssignmentJson) ToJson() string {
 		panic(ke)
 	}
 	return string(bytes)
-}
-
-type ShardStats struct {
-	Qpm   int64 `json:"qpm"`              // query per minute
-	MemMb int64 `json:"mem_mb,omitempty"` // memory usage
-}
-
-type PodStats struct {
-	MemMb int64 `json:"mem_mb,omitempty"` // memory usage
-	CpuMs int64 `json:"cpu_ms,omitempty"` // cpu usage
 }

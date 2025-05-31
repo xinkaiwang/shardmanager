@@ -269,11 +269,11 @@ func (ss *ServiceState) GetSnapshotFutureForClone(ctx context.Context) *costfunc
 	if !ss.SnapshotFuture.Frozen {
 		ss.SnapshotFuture.Freeze()
 	}
-	klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForClone", "")
+	klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForClone", "")
 	return ss.SnapshotFuture
 }
 
 func (ss *ServiceState) GetSnapshotFutureForAny(ctx context.Context) *costfunc.Snapshot {
-	klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForAny", "")
+	klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForAny", "")
 	return ss.SnapshotFuture
 }

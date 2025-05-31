@@ -43,19 +43,19 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 				klogging.Info(ctx2).With("workerId", workerId).With("path", kvItem.Key).
 					Log("WorkerEphWatcher", "观察到worker eph已删除")
 				w.ss.PostEvent(NewWorkerEphEvent(ctx2, workerId, nil))
-				klogging.Info(ctx2).With("workerId", workerId).
-					Log("WorkerEphWatcher", "worker eph event posted")
+				// klogging.Info(ctx2).With("workerId", workerId).
+				// 	Log("WorkerEphWatcher", "worker eph event posted")
 				continue
 			}
 			// this is a add or update event
-			klogging.Info(ctx2).With("workerFullId", kvItem.Key).With("eph", kvItem.Value).
+			klogging.Info(ctx2).With("workerFullId", kvItem.Key).WithDebug("eph", kvItem.Value).
 				Log("WorkerEphWatcher", "观察到worker eph已更新")
 			// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
 			workerId := w.workerIdFromPath(kvItem.Key)
 			workerEph := cougarjson.WorkerEphJsonFromJson(kvItem.Value)
 			w.ss.PostEvent(NewWorkerEphEvent(ctx2, workerId, workerEph))
-			klogging.Info(ctx2).With("workerId", workerId).With("eph", workerEph).
-				Log("WorkerEphWatcher", "worker eph event posted")
+			// klogging.Info(ctx2).With("workerId", workerId).With("eph", workerEph).
+			// 	Log("WorkerEphWatcher", "worker eph event posted")
 		}
 	}
 }
@@ -99,12 +99,12 @@ func (e *WorkerEphEvent) Process(ctx context.Context, ss *ServiceState) {
 
 // stagingWorkerEph: must call in runloop. Staging area is write by (individual) worker eph event(s), read by digestStagingWorkerEph (in batch)
 func (ss *ServiceState) StagingWorkerEph(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) {
-	klogging.Info(ctx).With("workerId", workerId).
+	klogging.Verbose(ctx).With("workerId", workerId).
 		With("hasEph", workerEph != nil).With("eph", workerEph).
 		Log("stagingWorkerEph", "开始处理worker eph")
 
 	defer func() {
-		klogging.Info(ctx).With("workerId", workerId).
+		klogging.Verbose(ctx).With("workerId", workerId).
 			With("hasEph", workerEph != nil).With("eph", workerEph).
 			Log("stagingWorkerEph", "处理worker eph完成")
 	}()

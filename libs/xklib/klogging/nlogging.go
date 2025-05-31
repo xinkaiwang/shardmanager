@@ -190,6 +190,20 @@ func (entry *LogEntry) With(k string, v interface{}) *LogEntry {
 	return entry
 }
 
+func (entry *LogEntry) WithDebug(k string, v interface{}) *LogEntry {
+	if NeedLog(DebugLevel, entry.EffectiveThreshold) {
+		entry.Details = append(entry.Details, Keypair{k, v})
+	}
+	return entry
+}
+
+func (entry *LogEntry) WithVerbose(k string, v interface{}) *LogEntry {
+	if NeedLog(VerboseLevel, entry.EffectiveThreshold) {
+		entry.Details = append(entry.Details, Keypair{k, v})
+	}
+	return entry
+}
+
 // this is to avoid fake nil pointer problem
 func IsNil(i interface{}) bool {
 	if i == nil {

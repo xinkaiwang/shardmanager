@@ -49,17 +49,19 @@ func (bm *BatchManager) TryScheduleInternal(ctx context.Context, reasons ...stri
 		return
 	}
 	kcommon.ScheduleRun(bm.maxDelayMs, func() {
-		bm.parent.PostEvent(NewBatchProcessEvent(bm))
+		bm.parent.PostEvent(NewBatchProcessEvent(ctx, bm))
 	})
 }
 
 // BatchProcessEvent implements krunloop.IEvent interface
 type BatchProcessEvent struct {
+	ctx    context.Context
 	parent *BatchManager
 }
 
-func NewBatchProcessEvent(parent *BatchManager) *BatchProcessEvent {
+func NewBatchProcessEvent(ctx context.Context, parent *BatchManager) *BatchProcessEvent {
 	return &BatchProcessEvent{
+		ctx:    ctx,
 		parent: parent,
 	}
 }
@@ -68,12 +70,12 @@ func (bpe *BatchProcessEvent) GetName() string {
 	return bpe.parent.name
 }
 
-func (bpe *BatchProcessEvent) Process(ctx context.Context, ss *ServiceState) {
+func (bpe *BatchProcessEvent) Process(_ context.Context, ss *ServiceState) {
 	var reasons []string
 	bpe.parent.isInFlight = false
 	reasons = bpe.parent.reasons
 	bpe.parent.reasons = nil
 
-	klogging.Info(ctx).With("name", bpe.parent.name).With("reason", reasons).Log("BatchManager", "out-bound")
-	bpe.parent.fn(ctx, ss)
+	klogging.Info(bpe.ctx).With("name", bpe.parent.name).With("reason", reasons).Log("BatchManager", "out-bound")
+	bpe.parent.fn(bpe.ctx, ss)
 }
