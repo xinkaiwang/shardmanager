@@ -1,7 +1,6 @@
 package api
 
 import (
-	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
@@ -26,15 +25,19 @@ type ReplicaVm struct {
 }
 
 type WorkerVm struct {
-	WorkerFullId string          `json:"worker_full_id"`
-	Assignments  []*AssignmentVm `json:"assignments,omitempty"`
+	WorkerFullId  string          `json:"worker_full_id"`
+	WorkerId      string          `json:"worker_id"`
+	SessionId     string          `json:"session_id,omitempty"`
+	IsOffline     int8            `json:"is_offline"`
+	IsShutdownReq int8            `json:"is_shutdown_req"`
+	IsDraning     int8            `json:"is_draining"`
+	Assignments   []*AssignmentVm `json:"assignments"`
 }
 
 type AssignmentVm struct {
-	AssignmentId data.AssignmentId                `json:"assignment_id"`
-	ShardId      data.ShardId                     `json:"shard_id"`
-	ReplicaIdx   data.ReplicaIdx                  `json:"replica_idx"`
-	WorkerFullId string                           `json:"worker_full_id"`
-	CurrentState cougarjson.CougarAssignmentState `json:"current_state"`
-	TargetState  cougarjson.CougarAssignmentState `json:"target_state"`
+	AssignmentId data.AssignmentId `json:"assignment_id"`
+	ShardId      data.ShardId      `json:"shard_id"`
+	ReplicaIdx   data.ReplicaIdx   `json:"replica_idx"`
+	WorkerFullId string            `json:"worker_full_id"`
+	Status       string            `json:"status,omitempty"` // e.g., "ready", "adding", "dropping", "dropped"
 }

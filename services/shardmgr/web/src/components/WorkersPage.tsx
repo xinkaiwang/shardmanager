@@ -27,6 +27,7 @@ import { WorkerVm, AssignmentVm } from '../types/api';
 
 // 状态到颜色的映射
 const stateColorMap: Record<string, string> = {
+  // 大写状态（兼容旧版）
   'UNASSIGNED': 'default',
   'ASSIGNED': 'primary',
   'STARTING': 'warning',
@@ -34,6 +35,15 @@ const stateColorMap: Record<string, string> = {
   'STOPPING': 'warning',
   'STOPPED': 'error',
   'FAILED': 'error',
+  // 小写状态（新版）
+  'ready': 'info',
+  'starting': 'warning',
+  'stopping': 'warning',
+  'failed': 'error',
+  'offline': 'error',
+  'adding': 'info',
+  'dropping': 'warning',
+  'dropped': 'default',
 };
 
 // 刷新间隔选项（秒）
@@ -46,7 +56,8 @@ const refreshIntervalOptions = [
 ];
 
 // 状态文本格式化
-const formatState = (state: string): string => {
+const formatState = (state: string | undefined): string => {
+  if (!state) return '未知';
   return state.charAt(0) + state.slice(1).toLowerCase();
 };
 
@@ -67,40 +78,74 @@ const isEqual = <T extends Record<string, any>>(obj1: T, obj2: T): boolean => {
 
 /**
  * 分片项组件 - 使用React.memo避免不必要的重渲染
+ * 单行显示每个分配任务，优化空间利用
  */
 const AssignmentItem = React.memo(({ assignment }: { assignment: AssignmentVm }) => {
+  // 获取状态对应的颜色
+  const getStatusColor = () => {
+    // 为"ready"状态使用自定义的浅绿色
+    if (assignment.status === 'ready') {
+      return 'success'; // 标准的绿色
+    }
+    return stateColorMap[assignment.status] || 'default';
+  };
+  
+  // 获取自定义样式
+  const getCustomStyle = () => {
+    // 为"ready"状态使用自定义的浅绿色背景
+    if (assignment.status === 'ready') {
+      return { 
+        bgcolor: '#e0f2f1', // 浅绿色背景
+        color: '#00695c',   // 深绿色文字
+        '& .MuiChip-label': { 
+          px: 1,
+          py: 0
+        }
+      };
+    }
+    
+    return { 
+      height: '20px', 
+      fontSize: '0.7rem',
+      '& .MuiChip-label': { 
+        px: 1,
+        py: 0
+      }
+    };
+  };
+  
   return (
-    <div>
-      <ListItem disablePadding sx={{ py: 1 }}>
-        <ListItemText
-          primary={
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <Typography variant="body2">
-                分片: {assignment.shard_id} (副本 {assignment.replica_idx})
-              </Typography>
-              <Chip 
-                label={formatState(assignment.current_state)} 
-                size="small"
-                color={stateColorMap[assignment.current_state] as any}
-                sx={{ ml: 1 }}
-              />
-            </Box>
-          }
-          secondary={
-            <Typography variant="caption" color="textSecondary">
-              目标状态: {formatState(assignment.target_state)}
-            </Typography>
-          }
-        />
-      </ListItem>
-      <Divider component="li" />
-    </div>
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        py: 0.75,
+        px: 1,
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+        '&:last-child': {
+          borderBottom: 'none',
+        }
+      }}
+    >
+      {/* 分片ID和副本索引，使用简洁格式 */}
+      <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
+        {`${assignment.shard_id}:${assignment.replica_idx}`}
+      </Typography>
+      
+      {/* 状态标签 */}
+      <Chip 
+        label={formatState(assignment.status)} 
+        size="small"
+        color={getStatusColor() as any}
+        sx={getCustomStyle()}
+      />
+    </Box>
   );
 }, (prevProps, nextProps) => {
   // 自定义比较函数，只比较关键字段
   return (
-    prevProps.assignment.current_state === nextProps.assignment.current_state &&
-    prevProps.assignment.target_state === nextProps.assignment.target_state &&
+    prevProps.assignment.status === nextProps.assignment.status &&
     prevProps.assignment.shard_id === nextProps.assignment.shard_id &&
     prevProps.assignment.replica_idx === nextProps.assignment.replica_idx
   );
@@ -139,42 +184,104 @@ const WorkerCard = React.memo(({
       }}
       onClick={handleClick}
     >
-      <CardHeader
-        title={formatWorkerId(worker.worker_full_id)}
-        subheader={`工作节点 ID: ${worker.worker_full_id}`}
-        titleTypographyProps={{ variant: 'h6' }}
-        subheaderTypographyProps={{ 
-          variant: 'body2',
-          style: { 
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }
-        }}
-      />
-      <CardContent sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <Typography variant="subtitle1" gutterBottom>
-          分配任务：{worker.assignments?.length || 0}
+      {/* 卡片标题 - worker_id居中 */}
+      <Box sx={{ textAlign: 'center', pt: 2, pb: 1 }}>
+        <Typography variant="h6" component="h2">
+          {worker.worker_id}
         </Typography>
+      </Box>
+      
+      {/* 状态标签区 */}
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          justifyContent: 'center',
+          gap: 1,
+          px: 2,
+          pb: 1
+        }}
+      >
+        {/* 在线状态 */}
+        {worker.is_offline === 0 && (
+          <Chip 
+            label="在线" 
+            size="small" 
+            color="success" 
+            sx={{ fontSize: '0.75rem' }}
+          />
+        )}
+        
+        {/* 离线状态 */}
+        {worker.is_offline === 1 && (
+          <Chip 
+            label="离线" 
+            size="small" 
+            color="error" 
+            sx={{ fontSize: '0.75rem' }}
+          />
+        )}
+        
+        {/* 关闭请求状态 */}
+        {worker.is_shutdown_req === 1 && (
+          <Chip 
+            label="关机请求" 
+            size="small" 
+            color="warning" 
+            sx={{ fontSize: '0.75rem' }}
+          />
+        )}
+        
+        {/* 耗尽状态 */}
+        {worker.is_draining === 1 && (
+          <Chip 
+            label="正在排空" 
+            size="small" 
+            color="warning" 
+            sx={{ fontSize: '0.75rem' }}
+          />
+        )}
+      </Box>
+      
+      <Divider />
+      
+      <CardContent sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', pt: 1 }}>
+        {/* 任务列表标题和计数 */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            mb: 1
+          }}
+        >
+          <Typography variant="subtitle2">分配任务</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {worker.assignments?.length || 0} 个
+          </Typography>
+        </Box>
+        
         {worker.assignments && worker.assignments.length > 0 ? (
-          <List 
-            disablePadding 
+          <Box 
             sx={{ 
               flex: 1, 
               overflow: 'auto', 
               '&::-webkit-scrollbar': {
-                width: '6px',
+                width: '4px',
               },
               '&::-webkit-scrollbar-thumb': {
                 backgroundColor: 'rgba(0,0,0,0.2)',
-                borderRadius: '3px',
+                borderRadius: '2px',
               },
             }}
           >
             {worker.assignments.map((assignment) => (
-              <AssignmentItem key={assignment.assignment_id} assignment={assignment} />
+              <AssignmentItem 
+                key={assignment.assignment_id} 
+                assignment={assignment} 
+              />
             ))}
-          </List>
+          </Box>
         ) : (
           <Typography variant="body2" color="textSecondary">
             无分配任务
@@ -362,29 +469,23 @@ export default function WorkersPage() {
   }, []);
 
   return (
-    <div style={{ position: 'relative' }}>
-      {/* 进度条 - 始终存在但透明度变化，避免布局变化导致的闪烁 */}
-      <Box 
-        sx={{ 
-          height: '4px', // 固定高度
-          width: '100%', 
-          position: 'absolute', 
-          top: 0, 
-          left: 0, 
-          zIndex: 1000,
-          overflow: 'hidden' // 确保内容不溢出
+    <div style={{ position: 'relative', paddingTop: 4 }}>
+      {/* 进度条 - 使用绝对定位固定在页面顶部，完全脱离文档流 */}
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          height: '4px',
+          visibility: refreshing ? 'visible' : 'hidden'
         }}
       >
-        <LinearProgress 
-          sx={{ 
-            opacity: refreshing ? 1 : 0,
-            transition: 'opacity 0.2s ease',
-            height: '100%'
-          }} 
-        />
+        <LinearProgress sx={{ height: '100%' }} />
       </Box>
       
-      {/* 提取为记忆化组件的页面标题栏 */}
+      {/* 页面标题栏 */}
       <PageHeader 
         refreshInterval={refreshInterval}
         onRefreshIntervalChange={handleRefreshIntervalChange}

@@ -1,6 +1,11 @@
 // 工作节点状态
 export interface WorkerVm {
   worker_full_id: string;
+  worker_id: string;
+  session_id: string;
+  is_offline: number;
+  is_shutdown_req: number;
+  is_draining: number;
   assignments: AssignmentVm[];
 }
 
@@ -10,8 +15,7 @@ export interface AssignmentVm {
   shard_id: string;
   replica_idx: number;
   worker_full_id: string;
-  current_state: string;
-  target_state: string;
+  status: string;
 }
 
 // 分片状态

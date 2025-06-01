@@ -38,3 +38,26 @@ func (as *AssignmentState) String() string {
 	}
 	return string(data)
 }
+
+func (as *AssignmentState) GetStateVmString() string {
+	switch as.TargetState {
+	case cougarjson.CAS_Ready:
+		if as.CurrentConfirmedState == cougarjson.CAS_Ready {
+			return "ready"
+		} else if as.CurrentConfirmedState == cougarjson.CAS_Unknown {
+			return "adding"
+		} else {
+			return "invalid state: current=" + string(as.CurrentConfirmedState) + ", target=" + string(as.TargetState)
+		}
+	case cougarjson.CAS_Dropped:
+		if as.CurrentConfirmedState == cougarjson.CAS_Dropped {
+			return "dropped"
+		} else if as.CurrentConfirmedState == cougarjson.CAS_Unknown || as.CurrentConfirmedState == cougarjson.CAS_Ready || as.CurrentConfirmedState == cougarjson.CAS_Dropping {
+			return "dropping"
+		} else {
+			return "invalid state: current=" + string(as.CurrentConfirmedState) + ", target=" + string(as.TargetState)
+		}
+	default:
+		return "invalid state: current=" + string(as.CurrentConfirmedState) + ", target=" + string(as.TargetState)
+	}
+}

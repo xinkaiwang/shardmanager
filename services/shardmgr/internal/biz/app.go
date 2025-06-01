@@ -153,8 +153,17 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 	workers := make([]api.WorkerVm, 0)
 	shards := make([]api.ShardVm, 0)
 	for _, workerState := range ss.AllWorkers {
+		if workerState.GetState() == data.WS_Deleted || workerState.GetState() == data.WS_Offline_dead || workerState.GetState() == data.WS_Offline_draining_complete {
+			// skip deleted or dead workers
+			continue
+		}
 		worker := api.WorkerVm{
-			WorkerFullId: workerState.GetWorkerFullId().String(),
+			WorkerFullId:  workerState.GetWorkerFullId().String(),
+			WorkerId:      string(workerState.WorkerId),
+			SessionId:     string(workerState.SessionId),
+			IsOffline:     common.Int8FromBool(workerState.IsOffline()),
+			IsShutdownReq: common.Int8FromBool(workerState.ShutdownRequesting),
+			IsDraning:     common.Int8FromBool(workerState.IsDaining()),
 		}
 		assignments := workerState.CollectCurrentAssignments(ss)
 		for _, assignment := range assignments {
@@ -163,8 +172,7 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 				ReplicaIdx:   assignment.ReplicaIdx,
 				WorkerFullId: assignment.WorkerFullId.String(),
 				AssignmentId: assignment.AssignmentId,
-				CurrentState: assignment.CurrentConfirmedState,
-				TargetState:  assignment.TargetState,
+				Status:       assignment.GetStateVmString(),
 			}
 			worker.Assignments = append(worker.Assignments, vm)
 		}
