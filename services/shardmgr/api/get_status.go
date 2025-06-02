@@ -29,9 +29,11 @@ type WorkerVm struct {
 	WorkerId            string          `json:"worker_id"`
 	SessionId           string          `json:"session_id,omitempty"`
 	IsOffline           int8            `json:"is_offline"`
-	IsShutdownReq       int8            `json:"is_shutdown_req"`
-	IsDraning           int8            `json:"is_draining"`
-	IsShutdownPermitted int8            `json:"is_shutdown_permitted"`
+	IsShutdownReq       int8            `json:"is_shutdown_req,omitempty"`
+	IsDraning           int8            `json:"is_draining,omitempty"`
+	IsShutdownPermitted int8            `json:"is_shutdown_permitted,omitempty"`
+	WorkerStartTimeMs   int64           `json:"worker_start_time_ms,omitempty"`  // Unix timestamp in ms
+	WorkerLastUpdateMs  int64           `json:"worker_last_update_ms,omitempty"` // Unix timestamp in ms
 	Assignments         []*AssignmentVm `json:"assignments"`
 }
 

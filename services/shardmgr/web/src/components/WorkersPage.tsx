@@ -230,6 +230,16 @@ const WorkerCard = React.memo(({
             sx={{ fontSize: '0.75rem' }}
           />
         )}
+
+        {/* 允许关机 - 罕见状态，只在允许时显示 */}
+        {worker.is_shutdown_permitted === 1 && (
+          <Chip 
+            label="允许关机" 
+            size="small" 
+            color="success" 
+            sx={{ fontSize: '0.75rem', bgcolor: '#81c784', color: '#1b5e20' }}
+          />
+        )}
       </Box>
       
       <Divider />

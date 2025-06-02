@@ -6,6 +6,7 @@ export interface WorkerVm {
   is_offline: number;
   is_shutdown_req: number;
   is_draining: number;
+  is_shutdown_permitted: number;
   assignments: AssignmentVm[];
 }
 

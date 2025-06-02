@@ -166,6 +166,12 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 			IsShutdownPermitted: common.Int8FromBool(workerState.GetShutdownPermited()),
 			IsDraning:           common.Int8FromBool(workerState.IsDaining()),
 		}
+		if workerState.WorkerInfo != nil {
+			worker.WorkerStartTimeMs = workerState.WorkerInfo.StartTimeMs
+		}
+		if workerState.EphNode != nil {
+			worker.WorkerLastUpdateMs = workerState.EphNode.LastUpdateAtMs
+		}
 		assignments := workerState.CollectCurrentAssignments(ss)
 		for _, assignment := range assignments {
 			vm := &api.AssignmentVm{
