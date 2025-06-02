@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -11,8 +12,9 @@ import (
 )
 
 var (
-	acceptSoftGainMetrics = kmetrics.CreateKmetric(context.Background(), "accept_soft_gain", "soft gain of accepted proposals", []string{"solver"})
-	acceptHardGainMetrics = kmetrics.CreateKmetric(context.Background(), "accept_hard_gain", "hard gain of accepted proposals", []string{"solver"})
+	acceptSoftGainMetrics      = kmetrics.CreateKmetric(context.Background(), "accept_soft_gain", "soft gain of accepted proposals", []string{"solver"})
+	acceptHardGainMetrics      = kmetrics.CreateKmetric(context.Background(), "accept_hard_gain", "hard gain of accepted proposals", []string{"solver"})
+	metricsInitAcceptEventOnce sync.Once
 )
 
 // AcceptEvent implements krunloop.IEvent[*ServiceState] interface
@@ -25,6 +27,17 @@ func NewAcceptEvent() *AcceptEvent {
 
 func (te *AcceptEvent) GetName() string {
 	return "AcceptEvent"
+}
+
+func metricsInitAcceptEvent(ctx context.Context) {
+	metricsInitAcceptEventOnce.Do(func() {
+		acceptSoftGainMetrics.GetTimeSequence(ctx, "SoftSolver").Touch()
+		acceptSoftGainMetrics.GetTimeSequence(ctx, "AssignSolver").Touch()
+		acceptSoftGainMetrics.GetTimeSequence(ctx, "UnassignSolver").Touch()
+		acceptHardGainMetrics.GetTimeSequence(ctx, "SoftSolver").Touch()
+		acceptHardGainMetrics.GetTimeSequence(ctx, "AssignSolver").Touch()
+		acceptHardGainMetrics.GetTimeSequence(ctx, "UnassignSolver").Touch()
+	})
 }
 
 func (te *AcceptEvent) Process(ctx context.Context, ss *ServiceState) {
@@ -96,6 +109,7 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 	threshold := ss.DynamicThreshold.GetCurrentThreshold(now)
 	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentThreadshold", threshold).With("base", proposal.BasedOn).With("proposal", proposal.Move.String()).Log("AcceptEvent", "接受提案")
 	ss.AcceptedCount++
+	costfunc.ProposalAcceptedMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(1)
 	if proposal.Gain.HardScore > 0 {
 		acceptHardGainMetrics.GetTimeSequence(ctx, proposal.SolverType).Add(int64(proposal.Gain.HardScore))
 	} else {

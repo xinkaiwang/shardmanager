@@ -88,6 +88,7 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	kcommon.ScheduleRun(30*1000, func() { // 30s
 		ss.PostEvent(NewHousekeep30sEvent())
 	})
+	metricsInitAcceptEvent(ctx)
 	ss.PostEvent(NewAcceptEvent())
 
 	// step 10: start

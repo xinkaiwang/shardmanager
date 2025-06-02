@@ -11,6 +11,7 @@ type MoveState struct {
 	Signature     string             `json:"signature"`
 	Actions       []*costfunc.Action `json:"actions"`
 	CurrentAction int                `json:"current_action"` // CurrentAction is the index of the current action
+	SolverType    string             `json:"solver_type"`    // SolverType is the type of the solver that proposed this move
 }
 
 func NewMoveStateFromProposal(ss *ServiceState, proposal *costfunc.Proposal) *MoveState {
@@ -19,6 +20,7 @@ func NewMoveStateFromProposal(ss *ServiceState, proposal *costfunc.Proposal) *Mo
 		Signature:     proposal.GetSignature(),
 		Actions:       make([]*costfunc.Action, 0),
 		CurrentAction: 0,
+		SolverType:    proposal.SolverType,
 	}
 	moveState.Actions = proposal.Move.GetActions(ss.ServiceConfig.ShardConfig)
 	return moveState
@@ -30,6 +32,7 @@ func (ms *MoveState) ToMoveStateJson(updateReason string) *smgjson.MoveStateJson
 		Signature:    ms.Signature,
 		NextMove:     ms.CurrentAction,
 		UpdateReason: updateReason,
+		SolverType:   ms.SolverType,
 	}
 	for _, action := range ms.Actions {
 		moveStateJson.Actions = append(moveStateJson.Actions, action.ToJson())
@@ -42,6 +45,7 @@ func MoveStateFromJson(msj *smgjson.MoveStateJson) *MoveState {
 		ProposalId:    msj.ProposalId,
 		Signature:     msj.Signature,
 		CurrentAction: msj.NextMove,
+		SolverType:    msj.SolverType,
 	}
 	for _, action := range msj.Actions {
 		moveState.Actions = append(moveState.Actions, costfunc.ActionFromJson(action))

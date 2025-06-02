@@ -6,9 +6,17 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+)
+
+var (
+	ProposalDropOutMetrics  = kmetrics.CreateKmetric(context.Background(), "solver_proposal_dropout", "how many proposal get dropout", []string{"solver", "reason"}).CountOnly() // Dropout = proposal in queue, but instead of being accepted, it either becomes invalid, or become out of priority. either way, drop out of queue.
+	ProposalAcceptedMetrics = kmetrics.CreateKmetric(context.Background(), "solver_proposal_accepted", "how many proposal get accepted", []string{"solver"}).CountOnly()
+	ProposalSuccMetrics     = kmetrics.CreateKmetric(context.Background(), "solver_proposal_succ", "how many proposal get succ", []string{"solver"}).CountOnly() // Note: completed successfully
+	ProposalFailMetrics     = kmetrics.CreateKmetric(context.Background(), "solver_proposal_fail", "how many proposal get fail", []string{"solver"}).CountOnly() // Note: completed with failure
 )
 
 // Proposal implements OrderedListItem
@@ -244,5 +252,6 @@ func (prop *Proposal) IsBetterThan(other common.OrderedListItem) bool {
 
 // implemnts OrderedListItem
 func (prop *Proposal) Dropped(ctx context.Context, reason common.EnqueueResult) {
-	klogging.Debug(ctx).With("proposalId", prop.ProposalId).With("solver", prop.SolverType).With("signature", prop.GetSignature()).Log("ProposalClosed", string(reason))
+	ProposalDropOutMetrics.GetTimeSequence(ctx, prop.SolverType, string(reason)).Add(1)
+	// klogging.Debug(ctx).With("proposalId", prop.ProposalId).With("solver", prop.SolverType).With("signature", prop.GetSignature()).Log("ProposalClosed", string(reason))
 }

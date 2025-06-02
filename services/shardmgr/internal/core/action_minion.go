@@ -34,8 +34,10 @@ func (am *ActionMinion) Run(ctx context.Context, ss *ServiceState) {
 	})
 	elapseMs := kcommon.GetWallTimeMs() - startMs
 	if ke != nil {
+		costfunc.ProposalFailMetrics.GetTimeSequence(ctx, am.moveState.SolverType).Add(1)
 		klogging.Error(ctx).WithError(ke).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion.Run", "Error")
 	} else {
+		costfunc.ProposalSuccMetrics.GetTimeSequence(ctx, am.moveState.SolverType).Add(1)
 		klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion.Run", "done")
 	}
 	ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, nil)

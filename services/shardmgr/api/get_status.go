@@ -25,13 +25,14 @@ type ReplicaVm struct {
 }
 
 type WorkerVm struct {
-	WorkerFullId  string          `json:"worker_full_id"`
-	WorkerId      string          `json:"worker_id"`
-	SessionId     string          `json:"session_id,omitempty"`
-	IsOffline     int8            `json:"is_offline"`
-	IsShutdownReq int8            `json:"is_shutdown_req"`
-	IsDraning     int8            `json:"is_draining"`
-	Assignments   []*AssignmentVm `json:"assignments"`
+	WorkerFullId        string          `json:"worker_full_id"`
+	WorkerId            string          `json:"worker_id"`
+	SessionId           string          `json:"session_id,omitempty"`
+	IsOffline           int8            `json:"is_offline"`
+	IsShutdownReq       int8            `json:"is_shutdown_req"`
+	IsDraning           int8            `json:"is_draining"`
+	IsShutdownPermitted int8            `json:"is_shutdown_permitted"`
+	Assignments         []*AssignmentVm `json:"assignments"`
 }
 
 type AssignmentVm struct {

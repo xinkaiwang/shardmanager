@@ -14,6 +14,7 @@ type MoveStateJson struct {
 	Actions      []*ActionJson   `json:"moves"`
 	NextMove     int             `json:"next_move"`     // NextMove 是下一个要执行的 move 的索引
 	UpdateReason string          `json:"update_reason"` // UpdateReason 更新原因
+	SolverType   string          `json:"solver_type"`   // SolverType 解决器类型
 }
 
 type ActionJson struct {

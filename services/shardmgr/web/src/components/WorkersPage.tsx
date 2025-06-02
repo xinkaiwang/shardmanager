@@ -7,11 +7,7 @@ import {
   Grid,
   Card,
   CardContent,
-  CardHeader,
   Chip,
-  List,
-  ListItem,
-  ListItemText,
   Divider,
   CircularProgress,
   Alert,
@@ -59,13 +55,6 @@ const refreshIntervalOptions = [
 const formatState = (state: string | undefined): string => {
   if (!state) return '未知';
   return state.charAt(0) + state.slice(1).toLowerCase();
-};
-
-// 格式化工作节点ID
-const formatWorkerId = (workerId: string): string => {
-  // 截取最后部分
-  const parts = workerId.split('/');
-  return parts[parts.length - 1];
 };
 
 /**
@@ -334,7 +323,7 @@ const PageHeader = React.memo(({
         
         <Chip 
           label="刷新" 
-          onClick={onRefresh}
+          onClick={onRefresh} 
           color="primary" 
           variant="outlined"
           sx={{ cursor: 'pointer' }}

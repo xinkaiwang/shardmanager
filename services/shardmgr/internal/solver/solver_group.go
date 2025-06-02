@@ -7,9 +7,27 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 )
+
+var (
+	solverGroupInvokeMsMetrics          = kmetrics.CreateKmetric(context.Background(), "solver_proposal_find_ms", "solver invoke ms", []string{"solver"})
+	solverGroupProposalGeneratedMetrics = kmetrics.CreateKmetric(context.Background(), "solver_proposal_generated", "how many proposal get generated", []string{"solver"}).CountOnly()
+	solverGroupProposalEnqueueMetrics   = kmetrics.CreateKmetric(context.Background(), "solver_proposal_enqueue", "how many proposal get enqueue", []string{"solver"}).CountOnly()
+)
+
+func metricsInitSolverGroup(ctx context.Context, solverName string) {
+	solverGroupInvokeMsMetrics.GetTimeSequence(ctx, solverName).Touch()
+	solverGroupProposalGeneratedMetrics.GetTimeSequence(ctx, solverName).Touch()
+	solverGroupProposalEnqueueMetrics.GetTimeSequence(ctx, solverName).Touch()
+	costfunc.ProposalDropOutMetrics.GetTimeSequence(ctx, solverName, "conflict").Touch()
+	costfunc.ProposalDropOutMetrics.GetTimeSequence(ctx, solverName, "low_gain").Touch()
+	costfunc.ProposalAcceptedMetrics.GetTimeSequence(ctx, solverName).Touch()
+	costfunc.ProposalSuccMetrics.GetTimeSequence(ctx, solverName).Touch()
+	costfunc.ProposalFailMetrics.GetTimeSequence(ctx, solverName).Touch()
+}
 
 type SnapshotListener interface {
 	OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot, reason string)
@@ -36,6 +54,7 @@ func NewSolverGroup(ctx context.Context, snapshot *costfunc.Snapshot, enqueuePro
 
 func (sa *SolverGroup) AddSolver(ctx context.Context, solver Solver) {
 	solverName := solver.GetType()
+	metricsInitSolverGroup(ctx, string(solverName))
 	driver := NewSolverDriver(ctx, solverName, sa, solver, sa.ThreadPool.EnqueueTask)
 	sa.SolverDrivers[solverName] = driver
 }
@@ -214,14 +233,16 @@ func (dtt *DriverThreadTask) Execute() {
 	proposal := dtt.parent.parent.solver.FindProposal(dtt.parent.parent.ctx, dtt.parent.parent.parent.loadSnapshot())
 	elapsedMs := kcommon.GetWallTimeMs() - startTime
 	klogging.Verbose(dtt.ctx).With("solver", dtt.name).With("elapsedMs", elapsedMs).Log("SolverGroup", "Execute")
+	solverGroupInvokeMsMetrics.GetTimeSequence(dtt.ctx, string(dtt.name)).Add(elapsedMs)
 	if proposal == nil {
 		close(dtt.done)
 		return
 	}
-	// klogging.Info(dtt.ctx).With("solver", dtt.name).With("proposalId", proposal.ProposalId).With("signature", proposal.Signature).With("gain", proposal.Gain).With("base", proposal.BasedOn).Log("SolverGroup", "NewProposal")
+	solverGroupProposalGeneratedMetrics.GetTimeSequence(dtt.ctx, string(dtt.name)).Add(1)
+	// klogging.Verbose(dtt.ctx).With("solver", dtt.name).With("proposalId", proposal.ProposalId).With("signature", proposal.Signature).With("gain", proposal.Gain).With("base", proposal.BasedOn).Log("SolverGroup", "NewProposal")
 	result := dtt.parent.parent.parent.enqueueProposals(proposal)
-	if result != common.ER_Enqueued {
-		klogging.Info(dtt.ctx).With("solver", dtt.name).With("result", result).Log("SolverGroup", "EnqueueProposal")
+	if result == common.ER_Enqueued {
+		solverGroupProposalEnqueueMetrics.GetTimeSequence(dtt.ctx, string(dtt.name)).Add(1)
 	}
 	close(dtt.done)
 }

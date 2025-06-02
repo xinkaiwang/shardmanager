@@ -158,12 +158,13 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 			continue
 		}
 		worker := api.WorkerVm{
-			WorkerFullId:  workerState.GetWorkerFullId().String(),
-			WorkerId:      string(workerState.WorkerId),
-			SessionId:     string(workerState.SessionId),
-			IsOffline:     common.Int8FromBool(workerState.IsOffline()),
-			IsShutdownReq: common.Int8FromBool(workerState.ShutdownRequesting),
-			IsDraning:     common.Int8FromBool(workerState.IsDaining()),
+			WorkerFullId:        workerState.GetWorkerFullId().String(),
+			WorkerId:            string(workerState.WorkerId),
+			SessionId:           string(workerState.SessionId),
+			IsOffline:           common.Int8FromBool(workerState.IsOffline()),
+			IsShutdownReq:       common.Int8FromBool(workerState.ShutdownRequesting),
+			IsShutdownPermitted: common.Int8FromBool(workerState.GetShutdownPermited()),
+			IsDraning:           common.Int8FromBool(workerState.IsDaining()),
 		}
 		assignments := workerState.CollectCurrentAssignments(ss)
 		for _, assignment := range assignments {

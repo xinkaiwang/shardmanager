@@ -132,7 +132,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	}
 
 	// step 6: create a proposal
-	proposal := costfunc.NewProposal(ctx, "AssignMove", baseCost.Substract(bestCost), snapshot.SnapshotId)
+	proposal := costfunc.NewProposal(ctx, "AssignSolver", baseCost.Substract(bestCost), snapshot.SnapshotId)
 	proposal.Move = bestMove
 	proposal.Signature = bestMove.GetSignature()
 	proposal.OnClose = func(reason common.EnqueueResult) {
