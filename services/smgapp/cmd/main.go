@@ -122,9 +122,14 @@ func main() {
 	h := handler.NewHandler(app, cougarApp)
 	mainMux := http.NewServeMux()
 	h.RegisterRoutes(mainMux)
+	shuttingDown := false
 	go func() {
 		reason := cougar.WaitOnExit()
-		klogging.Fatal(ctx).With("reason", reason).Log("CougarExit", "Cougar exited")
+		if shuttingDown {
+			klogging.Info(ctx).With("reason", reason).Log("CougarExit", "Cougar exited gracefully")
+		} else {
+			klogging.Fatal(ctx).With("reason", reason).Log("CougarExit", "Cougar exited")
+		}
 	}()
 
 	// 创建主 HTTP 服务器
@@ -153,12 +158,13 @@ func main() {
 
 		klogging.Info(ctx).Log("ServerShutdown", "Shutting down servers...")
 		// shutdown request
-		chDone := cougar.RequestShutdown()
+		chShutdownPermitted := cougar.RequestShutdown()
 		klogging.Info(ctx).Log("ServerShutdown", "Waiting for shutdown permit")
 		start := kcommon.GetWallTimeMs()
-		<-chDone
+		<-chShutdownPermitted
 		elapsed := kcommon.GetWallTimeMs() - start
 		klogging.Info(ctx).With("elapsedMs", elapsed).Log("ServerShutdown", "Shutdown permit received")
+		cougar.StopLease(ctx)
 
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()

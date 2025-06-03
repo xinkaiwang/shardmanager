@@ -100,7 +100,7 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 	}
 	if len(passiveMoves) > 0 {
 		for _, passiveMove := range passiveMoves {
-			ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteWorker")
+			ss.ModifySnapshot(ctx, passiveMove.Apply, passiveMove.Signature())
 		}
 	}
 }

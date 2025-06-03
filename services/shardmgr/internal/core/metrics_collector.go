@@ -72,7 +72,7 @@ func (ss *ServiceState) collectShardStats(ctx context.Context) {
 func (ss *ServiceState) collectCurrentScore(ctx context.Context) {
 	// collect current score
 	if ss.SnapshotCurrent != nil {
-		currentCost := ss.SnapshotCurrent.GetCost()
+		currentCost := ss.SnapshotCurrent.GetCost(ctx)
 		ss.MetricsValues.MetricsValueCurrentSoftCost.Store(int64(currentCost.SoftScore))
 		ss.MetricsValues.MetricsValueCurrentHardCost.Store(int64(currentCost.HardScore))
 	} else {
@@ -80,7 +80,7 @@ func (ss *ServiceState) collectCurrentScore(ctx context.Context) {
 		ss.MetricsValues.MetricsValueCurrentHardCost.Store(0)
 	}
 	if ss.SnapshotFuture != nil {
-		futureCost := ss.SnapshotFuture.GetCost()
+		futureCost := ss.SnapshotFuture.GetCost(ctx)
 		ss.MetricsValues.MetricsValueFutureSoftCost.Store(int64(futureCost.SoftScore))
 		ss.MetricsValues.MetricsValueFutureHardCost.Store(int64(futureCost.HardScore))
 	} else {

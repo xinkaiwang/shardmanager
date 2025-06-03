@@ -1,6 +1,8 @@
 package cougar
 
 import (
+	"context"
+
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 )
@@ -102,4 +104,5 @@ type Cougar interface {
 	VisitState(visitor CougarStateVisitor)
 	RequestShutdown() chan struct{} // the channel will be closed when shutdown is permitted
 	WaitOnExit() string             // call this to wait for the exit. return the reason for exit
+	StopLease(ctx context.Context)  // stop the lease, this will block until the lease is stopped
 }

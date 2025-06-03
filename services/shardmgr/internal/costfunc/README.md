@@ -32,7 +32,7 @@ worker := NewWorkerSnap(workerFullId)
 snapshot.AllWorkers.Set(workerFullId, worker)
 
 // 计算快照的成本
-cost := snapshot.GetCost()
+cost := snapshot.GetCost(ctx)
 ```
 
 ### 更改
@@ -47,18 +47,18 @@ newSnapshot := snapshot.Clone() // if you want to change it, you may make update
 // apply a move
 Proposal.Move.Apply(newSnapshot)
 
-cost := newSnapshot.GetCost()
+cost := newSnapshot.GetCost(ctx)
 ```
 
 ### 计算变更收益
 
 ```go
 // 计算 old 状态成本
-oldCost := snapshot.GetCost()
+oldCost := snapshot.GetCost(ctx)
 
 newSnapshot := snapshot.Clone()
 Proposal.Move.Apply(newSnapshot)
-newCost := newSnapshot.GetCost()
+newCost := newSnapshot.GetCost(ctx)
 
 // 计算变更收益 (positive gain means good)
 gain := oldCost.Substract(newCost)

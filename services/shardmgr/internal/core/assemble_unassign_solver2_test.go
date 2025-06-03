@@ -74,7 +74,7 @@ func TestAssembleUnassignSolver2(t *testing.T) {
 				if snap == nil {
 					return false, "快照不存在"
 				}
-				cost := snap.GetCost()
+				cost := snap.GetCost(ctx)
 				if cost.HardScore > 0 {
 					return false, "快照不正确, cost=" + cost.String()
 				}
@@ -106,7 +106,7 @@ func TestAssembleUnassignSolver2(t *testing.T) {
 				if snap == nil {
 					return false, "快照不存在"
 				}
-				cost := snap.GetCost()
+				cost := snap.GetCost(ctx)
 				if cost.HardScore != 1 {
 					return false, "快照不正确, cost=" + cost.String()
 				}

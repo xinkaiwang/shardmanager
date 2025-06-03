@@ -15,7 +15,7 @@ func TestCostfunc_basic(t *testing.T) {
 	// step 1: Empty snapshot, cost should be 0
 	snap1 := NewSnapshot(ctx, cfg)
 	{
-		cost1 := snap1.GetCost()
+		cost1 := snap1.GetCost(ctx)
 		assert.Equal(t, NewCost(0, 0), cost1, "初始硬成本应为0")
 	}
 
@@ -24,7 +24,7 @@ func TestCostfunc_basic(t *testing.T) {
 	{
 		shard := NewShardSnap("shard_1", 0)
 		snap2.AllShards.Set("shard_1", shard)
-		cost2 := snap2.GetCost()
+		cost2 := snap2.GetCost(ctx)
 		assert.Equal(t, cost2.HardScore, int32(0), "添加shard后硬成本应为0")
 	}
 
@@ -41,7 +41,7 @@ func TestCostfunc_basic(t *testing.T) {
 		shard.TargetReplicaCount = 1
 		move2 := NewPasMoveWorkerSnapAddRemove(workerFullId, NewWorkerSnap(workerFullId), "")
 		move2.Apply(snap3)
-		cost3 := snap3.GetCost()
+		cost3 := snap3.GetCost(ctx)
 		assert.Greater(t, cost3.HardScore, int32(0), "添加副本后硬成本应该大于0")
 	}
 
@@ -50,8 +50,8 @@ func TestCostfunc_basic(t *testing.T) {
 	{
 		move1 := NewAssignMove(data.NewReplicaFullId("shard_1", 0), "assign1", workerFullId)
 		move1.Apply(snap4, AM_Strict)
-		cost4 := snap4.GetCost()
-		cost3 := snap3.GetCost()
+		cost4 := snap4.GetCost(ctx)
+		cost3 := snap3.GetCost(ctx)
 		assert.Equal(t, true, cost4.HardScore < cost3.HardScore, "hard cost should get lower after assign")
 		assert.Equal(t, true, cost4.SoftScore > cost3.SoftScore, "soft cost should get slightly higher after assign")
 		assert.Equal(t, true, cost4.IsLowerThan(cost3), "cost should get lower after assign")
@@ -62,8 +62,8 @@ func TestCostfunc_basic(t *testing.T) {
 	{
 		move1 := NewUnassignMove(workerFullId, data.NewReplicaFullId("shard_1", 0), "assign1")
 		move1.Apply(snap5, AM_Strict)
-		cost5 := snap5.GetCost()
-		cost4 := snap4.GetCost()
+		cost5 := snap5.GetCost(ctx)
+		cost4 := snap4.GetCost(ctx)
 		assert.Equal(t, true, cost5.HardScore > cost4.HardScore, "hard cost should get higher after unassign")
 		assert.Equal(t, true, cost5.SoftScore < cost4.SoftScore, "soft cost should get slightly lower after unassign")
 	}

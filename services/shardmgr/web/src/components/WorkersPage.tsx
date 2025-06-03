@@ -17,6 +17,7 @@ import {
   MenuItem,
   SelectChangeEvent,
   LinearProgress,
+  Tooltip,
 } from '@mui/material';
 import * as api from '../services/api';
 import { WorkerVm, AssignmentVm } from '../types/api';
@@ -156,6 +157,97 @@ const WorkerCard = React.memo(({
     onSelect(worker.worker_full_id);
   }, [worker.worker_full_id, onSelect]);
   
+  // 跟踪节点是否为新创建的状态
+  const [isNew, setIsNew] = useState(false);
+  
+  // 检查和更新节点是否为新创建（小于60秒）
+  useEffect(() => {
+    if (!worker.worker_start_time_ms) return;
+    
+    // 初始检查
+    const checkIfNew = () => {
+      const currentTimeMs = Date.now();
+      const workerAgeMs = currentTimeMs - worker.worker_start_time_ms;
+      return workerAgeMs < 60 * 1000; // 小于60秒视为新节点
+    };
+    
+    // 设置初始状态
+    setIsNew(checkIfNew());
+    
+    // 如果是新节点，设置定时器在适当的时间后更新状态
+    if (checkIfNew()) {
+      const remainingTimeMs = 60 * 1000 - (Date.now() - worker.worker_start_time_ms);
+      const timerId = setTimeout(() => {
+        setIsNew(false);
+      }, Math.max(0, remainingTimeMs));
+      
+      // 清理定时器
+      return () => clearTimeout(timerId);
+    }
+  }, [worker.worker_start_time_ms]);
+  
+  // 用于强制刷新tooltip内容的状态
+  const [ageUpdateTrigger, setAgeUpdateTrigger] = useState(0);
+  
+  // 定期更新年龄显示（每秒更新一次）
+  useEffect(() => {
+    if (!worker.worker_start_time_ms || !isNew) return;
+    
+    const intervalId = setInterval(() => {
+      setAgeUpdateTrigger(prev => prev + 1);
+    }, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [worker.worker_start_time_ms, isNew]);
+  
+  // 获取格式化的创建时间
+  const formattedCreationTime = useMemo(() => {
+    if (!worker.worker_start_time_ms) return '';
+    
+    const date = new Date(worker.worker_start_time_ms);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }, [worker.worker_start_time_ms]);
+  
+  // 获取节点已存在的时长
+  const getNodeAge = useCallback(() => {
+    if (!worker.worker_start_time_ms) return '';
+    
+    // ageUpdateTrigger用于强制函数重新计算
+    // eslint-disable-next-line no-unused-vars
+    const _ = ageUpdateTrigger;
+    
+    const ageMs = Date.now() - worker.worker_start_time_ms;
+    
+    // 小于1分钟显示秒数
+    if (ageMs < 60 * 1000) {
+      const seconds = Math.floor(ageMs / 1000);
+      return `${seconds}秒`;
+    }
+    
+    // 小于1小时显示分钟
+    if (ageMs < 60 * 60 * 1000) {
+      const minutes = Math.floor(ageMs / (60 * 1000));
+      return `${minutes}分钟`;
+    }
+    
+    // 小于1天显示小时
+    if (ageMs < 24 * 60 * 60 * 1000) {
+      const hours = Math.floor(ageMs / (60 * 60 * 1000));
+      return `${hours}小时`;
+    }
+    
+    // 大于1天显示天数
+    const days = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+    return `${days}天`;
+  }, [worker.worker_start_time_ms, ageUpdateTrigger]);
+  
   return (
     <Card 
       sx={{ 
@@ -191,6 +283,32 @@ const WorkerCard = React.memo(({
           pb: 1
         }}
       >
+        {/* 新节点标签 */}
+        {isNew && (
+          <Tooltip 
+            title={
+              <React.Fragment>
+                <Typography variant="body2">创建时间: {formattedCreationTime}</Typography>
+                <Typography variant="body2">已存在: {getNodeAge()}</Typography>
+              </React.Fragment>
+            }
+            arrow
+            placement="top"
+          >
+            <Chip 
+              label="新" 
+              size="small"
+              sx={{ 
+                fontSize: '0.75rem',
+                bgcolor: '#e3f2fd', 
+                color: '#0d47a1',
+                fontWeight: 'bold',
+                animation: 'pulse 2s infinite'
+              }}
+            />
+          </Tooltip>
+        )}
+        
         {/* 在线状态 */}
         {worker.is_offline === 0 && (
           <Chip 
@@ -358,6 +476,21 @@ export default function WorkersPage() {
     setSelectedWorkerId(prev => prev === workerId ? null : workerId);
   }, []);
 
+  // 定义脉冲动画样式
+  const pulseAnimation = `
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(13, 71, 161, 0.4);
+      }
+      70% {
+        box-shadow: 0 0 0 6px rgba(13, 71, 161, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(13, 71, 161, 0);
+      }
+    }
+  `;
+
   /**
    * 智能更新工作节点数据
    * 保持未变化节点的引用相等性，减少不必要的重渲染
@@ -469,6 +602,9 @@ export default function WorkersPage() {
 
   return (
     <div style={{ position: 'relative', paddingTop: 4 }}>
+      {/* 添加脉冲动画样式 */}
+      <style>{pulseAnimation}</style>
+      
       {/* 进度条 - 使用绝对定位固定在页面顶部，完全脱离文档流 */}
       <Box
         sx={{

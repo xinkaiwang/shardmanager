@@ -111,7 +111,7 @@ func TestCalCostFromJsonSnapshot2(t *testing.T) {
 	assert.NoError(t, err, "从JSON创建快照失败")
 
 	// 3. 计算成本
-	cost := snapshot.GetCost()
+	cost := snapshot.GetCost(ctx)
 
 	// 4. 验证成本
 	assert.Equal(t, int32(1), cost.HardScore, "硬成本计算不匹配")
@@ -122,7 +122,7 @@ func TestCalCostFromJsonSnapshot2(t *testing.T) {
 	// 	move := MoveParseFromSignature("worker-2:session-2/shard_2:0/worker-1:session-1", snapshot)
 	// 	newSnap := snapshot.Clone()
 	// 	move.Apply(newSnap, AM_Relaxed)
-	// 	cost2 := newSnap.GetCost()
+	// 	cost2 := newSnap.GetCost(ctx)
 	// 	assert.Equal(t, true, cost2.HardScore > cost.HardScore, "硬成本计算不匹配")
 	// }
 
@@ -130,7 +130,7 @@ func TestCalCostFromJsonSnapshot2(t *testing.T) {
 	// 	move := MoveParseFromSignature("worker-1:session-1/shard_1:0/worker-2:session-2", snapshot)
 	// 	newSnap := snapshot.Clone()
 	// 	move.Apply(newSnap, AM_Strict)
-	// 	cost2 := newSnap.GetCost()
+	// 	cost2 := newSnap.GetCost(ctx)
 	// 	assert.Equal(t, true, cost2.HardScore < cost.HardScore, "硬成本计算不匹配")
 	// }
 

@@ -24,7 +24,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	// step 1: get the cost of the current snapshot
 	// costProvider := costfunc.GetCurrentCostFuncProvider()
 	// baseCost := costProvider.CalCost(snapshot)
-	baseCost := snapshot.GetCost()
+	baseCost := snapshot.GetCost(ctx)
 	asCfg := GetCurrentSolverConfigProvider().GetAssignSolverConfig()
 	// klogging.Info(ctx).With("baseCost", baseCost).With("solver", "AssignSolver").Log("FindProposal", "start")
 
@@ -54,7 +54,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 				// candidate replica list
 				candidateReplicas := []data.ReplicaFullId{}
 				snapshot.AllShards.VisitAll(func(shardId data.ShardId, shard *costfunc.ShardSnap) {
-					replicaViews := shard.CollectReplicas(snapshot)
+					replicaViews := shard.CollectReplicas(ctx, snapshot)
 					if costfunc.CountReplicas(replicaViews, func(rv *costfunc.ReplicaView) bool {
 						return !rv.LameDuck
 					}) < shard.TargetReplicaCount {
@@ -104,7 +104,7 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 			move.Apply(newSnapshot, costfunc.AM_Strict)
 			// calculate the cost of the new snapshot
 			// newCost := costProvider.CalCost(newSnapshot)
-			newCost := newSnapshot.GetCost()
+			newCost := newSnapshot.GetCost(ctx)
 			if newCost.IsLowerThan(bestCost) {
 				bestCost = newCost
 				bestMove = move

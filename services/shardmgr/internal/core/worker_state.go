@@ -415,11 +415,12 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 	}
 	// case 3: need delete
 	for _, assignState := range dict {
-		if assignState.CurrentConfirmedState != cougarjson.CAS_Dropped {
+		if assignState.CurrentConfirmedState == cougarjson.CAS_Ready || assignState.CurrentConfirmedState == cougarjson.CAS_Dropping {
+			oldState := assignState.CurrentConfirmedState
 			assignState.CurrentConfirmedState = cougarjson.CAS_Dropped
 			passiveMove := NewPasMoveRemoveAssignment(assignState.AssignmentId, assignState.ShardId, assignState.ReplicaIdx, ws.GetWorkerFullId())
 			moves = append(moves, passiveMove)
-			dirtyFlag.AddDirtyFlag("unassign:" + string(assignState.AssignmentId) + ":" + string(assignState.CurrentConfirmedState))
+			dirtyFlag.AddDirtyFlag("unassign:" + string(assignState.AssignmentId) + ":" + string(oldState) + ":" + string(assignState.CurrentConfirmedState))
 		}
 	}
 	// request shutdown

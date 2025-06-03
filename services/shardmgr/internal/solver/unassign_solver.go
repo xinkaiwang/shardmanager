@@ -24,7 +24,7 @@ func (us *UnassignSolver) GetType() SolverType {
 
 func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snapshot) *costfunc.Proposal {
 	// step 1: get the cost of the current snapshot
-	baseCost := snapshot.GetCost()
+	baseCost := snapshot.GetCost(ctx)
 	cfg := GetCurrentSolverConfigProvider().GetUnassignSolverConfig()
 
 	var bestMove *costfunc.UnassignMove
@@ -49,7 +49,7 @@ func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.S
 			}
 			newSnap := snapshot.Clone()
 			newSnap.Unassign(assign.WorkerFullId, assign.ShardId, assign.ReplicaIdx, assign.AssignmentId, costfunc.AM_Strict, true)
-			newCost := newSnap.GetCost()
+			newCost := newSnap.GetCost(ctx)
 			if newCost.IsLowerThan(bestCost) {
 				bestCost = newCost
 				bestMove = &costfunc.UnassignMove{

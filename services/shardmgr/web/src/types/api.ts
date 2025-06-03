@@ -7,6 +7,7 @@ export interface WorkerVm {
   is_shutdown_req: number;
   is_draining: number;
   is_shutdown_permitted: number;
+  worker_start_time_ms: number;  // 工作节点启动时间戳（毫秒）
   assignments: AssignmentVm[];
 }
 

@@ -44,8 +44,8 @@ func TestAssembleAssignSolver3(t *testing.T) {
 				if ss.GetSnapshotFutureForAny(ctx) == nil {
 					return false, "快照不存在"
 				}
-				if !ss.GetSnapshotFutureForAny(ctx).GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
-					return false, "快照不正确" + ss.GetSnapshotFutureForAny(ctx).GetCost().String()
+				if !ss.GetSnapshotFutureForAny(ctx).GetCost(ctx).IsEqualTo(costfunc.NewCost(4, 0.0)) {
+					return false, "快照不正确" + ss.GetSnapshotFutureForAny(ctx).GetCost(ctx).String()
 				}
 				return true, "" // 快照存在
 			}, 1000, 10)
@@ -84,7 +84,7 @@ func TestAssembleAssignSolver3(t *testing.T) {
 				if ss.GetSnapshotFutureForAny(ctx) == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotFutureForAny(ctx).GetCost()
+				cost := ss.GetSnapshotFutureForAny(ctx).GetCost(ctx)
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}
@@ -148,7 +148,7 @@ func TestAssembleAssignSolver3(t *testing.T) {
 				if ss.GetSnapshotCurrentForAny() == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotCurrentForAny().GetCost()
+				cost := ss.GetSnapshotCurrentForAny().GetCost(ctx)
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}
@@ -165,7 +165,7 @@ func TestAssembleAssignSolver3(t *testing.T) {
 			var cost costfunc.Cost
 			setup.safeAccessServiceState(func(ss *ServiceState) {
 				acceptCount = ss.AcceptedCount
-				cost = ss.GetSnapshotCurrentForAny().GetCost()
+				cost = ss.GetSnapshotCurrentForAny().GetCost(ctx)
 			})
 			assert.Equal(t, 1, acceptCount, "应该有1个接受的提议")
 			assert.Equal(t, 2, int(cost.HardScore), "快照不正确") // 1个分片, 2个副本, 1个副本没有分配
@@ -205,7 +205,7 @@ func TestAssembleAssignSolver3(t *testing.T) {
 				if snapshot == nil {
 					return false, "快照不存在"
 				}
-				if snapshot.GetCost().HardScore != 0 {
+				if snapshot.GetCost(ctx).HardScore != 0 {
 					return false, "快照不正确"
 				}
 				return true, ""

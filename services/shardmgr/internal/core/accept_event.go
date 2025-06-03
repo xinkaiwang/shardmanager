@@ -60,8 +60,8 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 		if proposal.BasedOn != ss.GetSnapshotFutureForClone(ctx).SnapshotId {
 			// re-evaluate the proposal gain (based on the new snapshot)
 			ke := kcommon.TryCatchRun(ctx, func() {
-				currentCost := ss.GetSnapshotFutureForClone(ctx).GetCost()
-				newCost := ss.GetSnapshotFutureForClone(ctx).Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost()
+				currentCost := ss.GetSnapshotFutureForClone(ctx).GetCost(ctx)
+				newCost := ss.GetSnapshotFutureForClone(ctx).Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost(ctx)
 				gain := currentCost.Substract(newCost)
 				proposal.Gain = gain
 				proposal.BasedOn = ss.GetSnapshotFutureForClone(ctx).SnapshotId
@@ -98,7 +98,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	// ss.AcceptedCount += len(accpeted)
 	if len(accpeted) > 0 {
 		future := ss.GetSnapshotFutureForAny(ctx)
-		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost().String()).Log("AcceptEvent", "broadcastSnapshot")
+		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost(ctx).String()).Log("AcceptEvent", "broadcastSnapshot")
 		ss.boardcastSnapshotBatchManager.TryScheduleInternal(ctx, "acceptEvent")
 		// ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
 	}

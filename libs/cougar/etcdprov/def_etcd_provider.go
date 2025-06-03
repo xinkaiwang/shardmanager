@@ -311,13 +311,13 @@ func (session *DefEtcdSession) Close(ctx context.Context) {
 		defer cancel()
 		_, err := session.parent.client.Revoke(ctx, session.lease)
 		if err != nil {
-			klogging.Error(context.Background()).
+			klogging.Info(ctx).
 				WithError(err).
 				With("sessionId", session.sessionId).
 				With("lease", session.lease).
 				Log("EtcdSession", "Failed to revoke lease")
 		} else {
-			klogging.Info(context.Background()).
+			klogging.Info(ctx).
 				With("sessionId", session.sessionId).
 				With("lease", session.lease).
 				Log("EtcdSession", "Lease revoked successfully")

@@ -62,7 +62,7 @@ func (move *SimpleMove) GetDstReplica() data.ReplicaFullId {
 }
 
 func (move *SimpleMove) String() string {
-	return move.Src.String() + "/" + move.GetSrcReplica().String() + ":" + string(move.SrcAssignmentId) + "/" + move.Dst.String() + ":" + move.GetDstReplica().String() + string(move.DestAssignmentId)
+	return move.Src.String() + "/" + move.GetSrcReplica().String() + ":" + string(move.SrcAssignmentId) + "/" + move.Dst.String() + ":" + move.GetDstReplica().String() + ":" + string(move.DestAssignmentId)
 }
 
 func (move *SimpleMove) GetSignature() string {

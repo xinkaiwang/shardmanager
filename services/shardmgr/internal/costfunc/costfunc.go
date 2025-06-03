@@ -10,7 +10,7 @@ import (
 )
 
 type CostFuncProvider interface {
-	CalCost(snap *Snapshot) Cost
+	CalCost(ctx context.Context, snap *Snapshot) Cost
 }
 
 // CostFuncSimpleProvider implements the CostFuncProvider interface
@@ -31,14 +31,14 @@ type ReplicaView struct {
 	Assignments map[data.AssignmentId]*AssignmentView
 }
 
-func (shardSnap *ShardSnap) CollectReplicas(snapshot *Snapshot) map[data.ReplicaIdx]*ReplicaView {
+func (shardSnap *ShardSnap) CollectReplicas(ctx context.Context, snapshot *Snapshot) map[data.ReplicaIdx]*ReplicaView {
 	replicaViews := make(map[data.ReplicaIdx]*ReplicaView)
 	for replicaIdx, replicaSnap := range shardSnap.Replicas {
 		replicaView := &ReplicaView{
 			ShardId:     replicaSnap.ShardId,
 			ReplicaIdx:  replicaSnap.ReplicaIdx,
 			LameDuck:    replicaSnap.LameDuck,
-			Assignments: snapshot.CollectAssignments(replicaSnap.Assignments),
+			Assignments: snapshot.CollectAssignments(ctx, replicaSnap.Assignments),
 		}
 		replicaViews[replicaIdx] = replicaView
 	}
@@ -62,17 +62,17 @@ type AssignmentView struct {
 	WorkerSnap   *WorkerSnap
 }
 
-func (snap *Snapshot) CollectAssignments(assigns map[data.AssignmentId]common.Unit) map[data.AssignmentId]*AssignmentView {
+func (snap *Snapshot) CollectAssignments(ctx context.Context, assigns map[data.AssignmentId]common.Unit) map[data.AssignmentId]*AssignmentView {
 	assignmentViews := make(map[data.AssignmentId]*AssignmentView)
 	for assignmentId := range assigns {
 		assignment, ok := snap.AllAssignments.Get(assignmentId)
 		if !ok {
-			klogging.Fatal(context.Background()).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "assignment not found")
+			klogging.Fatal(ctx).With("assignId", assignmentId).With("snapshotId", snap.SnapshotId).Log("CostFuncSimpleProvider", "assignment not found")
 			continue
 		}
 		worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
 		if !ok {
-			klogging.Fatal(context.Background()).With("assignId", assignmentId).With("workerId", assignment.WorkerFullId.String()).Log("CostFuncSimpleProvider", "worker not found")
+			klogging.Fatal(ctx).With("assignId", assignmentId).With("workerId", assignment.WorkerFullId.String()).With("snapshotId", snap.SnapshotId).Log("CostFuncSimpleProvider", "worker not found")
 			continue
 		}
 		av := &AssignmentView{
@@ -97,14 +97,26 @@ func CountAssignments(assigns map[data.AssignmentId]*AssignmentView, fn func(*As
 }
 
 // CalCost implements the CostFuncProvider interface
-func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
+func (simple *CostFuncSimpleProvider) CalCost(ctx context.Context, snap *Snapshot) Cost {
 	{
-		// validate snapshot
+		// validate snapshot (replicas should be lame duck if they have no assignments)
 		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
 			for replicaIdx, replica := range shard.Replicas {
 				if !replica.LameDuck && len(replica.Assignments) == 0 {
 					klogging.Fatal(context.Background()).With("shardId", shardId).With("replicaIdx", replicaIdx).Log("CostFuncSimpleProvider", "replica without assignments should be lame duck")
 				}
+			}
+		})
+	}
+	{
+		// validate snapshot (assignment should be in the worker's assignments)
+		snap.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, assignment *AssignmentSnap) {
+			worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
+			if !ok {
+				klogging.Fatal(context.Background()).With("assignmentId", assignmentId).With("workerId", assignment.WorkerFullId.String()).Log("CostFuncSimpleProvider", "worker not found for assignment")
+			}
+			if _, ok := worker.Assignments[assignment.ShardId]; !ok {
+				klogging.Fatal(context.Background()).With("assignmentId", assignmentId).With("workerId", assignment.WorkerFullId.String()).Log("CostFuncSimpleProvider", "assignment not found in worker's assignments")
 			}
 		})
 	}
@@ -121,7 +133,7 @@ func (simple *CostFuncSimpleProvider) CalCost(snap *Snapshot) Cost {
 		hard := int32(0)
 		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
 			// each shard
-			replicas := shard.CollectReplicas(snap)
+			replicas := shard.CollectReplicas(ctx, snap)
 			currentReplicaCount := CountReplicas(replicas, func(rv *ReplicaView) bool { return !rv.LameDuck && len(rv.Assignments) > 0 })
 			if currentReplicaCount < int(shard.TargetReplicaCount) {
 				hard += int32(shard.TargetReplicaCount-currentReplicaCount) * 2 // H6

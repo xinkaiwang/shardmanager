@@ -211,7 +211,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			// wait on signal box
 			signalBox = workerState.SignalBox
 			status = AS_Wait
-			klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).Log("actionAddShard", "add shard to worker")
+			klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).With("assignmentId", action.DestAssignmentId).Log("actionAddShard", "add shard to worker")
 		})
 		if status == AS_Failed {
 			panic(ke)
@@ -219,7 +219,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 		action.ActionStage = smgjson.AS_Conducted
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("addShard"))
 	}
-	// step 2: wail until this assignment is stop (based on feedback from ephemeral node)
+	// step 2: wail until this assignment is ready (based on feedback from ephemeral node)
 	klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).Log("actionAddShard", "wait for assignment to be ready")
 	var ke *kerror.Kerror
 	for status == AS_Wait {

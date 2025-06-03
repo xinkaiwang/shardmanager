@@ -24,7 +24,7 @@ func (ss *SoftSolver) GetType() SolverType {
 
 func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snapshot) *costfunc.Proposal {
 	// step 1: get the cost of the current snapshot
-	baseCost := snapshot.GetCost()
+	baseCost := snapshot.GetCost(ctx)
 	softSolverCfg := GetCurrentSolverConfigProvider().GetSoftSolverConfig()
 
 	var bestMove *costfunc.SimpleMove
@@ -98,7 +98,7 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 			// 	Dst:              destWorkerId,
 			// }
 			move.Apply(snapshotCopy, costfunc.AM_Strict)
-			newCost := snapshotCopy.GetCost()
+			newCost := snapshotCopy.GetCost(ctx)
 			if !newCost.IsLowerThan(bestCost) {
 				return
 			}

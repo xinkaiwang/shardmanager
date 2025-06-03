@@ -120,6 +120,13 @@ func (ci *CougarImpl) WaitOnExit() string {
 	return ci.exitReason
 }
 
+func (ci *CougarImpl) StopLease(ctx context.Context) {
+	// stop the etcd session lease
+	if ci.etcdSession != nil {
+		ci.etcdSession.Close(ctx)
+	}
+}
+
 // etcd path is "/smg/eph/{worker_id}:{session_id}"
 func (c *CougarImpl) ephPath() string {
 	return fmt.Sprintf("/smg/eph/%s:%s", c.workerInfo.WorkerId, c.workerInfo.SessionId)
@@ -239,7 +246,8 @@ func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) 
 	for _, newAssignment := range newAssignments {
 		oldAssignment, ok := oldShards[data.ShardId(newAssignment.ShardId)]
 		if ok {
-			if oldAssignment.TargetState != newAssignment.State || !compareStringMap(oldAssignment.Properties, newAssignment.CustomProperties) {
+			// Note: 1) target state changed 2) any custom properties changed 3) assignment id changed (this is rare, but still possible)
+			if oldAssignment.TargetState != newAssignment.State || !compareStringMap(oldAssignment.Properties, newAssignment.CustomProperties) || oldAssignment.AssignmentId != data.AssignmentId(newAssignment.AsginmentId) {
 				// update assignment
 				needUpdate = append(needUpdate, newAssignment)
 			}
@@ -268,6 +276,8 @@ func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) 
 	for _, newAssignment := range needUpdate {
 		shardInfo := impl.cougarState.AllShards[data.ShardId(newAssignment.ShardId)]
 		shardInfo.CurrentConfirmedState = newAssignment.State
+		shardInfo.AssignmentId = data.AssignmentId(newAssignment.AsginmentId)
+		shardInfo.ReplicaIdx = data.ReplicaIdx(newAssignment.ReplicaIdx)
 		shardInfo.Properties = newAssignment.CustomProperties
 		// callback
 		shardInfo.AppShard.UpdateShard(ctx, shardInfo)

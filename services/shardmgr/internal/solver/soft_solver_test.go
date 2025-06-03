@@ -18,7 +18,7 @@ func NewTestCostProvider() *testCostProvider {
 	return &testCostProvider{}
 }
 
-func (tcp *testCostProvider) CalCost(snapshot *costfunc.Snapshot) costfunc.Cost {
+func (tcp *testCostProvider) CalCost(ctx context.Context, snapshot *costfunc.Snapshot) costfunc.Cost {
 	// 计算每个 worker 的分片数量
 	workerShardCounts := make(map[data.WorkerFullId]int)
 	snapshot.AllWorkers.VisitAll(func(workerId data.WorkerFullId, worker *costfunc.WorkerSnap) {

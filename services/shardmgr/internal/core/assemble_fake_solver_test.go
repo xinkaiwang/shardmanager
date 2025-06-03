@@ -77,17 +77,17 @@ func TestAssembleFakeSolver(t *testing.T) {
 				if snapshot == nil {
 					return false, "快照未创建"
 				}
-				if snapshot.GetCost().HardScore == 6 {
+				if snapshot.GetCost(ctx).HardScore == 6 {
 					return true, ""
 				}
-				return false, "快照更新未达预期:" + snapshot.GetCost().String()
+				return false, "快照更新未达预期:" + snapshot.GetCost(ctx).String()
 			}, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
 		}
 		{
 			// assert.Equal(t, 3, snapshotListener.updateCount, "快照更新次数应该为3") // 1:first create (empty), 2: worker added, 3: shards added
 			assert.NotNil(t, setup.FakeSnapshotListener.snapshot, "快照应该不为nil")
-			cost := setup.FakeSnapshotListener.snapshot.GetCost()
+			cost := setup.FakeSnapshotListener.snapshot.GetCost(ctx)
 			assert.Equal(t, costfunc.Cost{HardScore: 6}, cost, "快照的成本应该为0")
 		}
 

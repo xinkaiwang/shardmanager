@@ -67,7 +67,7 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	ss.SnapshotCurrent = newSnapshotCurrent
 	newSnapshotFuture.Freeze()
 	ss.SetSnapshotFuture(ctx, newSnapshotFuture, "annualCheckSnapshot")
-	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString()).With("future", newSnapshotFuture.ToShortString()).Log("annualCheckSnapshot", "done")
+	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString(ctx)).With("future", newSnapshotFuture.ToShortString(ctx)).Log("annualCheckSnapshot", "done")
 }
 
 // return list of differences
@@ -82,8 +82,8 @@ func compareSnapshot(ctx context.Context, snap1 *costfunc.Snapshot, snap2 *costf
 func (ss *ServiceState) broadcastSnapshot(ctx context.Context, reason string) {
 	if ss.SolverGroup != nil {
 		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(ctx), reason)
-		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString()).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
+		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString(ctx)).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
 	} else {
-		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString()).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString(ctx)).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
 	}
 }

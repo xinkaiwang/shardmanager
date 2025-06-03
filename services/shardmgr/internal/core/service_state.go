@@ -249,7 +249,7 @@ func (ss *ServiceState) SetSnapshotCurrent(ctx context.Context, newSnapshot *cos
 	}
 	newId := string(newSnapshot.SnapshotId)
 	ss.SnapshotCurrent = newSnapshot
-	klogging.Info(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).With("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotCurrent", "")
+	klogging.Debug(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).WithVerbose("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotCurrent", "")
 }
 
 func (ss *ServiceState) SetSnapshotFuture(ctx context.Context, newSnapshot *costfunc.Snapshot, reason string) {
@@ -262,7 +262,7 @@ func (ss *ServiceState) SetSnapshotFuture(ctx context.Context, newSnapshot *cost
 	}
 	newId := string(newSnapshot.SnapshotId)
 	ss.SnapshotFuture = newSnapshot
-	klogging.Info(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).With("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotFuture", "")
+	klogging.Debug(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).WithVerbose("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotFuture", "")
 }
 
 func (ss *ServiceState) GetSnapshotFutureForClone(ctx context.Context) *costfunc.Snapshot {

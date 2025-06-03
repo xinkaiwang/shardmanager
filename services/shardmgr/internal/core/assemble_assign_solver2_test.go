@@ -43,8 +43,8 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 				if ss.GetSnapshotFutureForAny(ctx) == nil {
 					return false, "快照不存在"
 				}
-				if !ss.GetSnapshotFutureForAny(ctx).GetCost().IsEqualTo(costfunc.NewCost(4, 0.0)) {
-					return false, "快照不正确" + ss.GetSnapshotFutureForAny(ctx).GetCost().String()
+				if !ss.GetSnapshotFutureForAny(ctx).GetCost(ctx).IsEqualTo(costfunc.NewCost(4, 0.0)) {
+					return false, "快照不正确" + ss.GetSnapshotFutureForAny(ctx).GetCost(ctx).String()
 				}
 				return true, "" // 快照存在
 			}, 1000, 10)
@@ -95,7 +95,7 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 				if ss.GetSnapshotFutureForAny(ctx) == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotFutureForAny(ctx).GetCost()
+				cost := ss.GetSnapshotFutureForAny(ctx).GetCost(ctx)
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}
@@ -174,7 +174,7 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 				if ss.GetSnapshotCurrentForAny() == nil {
 					reason = "快照不存在"
 				}
-				cost := ss.GetSnapshotCurrentForAny().GetCost()
+				cost := ss.GetSnapshotCurrentForAny().GetCost(ctx)
 				if cost.HardScore > 0 {
 					reason = "快照不正确, cost=" + cost.String()
 				}

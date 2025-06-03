@@ -186,7 +186,7 @@ func TestCalCostFromJsonSnapshot(t *testing.T) {
 			assert.NoError(t, err, "从JSON创建快照失败")
 
 			// 3. 计算成本
-			cost := snapshot.GetCost()
+			cost := snapshot.GetCost(ctx)
 
 			// 4. 验证成本
 			assert.Equal(t, tt.expectedHard, cost.HardScore, "硬成本计算不匹配")
@@ -223,7 +223,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	snapshot.AllWorkers.Set(worker2.WorkerFullId, worker2)
 
 	// 计算初始成本 - 应该是4分（两个未分配的副本，每个2分）
-	initialCost := snapshot.GetCost()
+	initialCost := snapshot.GetCost(ctx)
 	assert.Equal(t, int32(4), initialCost.HardScore, "初始硬成本应为4（两个未分配副本）")
 	assert.Equal(t, float64(0), initialCost.SoftScore, "初始软成本应为0")
 
@@ -237,7 +237,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	worker1.Assignments["shard_1"] = "assign-1"
 
 	// 计算中间成本 - 应该是2分（副本1未分配）
-	midCost := snapshot.GetCost()
+	midCost := snapshot.GetCost(ctx)
 	assert.Equal(t, int32(2), midCost.HardScore, "中间硬成本应为2（一个未分配副本）")
 
 	// 为副本1分配同一个工作节点 - 违反了硬规则H3
@@ -251,7 +251,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	worker1.Assignments["shard_1"] = "assign-2" // 这里其实有问题，一个worker不能对同一个shard有多个assignments
 
 	// 计算最终成本 - 应该是10分（违反H3规则）
-	finalCost := snapshot.GetCost()
+	finalCost := snapshot.GetCost(ctx)
 	assert.Equal(t, int32(10), finalCost.HardScore, "最终硬成本应为10（违反H3规则）")
 
 	t.Logf("初始成本: %v", initialCost)

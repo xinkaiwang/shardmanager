@@ -557,23 +557,23 @@ func (snap *Snapshot) ApplyMove(move Move, mode ApplyMode) *Snapshot {
 	return snap
 }
 
-func (snap *Snapshot) GetCost() Cost {
+func (snap *Snapshot) GetCost(ctx context.Context) Cost {
 	if !snap.Frozen {
 		snap.Freeze()
 	}
 	if snap.cost == nil {
-		cost := snap.Costfunc.CalCost(snap)
+		cost := snap.Costfunc.CalCost(ctx, snap)
 		snap.cost = &cost
 	}
 	return *snap.cost
 }
 
-func (snap *Snapshot) ToShortString() string {
+func (snap *Snapshot) ToShortString(ctx context.Context) string {
 	replicaCount := 0
 	snap.AllShards.VisitAll(func(shardId data.ShardId, shardSnap *ShardSnap) {
 		replicaCount += len(shardSnap.Replicas)
 	})
-	return fmt.Sprintf("SnapshotId=%s, Cost=%v, shard=%d, worker=%d, replica=%d, assign=%d", snap.SnapshotId, snap.GetCost(), snap.AllShards.Count(), snap.AllWorkers.Count(), replicaCount, snap.AllAssignments.Count())
+	return fmt.Sprintf("SnapshotId=%s, Cost=%v, shard=%d, worker=%d, replica=%d, assign=%d", snap.SnapshotId, snap.GetCost(ctx), snap.AllShards.Count(), snap.AllWorkers.Count(), replicaCount, snap.AllAssignments.Count())
 }
 
 func (snap *Snapshot) Compare(other *Snapshot) []string {
@@ -593,7 +593,7 @@ func (snap *Snapshot) Compare(other *Snapshot) []string {
 func (snap *Snapshot) ToJson() map[string]interface{} {
 	obj := make(map[string]interface{})
 	obj["SnapshotId"] = snap.SnapshotId
-	// obj["Cost"] = snap.GetCost()
+	// obj["Cost"] = snap.GetCost(ctx)
 	obj["Shards"] = make([]map[string]interface{}, 0)
 	snap.AllShards.VisitAll(func(shardId data.ShardId, shardSnap *ShardSnap) {
 		shardObj := shardSnap.ToJson()
