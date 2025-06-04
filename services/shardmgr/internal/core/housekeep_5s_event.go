@@ -23,6 +23,7 @@ func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
 	ke := kcommon.TryCatchRun(ctx, func() {
 		ss.checkWorkerTombStone(ctx)
 		ss.checkShardTombStone(ctx)
+		ss.collectDynamicThresholdStats(ctx)
 		ss.collectWorkerStats(ctx)
 		ss.collectShardStats(ctx)
 		ss.collectCurrentScore(ctx)

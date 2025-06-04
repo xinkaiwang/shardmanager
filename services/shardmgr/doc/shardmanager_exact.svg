@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg baseProfile="full" height="433" version="1.1" width="464"
+	xmlns="http://www.w3.org/2000/svg"
+	xmlns:ev="http://www.w3.org/2001/xml-events"
+	xmlns:xlink="http://www.w3.org/1999/xlink">
+	<defs />
+	<polygon fill="#155187" points="168,360 229,393 295,357 302,350 216,303 201,312 201,340" />
+	<polygon fill="#155387" points="145,264 104,287 103,323 156,353 190,333 190,288" />
+	<polygon fill="#185d9b" points="301,216 274,234 274,295 254,308 317,344 355,322 355,247" />
+	<polygon fill="#2570ac" points="154,220 264,284 264,206 219,180" />
+	<polygon fill="#368cc5" points="144,93 102,118 103,175 152,204 197,176 196,124" />
+	<polygon fill="#2671ad" points="308,79 308,119 270,143 323,172 361,151 362,110" />
+	<polygon fill="#246eab" points="165,82 258,136 296,116 296,72 240,40" />
+</svg>

@@ -25,6 +25,8 @@ import {
 // 导入页面组件
 import WorkersPage from './components/WorkersPage';
 import ConfigPage from './components/ConfigPage';
+// 导入SVG logo
+import logoSvg from './assets/logo.svg';
 
 const drawerWidth = 240;
 
@@ -50,9 +52,12 @@ export default function App() {
   const drawer = (
     <div>
       <Toolbar>
-        <Typography variant="h6" noWrap component="div">
-          ShardManager
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <img src={logoSvg} alt="ShardManager Logo" style={{ width: '40px', height: '40px' }} />
+          <Typography variant="h6" noWrap component="div">
+            ShardManager
+          </Typography>
+        </Box>
       </Toolbar>
       <List>
         <ListItem disablePadding component={Link} to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -96,9 +101,16 @@ export default function App() {
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6" noWrap component="div">
-              ShardManager UI
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <img 
+                src={logoSvg} 
+                alt="ShardManager Logo" 
+                style={{ width: '32px', height: '32px', filter: 'brightness(0) invert(1)' }} 
+              />
+              <Typography variant="h6" noWrap component="div">
+                ShardManager UI
+              </Typography>
+            </Box>
           </Toolbar>
         </AppBar>
         <Box

@@ -117,6 +117,7 @@ func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc
 	}
 
 	moveState := NewMoveStateFromProposal(ss, proposal)
+	moveState.AcceptTimeMs = now
 	ctx2 := klogging.EmbedTraceId(ctx, "am_"+string(proposal.ProposalId))
 	minion := NewActionMinion(ctx2, ss, moveState)
 	ss.storeProvider.StoreMoveState(proposal.ProposalId, moveState.ToMoveStateJson("accepted"))

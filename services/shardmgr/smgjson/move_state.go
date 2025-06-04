@@ -12,9 +12,10 @@ type MoveStateJson struct {
 	ProposalId   data.ProposalId `json:"proposal_id"`
 	Signature    string          `json:"signature"`
 	Actions      []*ActionJson   `json:"moves"`
-	NextMove     int             `json:"next_move"`     // NextMove 是下一个要执行的 move 的索引
-	UpdateReason string          `json:"update_reason"` // UpdateReason 更新原因
-	SolverType   string          `json:"solver_type"`   // SolverType 解决器类型
+	NextMove     int             `json:"next_move"`      // NextMove 是下一个要执行的 move 的索引
+	UpdateReason string          `json:"update_reason"`  // UpdateReason 更新原因
+	SolverType   string          `json:"solver_type"`    // SolverType 解决器类型
+	AcceptTimeMs int64           `json:"accept_time_ms"` // AcceptTimeMs 是接受该 move 的时间，单位为毫秒
 }
 
 type ActionJson struct {

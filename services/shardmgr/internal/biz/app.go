@@ -51,7 +51,13 @@ func (app *App) StartAppMetrics(ctx context.Context) {
 	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
 		func() int64 { return app.ss.MetricsValues.MetricsValueDynamicThreshold.Load() },
 		"dynamic_threshold",
-		"Dynamic threshold for accepting ",
+		"Dynamic threshold for accepting proposals",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValues.MetricsValueBestProposalInQueue.Load() },
+		"best_proposal_in_queue",
+		"Best proposal in the queue",
 		map[string]string{"smg": app.ss.Name},
 	)
 	// worker count
@@ -106,6 +112,28 @@ func (app *App) StartAppMetrics(ctx context.Context) {
 		"Total number of assignments in the system",
 		map[string]string{"smg": app.ss.Name},
 	)
+	// inflight move count
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValues.MetricsValueInflightMoveCount.Load() },
+		"inflight_move_count",
+		"Total number of inflight moves in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 {
+			ageMs := app.ss.MetricsValues.MetricsValueOldestMoveAgeMs.Load()
+			if ageMs > 0 {
+				moveStr := app.ss.MetricsValues.MetricsValueOldestMoveStr.Load().(string)
+				count := app.ss.MetricsValues.MetricsValueInflightMoveCount.Load()
+				klogging.Info(ctx).With("maxAge", ageMs).With("move", moveStr).With("count", count).Log("app.StartAppMetrics", "inflight move max age")
+			}
+			return ageMs
+		},
+		"oldest_move_age_ms",
+		"Age of the oldest move in milliseconds",
+		map[string]string{"smg": app.ss.Name},
+	)
+
 	// soft/hard score
 	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
 		func() int64 { return app.ss.MetricsValues.MetricsValueCurrentSoftCost.Load() },

@@ -220,8 +220,7 @@ const WorkerCard = React.memo(({
     if (!worker.worker_start_time_ms) return '';
     
     // ageUpdateTrigger用于强制函数重新计算
-    // eslint-disable-next-line no-unused-vars
-    const _ = ageUpdateTrigger;
+    void ageUpdateTrigger; // 使用void操作符"消费"变量以避免TS警告
     
     const ageMs = Date.now() - worker.worker_start_time_ms;
     

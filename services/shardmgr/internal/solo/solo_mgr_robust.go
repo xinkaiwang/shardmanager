@@ -44,6 +44,7 @@ func (solo *SoloManagerRobust) GetLckLostCh() <-chan struct{} {
 	return solo.ChLockLost
 }
 
+// Close: close this lease and wait for close
 func (solo *SoloManagerRobust) Close(ctx context.Context) {
 	solo.sessionWrapper.Close(ctx)
 }
@@ -51,7 +52,12 @@ func (solo *SoloManagerRobust) Close(ctx context.Context) {
 func (solo *SoloManagerRobust) onSessionLost(ctx context.Context) {
 	ke := kcommon.TryCatchRun(ctx, func() {
 		solo.sessionWrapper = NewSessionWrapper(ctx, solo, "recover")
-		go solo.onSessionLost(ctx)
+		// go solo.onSessionLost(ctx)
+		go func() {
+			<-solo.sessionWrapper.chClosed
+			solo.sessionWrapper = nil
+			solo.onSessionLost(ctx)
+		}()
 	})
 	if ke != nil {
 		klogging.Error(ctx).With("error", ke).Log("SoloManager", "failed to recover session")
@@ -73,6 +79,7 @@ func NewSessionWrapper(ctx context.Context, parent *SoloManagerRobust, reason st
 		chClosed: make(chan struct{}, 1),
 	}
 	wrapper.session = parent.etcdprov.CreateEtcdSession(ctx)
+	klogging.Info(ctx).With("sessionId", parent.sessionId).Log("NewSessionWrapper", "session created")
 	node := smgjson.NewGlobalLock(parent.podName, parent.sessionId, wrapper.session.GetLeaseId(), parent.ServerStartTimeMs, common.GetVersion())
 	node.LastUpdateTimeMs = kcommon.GetWallTimeMs()
 	node.LastUpdateResason = reason
@@ -88,6 +95,7 @@ func (sw *SessionWrapper) OnStateChange(state cougarEtcd.EtcdSessionState, msg s
 	sw.session.Close(context.Background())
 }
 
+// close session and wait for close
 func (sw *SessionWrapper) Close(ctx context.Context) {
 	sw.stop = true
 	sw.session.Close(ctx)

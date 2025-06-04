@@ -36,6 +36,8 @@ func main() {
 	// 创建并配置 LogrusLogger
 	logrusLogger := klogging.NewLogrusLogger(ctx)
 	logrusLogger.SetConfig(ctx, logLevel, logFormat)
+	logrusLogger.WithMetricsReporter(NewMyLoggerMetrcsReporter()) // 设置日志指标报告器
+
 	klogging.SetDefaultLogger(logrusLogger)
 	klogging.Info(ctx).With("logLevel", logLevel).With("logFormat", logFormat).Log("LogLevelSet", "")
 
@@ -122,6 +124,7 @@ func main() {
 		<-sigChan
 
 		klogging.Info(ctx).Log("ServerShutdown", "Shutting down servers...")
+		soloMgr.Close(ctx)
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
