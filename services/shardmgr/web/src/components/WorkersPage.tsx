@@ -147,7 +147,7 @@ const AssignmentItem = React.memo(({ assignment }: { assignment: AssignmentVm })
 const WorkerCard = React.memo(({ 
   worker, 
   isSelected, 
-  onSelect 
+  onSelect
 }: { 
   worker: WorkerVm; 
   isSelected: boolean;
@@ -191,14 +191,15 @@ const WorkerCard = React.memo(({
   
   // 定期更新年龄显示（每秒更新一次）
   useEffect(() => {
-    if (!worker.worker_start_time_ms || !isNew) return;
+    // 只要节点在线且有时间戳就启动更新定时器
+    if (!worker.worker_start_time_ms || worker.is_offline === 1) return;
     
     const intervalId = setInterval(() => {
       setAgeUpdateTrigger(prev => prev + 1);
     }, 1000);
-    
+
     return () => clearInterval(intervalId);
-  }, [worker.worker_start_time_ms, isNew]);
+  }, [worker.worker_start_time_ms, worker.is_offline]);
   
   // 获取格式化的创建时间
   const formattedCreationTime = useMemo(() => {
@@ -246,6 +247,43 @@ const WorkerCard = React.memo(({
     const days = Math.floor(ageMs / (24 * 60 * 60 * 1000));
     return `${days}天`;
   }, [worker.worker_start_time_ms, ageUpdateTrigger]);
+  
+  // 获取最后更新时间相对表示
+  const getLastUpdateTimeText = useCallback(() => {
+    // ageUpdateTrigger用于强制函数重新计算
+    void ageUpdateTrigger;
+    
+    if (!worker.worker_last_update_ms) return '未知';
+    
+    const elapsedMs = Date.now() - worker.worker_last_update_ms;
+    
+    // 小于3秒显示"刚刚"
+    if (elapsedMs < 3 * 1000) {
+      return '刚刚';
+    }
+    
+    // 小于1分钟显示秒数
+    if (elapsedMs < 60 * 1000) {
+      const seconds = Math.floor(elapsedMs / 1000);
+      return `${seconds}秒前`;
+    }
+    
+    // 小于1小时显示分钟
+    if (elapsedMs < 60 * 60 * 1000) {
+      const minutes = Math.floor(elapsedMs / (60 * 1000));
+      return `${minutes}分钟前`;
+    }
+    
+    // 小于1天显示小时
+    if (elapsedMs < 24 * 60 * 60 * 1000) {
+      const hours = Math.floor(elapsedMs / (60 * 60 * 1000));
+      return `${hours}小时前`;
+    }
+    
+    // 大于1天显示天数
+    const days = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
+    return `${days}天前`;
+  }, [worker.worker_last_update_ms, ageUpdateTrigger]);
   
   return (
     <Card 
@@ -310,12 +348,24 @@ const WorkerCard = React.memo(({
         
         {/* 在线状态 */}
         {worker.is_offline === 0 && (
-          <Chip 
-            label="在线" 
-            size="small" 
-            color="success" 
-            sx={{ fontSize: '0.75rem' }}
-          />
+          <Tooltip 
+            title={
+              <React.Fragment>
+                <Typography variant="body2">创建时间: {formattedCreationTime}</Typography>
+                <Typography variant="body2">已存在: {getNodeAge()}</Typography>
+                <Typography variant="body2">最后更新: {getLastUpdateTimeText()}</Typography>
+              </React.Fragment>
+            }
+            arrow
+            placement="top"
+          >
+            <Chip 
+              label="在线" 
+              size="small" 
+              color="success" 
+              sx={{ fontSize: '0.75rem' }}
+            />
+          </Tooltip>
         )}
         
         {/* 离线状态 */}
