@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -339,15 +340,22 @@ func (worker *WorkerSnap) Compare(other *WorkerSnap) []string {
 
 func (worker *WorkerSnap) ToJson() map[string]interface{} {
 	obj := make(map[string]interface{})
-	obj["WorkerFullId"] = worker.WorkerFullId
+	obj["WorkerFullId"] = worker.WorkerFullId.String()
 	obj["Draining"] = common.Int8FromBool(worker.Draining)
 	obj["Offline"] = common.Int8FromBool(worker.Offline)
-	obj["Assignments"] = make([]map[string]interface{}, 0)
-	for shardId, assignmentId := range worker.Assignments {
-		assignObj := make(map[string]interface{})
-		assignObj["ShardId"] = shardId
-		assignObj["AssignmentId"] = assignmentId
-		obj["Assignments"] = append(obj["Assignments"].([]map[string]interface{}), assignObj)
+	{
+		var list []map[string]string
+		for shardId, assignmentId := range worker.Assignments {
+			assignObj := make(map[string]string)
+			assignObj["ShardId"] = string(shardId)
+			assignObj["AssignmentId"] = string(assignmentId)
+			list = append(list, assignObj)
+		}
+
+		sort.Slice(list, func(i, j int) bool {
+			return list[i]["AssignmentId"] < list[j]["AssignmentId"]
+		})
+		obj["Assignments"] = list
 	}
 	return obj
 }
@@ -599,16 +607,28 @@ func (snap *Snapshot) ToJson() map[string]interface{} {
 		shardObj := shardSnap.ToJson()
 		obj["Shards"] = append(obj["Shards"].([]map[string]interface{}), shardObj)
 	})
-	obj["Workers"] = make([]map[string]interface{}, 0)
-	snap.AllWorkers.VisitAll(func(workerFullId data.WorkerFullId, workerSnap *WorkerSnap) {
-		workerObj := workerSnap.ToJson()
-		obj["Workers"] = append(obj["Workers"].([]map[string]interface{}), workerObj)
-	})
-	obj["Assignments"] = make([]map[string]interface{}, 0)
-	snap.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, assignmentSnap *AssignmentSnap) {
-		assignmentObj := assignmentSnap.ToJson()
-		obj["Assignments"] = append(obj["Assignments"].([]map[string]interface{}), assignmentObj)
-	})
+	{
+		list := make([]map[string]interface{}, 0)
+		snap.AllWorkers.VisitAll(func(workerFullId data.WorkerFullId, workerSnap *WorkerSnap) {
+			workerObj := workerSnap.ToJson()
+			list = append(list, workerObj)
+		})
+		sort.Slice(list, func(i, j int) bool {
+			return list[i]["WorkerFullId"].(string) < list[j]["WorkerFullId"].(string)
+		})
+		obj["Workers"] = list
+	}
+	{
+		list := make([]map[string]interface{}, 0)
+		snap.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, assignmentSnap *AssignmentSnap) {
+			assignmentObj := assignmentSnap.ToJson()
+			list = append(list, assignmentObj)
+		})
+		sort.Slice(list, func(i, j int) bool {
+			return list[i]["AssignmentId"].(data.AssignmentId) < list[j]["AssignmentId"].(data.AssignmentId)
+		})
+		obj["Assignments"] = list
+	}
 	return obj
 }
 

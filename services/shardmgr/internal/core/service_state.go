@@ -234,7 +234,7 @@ func (ss *ServiceState) ModifySnapshotFuture(ctx context.Context, fn func(*costf
 	if ss.SnapshotFuture.Frozen {
 		ss.SnapshotFuture = ss.SnapshotFuture.Clone()
 	}
-	oldSnapStr := ss.SnapshotCurrent.ToJsonString()
+	oldSnapStr := ss.SnapshotFuture.ToJsonString()
 	fn(ss.SnapshotFuture)
 	klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("reason", reason).With("oldSnapshot", oldSnapStr).With("newSnapshot", ss.SnapshotFuture.ToJsonString()).Log("ModifySnapshotFuture", "")
 }

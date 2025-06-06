@@ -26,6 +26,12 @@ func WithSystemLimits(maxShards, maxReplicas, maxAssignments, maxAssignmentsPerW
 	}
 }
 
+func WithSystemLimitFn(fn func(*SystemLimitConfig)) ServiceConfigOption {
+	return func(cfg *ServiceConfig) {
+		fn(&cfg.SystemLimit)
+	}
+}
+
 func WithSolverConfig(fn func(*SolverConfig)) ServiceConfigOption {
 	return func(cfg *ServiceConfig) {
 		fn(&cfg.SolverConfig)

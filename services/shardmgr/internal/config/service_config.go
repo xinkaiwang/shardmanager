@@ -213,6 +213,7 @@ func (cfg *SystemLimitConfig) ToJsonObj() *smgjson.SystemLimitConfigJson {
 		MaxShardsCountLimit:     &cfg.MaxShardsCountLimit,
 		MaxReplicaCountLimit:    &cfg.MaxReplicaCountLimit,
 		MaxAssignmentCountLimit: &cfg.MaxAssignmentCountLimit,
+		MaxHatCountLimit:        &cfg.MaxHatCountLimit,
 	}
 }
 func (cfg *DynamicThresholdConfig) ToJsonObj() *smgjson.DynamicThresholdConfigJson {

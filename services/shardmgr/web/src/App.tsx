@@ -22,6 +22,18 @@ import {
   Computer as ComputerIcon,
 } from '@mui/icons-material';
 
+// 扩展断点类型定义
+declare module '@mui/material/styles' {
+  interface BreakpointOverrides {
+    xs: true;
+    sm: true;
+    md: true;
+    lg: true;
+    xl: true;
+    xxl: true; // 添加新的XXL断点
+  }
+}
+
 // 导入页面组件
 import WorkersPage from './components/WorkersPage';
 import ConfigPage from './components/ConfigPage';
@@ -40,40 +52,67 @@ const theme = createTheme({
       main: '#dc004e',
     },
   },
+  // 自定义断点配置
+  breakpoints: {
+    values: {
+      xs: 0,      // 移动设备
+      sm: 600,    // 平板竖屏 (≥600px)
+      md: 900,    // 平板横屏 (≥900px)
+      lg: 1200,   // 小型笔记本 (≥1200px)
+      xl: 1700,   // 大型笔记本/桌面显示器 (≥1536px，如16英寸MBP的有效宽度)
+      xxl: 1920,  // 全高清显示器 (≥1920px)
+    },
+  },
 });
 
 export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
+  const handleSidebarCollapse = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+  
+  // 计算侧边栏宽度
+  const currentDrawerWidth = sidebarCollapsed ? 64 : drawerWidth;
+
   const drawer = (
     <div>
       <Toolbar>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+          width: '100%'
+        }}>
           <img src={logoSvg} alt="ShardManager Logo" style={{ width: '40px', height: '40px' }} />
-          <Typography variant="h6" noWrap component="div">
-            ShardManager
-          </Typography>
+          {!sidebarCollapsed && (
+            <Typography variant="h6" noWrap component="div">
+              ShardManager
+            </Typography>
+          )}
         </Box>
       </Toolbar>
       <List>
         <ListItem disablePadding component={Link} to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <ListItemButton>
-            <ListItemIcon>
+          <ListItemButton sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
+            <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 56 }}>
               <ComputerIcon />
             </ListItemIcon>
-            <ListItemText primary="Workers" />
+            {!sidebarCollapsed && <ListItemText primary="Workers" />}
           </ListItemButton>
         </ListItem>
         <ListItem disablePadding component={Link} to="/config" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <ListItemButton>
-            <ListItemIcon>
+          <ListItemButton sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
+            <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 56 }}>
               <SettingsIcon />
             </ListItemIcon>
-            <ListItemText primary="Config" />
+            {!sidebarCollapsed && <ListItemText primary="Config" />}
           </ListItemButton>
         </ListItem>
       </List>
@@ -87,8 +126,12 @@ export default function App() {
         <AppBar
           position="fixed"
           sx={{
-            width: { sm: `calc(100% - ${drawerWidth}px)` },
-            ml: { sm: `${drawerWidth}px` },
+            width: { md: `calc(100% - ${currentDrawerWidth}px)` },
+            ml: { md: `${currentDrawerWidth}px` },
+            transition: theme.transitions.create(['width', 'margin'], {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.leavingScreen,
+            }),
           }}
         >
           <Toolbar>
@@ -97,10 +140,22 @@ export default function App() {
               aria-label="open drawer"
               edge="start"
               onClick={handleDrawerToggle}
-              sx={{ mr: 2, display: { sm: 'none' } }}
+              sx={{ mr: 2, display: { md: 'none' } }}
             >
               <MenuIcon />
             </IconButton>
+            
+            {/* 添加侧边栏折叠按钮 */}
+            <IconButton
+              color="inherit"
+              aria-label="collapse sidebar"
+              edge="start"
+              onClick={handleSidebarCollapse}
+              sx={{ mr: 2, display: { xs: 'none', md: 'block' } }}
+            >
+              <MenuIcon />
+            </IconButton>
+            
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <img 
                 src={logoSvg} 
@@ -115,7 +170,14 @@ export default function App() {
         </AppBar>
         <Box
           component="nav"
-          sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+          sx={{ 
+            width: { md: currentDrawerWidth }, 
+            flexShrink: { md: 0 },
+            transition: theme.transitions.create('width', {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.enteringScreen,
+            }),
+          }}
           aria-label="mailbox folders"
         >
           {/* 移动端抽屉 */}
@@ -127,8 +189,11 @@ export default function App() {
               keepMounted: true, // 改善移动端性能
             }}
             sx={{
-              display: { xs: 'block', sm: 'none' },
-              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+              display: { xs: 'block', md: 'none' },
+              '& .MuiDrawer-paper': { 
+                boxSizing: 'border-box', 
+                width: drawerWidth 
+              },
             }}
           >
             {drawer}
@@ -137,8 +202,16 @@ export default function App() {
           <Drawer
             variant="permanent"
             sx={{
-              display: { xs: 'none', sm: 'block' },
-              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+              display: { xs: 'none', md: 'block' },
+              '& .MuiDrawer-paper': { 
+                boxSizing: 'border-box', 
+                width: currentDrawerWidth,
+                transition: theme.transitions.create('width', {
+                  easing: theme.transitions.easing.sharp,
+                  duration: theme.transitions.duration.enteringScreen,
+                }),
+                overflowX: 'hidden'
+              },
             }}
             open
           >
@@ -147,7 +220,15 @@ export default function App() {
         </Box>
         <Box
           component="main"
-          sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
+          sx={{ 
+            flexGrow: 1, 
+            p: 3, 
+            width: { md: `calc(100% - ${currentDrawerWidth}px)` },
+            transition: theme.transitions.create(['width', 'margin'], {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.enteringScreen,
+            }),
+          }}
         >
           <Toolbar />
           <Routes>

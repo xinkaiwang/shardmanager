@@ -18,6 +18,8 @@ import {
   SelectChangeEvent,
   LinearProgress,
   Tooltip,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import * as api from '../services/api';
 import { WorkerVm, AssignmentVm } from '../types/api';
@@ -698,27 +700,42 @@ export default function WorkersPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <Grid container spacing={3}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           {filteredWorkers.length > 0 ? (
             filteredWorkers.map((worker) => (
-              <Grid item xs={12} md={6} lg={4} key={worker.worker_full_id}>
+              <Box
+                key={worker.worker_full_id}
+                sx={{
+                  // 动态计算卡片宽度
+                  width: {
+                    xs: 'calc(100% - 24px)',            // 手机: 1张卡片/行
+                    sm: 'calc(50% - 24px)',             // 小屏: 2张卡片/行
+                    md: 'calc(33.333% - 24px)',         // 中屏: 3张卡片/行
+                    lg: 'calc(25% - 24px)',             // 大屏: 4张卡片/行
+                    xl: 'calc(20% - 24px)',             // 超大屏: 5张卡片/行
+                    xxl: 'calc(16.666% - 24px)',        // 超超大屏: 6张卡片/行
+                  },
+                  // 保留上下外边距，与间隙配合形成统一间距
+                  mb: 1,
+                }}
+              >
                 <WorkerCard 
                   worker={worker} 
                   isSelected={selectedWorkerId === worker.worker_full_id}
                   onSelect={handleSelectWorker}
                 />
-              </Grid>
+              </Box>
             ))
           ) : (
-            <Grid item xs={12}>
+            <Box width="100%">
               <Paper sx={{ p: 3, textAlign: 'center' }}>
                 <Typography variant="body1">
                   {searchText ? '没有找到匹配的工作节点' : '暂无工作节点数据'}
                 </Typography>
               </Paper>
-            </Grid>
+            </Box>
           )}
-        </Grid>
+        </Box>
       )}
     </div>
   );

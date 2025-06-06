@@ -29,3 +29,7 @@ func BoolToInt8(b bool) int8 {
 	}
 	return 0
 }
+
+func BoolFromInt8(v int8) bool {
+	return v != 0
+}

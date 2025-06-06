@@ -64,7 +64,24 @@ func (move *RemoveAssignment) Apply(snapshot *costfunc.Snapshot) {
 	if ok {
 		workerSnap = workerSnap.Clone()
 		snapshot.AllWorkers.Set(move.WorkerId, workerSnap)
-		delete(workerSnap.Assignments, move.ShardId)
+		assignId, ok := workerSnap.Assignments[move.ShardId]
+		if ok {
+			if assignId != move.AssignmentId {
+				// Ignore, do nothing
+
+				// This can happen in rare case, when this happens, we just ignore it.
+				// 1) shard1 have assign1 on worker1,
+				// 2) we decide to remove assign1 from worker1,
+				// 3) pilot node of worker1 updated
+				// 4) eph updated, and remove success. we remove assign1 from worker1 from most of records, except workerState lame duck/tombstone. (later housekeep 30s will remove it)
+				// 5) accept decided to assign shard1 assign2 to worker1
+				// 6) minion working on the new move
+				// 7) housekeeping 30s triggered. and remove assign1 from worker1 from workerState + snapshot. <-- this is the case we are handling here.
+			} else {
+				// remove assignment from worker
+				delete(workerSnap.Assignments, move.ShardId)
+			}
+		}
 	}
 }
 
