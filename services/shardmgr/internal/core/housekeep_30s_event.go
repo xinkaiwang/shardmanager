@@ -23,6 +23,7 @@ func (te *Housekeep30sEvent) GetName() string {
 func (te *Housekeep30sEvent) Process(ctx context.Context, ss *ServiceState) {
 	ke := kcommon.TryCatchRun(ctx, func() {
 		ss.annualCheckSnapshot(ctx)
+		ss.snapshotDump(ctx)
 	})
 	if ke != nil {
 		klogging.Error(ctx).With("error", ke).Log("Housekeep30sEvent", "annualCheckSnapshot failed")
@@ -68,6 +69,16 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 	newSnapshotFuture.Freeze()
 	ss.SetSnapshotFuture(ctx, newSnapshotFuture, "annualCheckSnapshot")
 	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString(ctx)).With("future", newSnapshotFuture.ToShortString(ctx)).Log("annualCheckSnapshot", "done")
+}
+
+func (ss *ServiceState) snapshotDump(ctx context.Context) {
+	now := kcommon.GetWallTimeMs()
+	if ss.LastSnapshotDumpMs+20*60*1000 > now {
+		return
+	}
+	ss.LastSnapshotDumpMs = now
+	klogging.Info(ctx).With("current", ss.GetSnapshotCurrentForAny().ToJsonString()).Log("SnapshotDump", "dumping current snapshot")
+	klogging.Info(ctx).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).Log("SnapshotDump", "dumping future snapshot")
 }
 
 // return list of differences

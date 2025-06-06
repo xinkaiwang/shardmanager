@@ -62,6 +62,8 @@ type ServiceState struct {
 
 	// for metrics collection use only
 	MetricsValues MetricsValues // all metrics values are atomic.Int64, so they are thread-safe
+
+	LastSnapshotDumpMs int64 // last snapshot jurnal ms, used for debug log
 }
 
 func NewServiceState(ctx context.Context, name string) *ServiceState {
