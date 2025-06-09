@@ -91,7 +91,7 @@ func (am *ActionMinion) actionRemoveFromRouting(ctx context.Context, stepIdx int
 			// update routing table
 			assign.ShouldInRoutingTable = false
 			ss.FlushWorkerState(ctx, workerFullId, ws, FS_WorkerState|FS_Routing, "removeFromRouting")
-		})
+		}, "actionRemoveFromRouting")
 		if !succ {
 			panic(ke)
 		}
@@ -130,7 +130,7 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 			assign.ShouldInRoutingTable = true
 			ss.FlushWorkerState(ctx, workerFullId, ws, FS_WorkerState|FS_Routing, "addToRouting")
 			status = AS_Completed
-		})
+		}, "actionAddToRouting")
 		action.ActionStage = smgjson.AS_Completed
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("addToRouting"))
 	}
@@ -212,7 +212,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			signalBox = workerState.SignalBox
 			status = AS_Wait
 			klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).With("assignmentId", action.DestAssignmentId).Log("actionAddShard", "add shard to worker")
-		})
+		}, "actionAddShard")
 		if status == AS_Failed {
 			panic(ke)
 		}
@@ -269,7 +269,7 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			reason = "assignment not in ready state"
-		})
+		}, "actionAddShardWait")
 
 		klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("loopId", loopId).With("reason", reason).With("status", status).WithError(ke).Log("actionAddShard", "loop end")
 	}
@@ -343,7 +343,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				}
 			}
 			status = AS_Wait
-		})
+		}, "actionDropShard")
 		if status == AS_Failed {
 			panic(ke)
 		}
@@ -397,7 +397,7 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 				return
 			}
 			signalBox = workerState.SignalBox
-		})
+		}, "actionDropShardWait")
 	}
 	if status == AS_Failed {
 		panic(ke)
@@ -408,17 +408,18 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 
 // ActionEvent implements IEvent
 type ActionEvent struct {
-	fn func(ss *ServiceState)
+	name string
+	fn   func(ss *ServiceState)
 }
 
-func NewActionEvent(fn func(ss *ServiceState)) *ActionEvent {
+func NewActionEvent(fn func(ss *ServiceState), name string) *ActionEvent {
 	return &ActionEvent{
 		fn: fn,
 	}
 }
 
 func (ae *ActionEvent) GetName() string {
-	return "ActionEvent"
+	return ae.name
 }
 
 func (ae *ActionEvent) Process(ctx context.Context, ss *ServiceState) {

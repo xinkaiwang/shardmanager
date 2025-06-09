@@ -125,3 +125,37 @@ func (move *RemoveAssignment) Signature() string {
 func (move *RemoveAssignment) String() string {
 	return move.Signature()
 }
+
+// PassiveMoveWorkerGotHat implements PassiveMove interface.
+type PassiveMoveWorkerGotHat struct {
+	WorkerId data.WorkerFullId
+}
+
+func NewPassiveMoveWorkerGotHat(workerId data.WorkerFullId) *PassiveMoveWorkerGotHat {
+	return &PassiveMoveWorkerGotHat{
+		WorkerId: workerId,
+	}
+}
+
+func (move *PassiveMoveWorkerGotHat) Apply(snapshot *costfunc.Snapshot) {
+	if snapshot.Frozen {
+		ke := kerror.Create("PassiveMoveWorkerGotHatApplyFailed", "snapshot is frozen")
+		panic(ke)
+	}
+	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
+	if !ok {
+		ke := kerror.Create("PassiveMoveWorkerGotHatApplyFailed", "worker not found in snapshot").With("workerId", move.WorkerId)
+		panic(ke)
+	}
+	workerSnap = workerSnap.Clone()
+	snapshot.AllWorkers.Set(move.WorkerId, workerSnap)
+	workerSnap.Draining = true // hat == draining
+}
+
+func (move *PassiveMoveWorkerGotHat) ApplyToSs(ctx context.Context, ss *ServiceState) {
+	// Not implemented yet, no need for now.
+}
+
+func (move *PassiveMoveWorkerGotHat) Signature() string {
+	return "PassiveMoveWorkerGotHat: " + move.WorkerId.String()
+}

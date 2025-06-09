@@ -34,8 +34,8 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	// candidate worker list
 	candidateWorkers := []data.WorkerFullId{}
 	snapshot.AllWorkers.VisitAll(func(fullId data.WorkerFullId, worker *costfunc.WorkerSnap) {
-		if worker.Draining || worker.Offline {
-			// this worker is draining, skip it
+		if worker.NotTarget {
+			// this worker is not target, skip it
 			return
 		}
 		candidateWorkers = append(candidateWorkers, fullId)

@@ -28,7 +28,8 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 	// workers
 	for workerId, workerState := range ss.AllWorkers {
 		workerSnap := costfunc.NewWorkerSnap(workerId)
-		workerSnap.Draining = workerState.IsDaining()
+		workerSnap.NotTarget = workerState.IsNotTarget()
+		workerSnap.Draining = workerState.IsDraining()
 		workerSnap.Offline = workerState.IsOffline()
 		for _, assignmentId := range workerState.Assignments {
 			assignment, ok := ss.AllAssignments[assignmentId]
@@ -53,10 +54,23 @@ func (ss *ServiceState) ToSnapshot(ctx context.Context) *costfunc.Snapshot {
 	return snapshot
 }
 
-func (ws *WorkerState) IsDaining() bool {
+// NotTarget == this worker is not available to move any shard into it.
+func (ws *WorkerState) IsNotTarget() bool {
 	if ws.ShutdownRequesting {
 		return true
 	}
+	if ws.HasShutdownHat() {
+		return true
+	}
+	if ws.State == data.WS_Online_shutdown_permit || ws.State == data.WS_Offline_draining_complete || ws.State == data.WS_Offline_dead || ws.State == data.WS_Deleted {
+		return true
+	}
+	return false
+}
+
+// Daining == need to move shards out of this worker.
+// Note: sometimes a worker is unhealthy but not draining, for example, waiting for shutdown hat.
+func (ws *WorkerState) IsDraining() bool {
 	if ws.HasShutdownHat() {
 		return true
 	}

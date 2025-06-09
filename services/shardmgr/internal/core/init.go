@@ -249,7 +249,8 @@ func (ss *ServiceState) CreateSnapshotFromCurrentState(ctx context.Context) *cos
 			continue
 		}
 		workerSnap := costfunc.NewWorkerSnap(workerId)
-		workerSnap.Draining = worker.IsDaining()
+		workerSnap.NotTarget = worker.IsNotTarget()
+		workerSnap.Draining = worker.IsDraining()
 		workerSnap.Offline = worker.IsOffline()
 		for _, assignId := range worker.Assignments {
 			assignmentState, ok := ss.AllAssignments[assignId]

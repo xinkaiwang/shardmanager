@@ -19,3 +19,13 @@ func (ss *ServiceState) hatTryGet(ctx context.Context, workerFullId data.WorkerF
 func (ss *ServiceState) hatReturn(ctx context.Context, workerFullId data.WorkerFullId) {
 	delete(ss.ShutdownHat, workerFullId)
 }
+
+func (ss *ServiceState) checkOrphanHats(ctx context.Context) {
+	for workerFullId := range ss.ShutdownHat {
+		_, ok := ss.AllWorkers[workerFullId]
+		if !ok {
+			// this worker is already gone, return the hat
+			ss.hatReturn(ctx, workerFullId)
+		}
+	}
+}

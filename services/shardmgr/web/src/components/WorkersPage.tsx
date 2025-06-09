@@ -4,7 +4,6 @@ import {
   Box,
   Paper,
   TextField,
-  Grid,
   Card,
   CardContent,
   Chip,
@@ -18,8 +17,6 @@ import {
   SelectChangeEvent,
   LinearProgress,
   Tooltip,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import * as api from '../services/api';
 import { WorkerVm, AssignmentVm } from '../types/api';

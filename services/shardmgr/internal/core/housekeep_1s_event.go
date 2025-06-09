@@ -32,10 +32,23 @@ func NewHousekeep1sEvent() *Housekeep1sEvent {
 }
 
 func (ss *ServiceState) checkWorkerForTimeout(ctx context.Context) {
+	var passiveMoves []PassiveMove
+	// check whether workers needs hats
 	for workerFullId, worker := range ss.AllWorkers {
+		dirty := worker.checkWorkerForHat(ctx)
+		if dirty {
+			move := NewPassiveMoveWorkerGotHat(workerFullId)
+			passiveMoves = append(passiveMoves, move)
+		}
 		needsDelete := worker.checkWorkerOnTimeout(ctx, ss)
 		if needsDelete {
 			delete(ss.AllWorkers, workerFullId)
+		}
+	}
+	if len(passiveMoves) > 0 {
+		// post passive moves
+		for _, move := range passiveMoves {
+			ss.ModifySnapshot(ctx, move.Apply, move.Signature())
 		}
 	}
 }

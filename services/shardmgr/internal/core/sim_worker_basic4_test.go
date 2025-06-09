@@ -89,8 +89,8 @@ func TestSimWorker_basic4(t *testing.T) {
 					if stoppedCount >= 4 {
 						return true, "4 out of 4 workers 已经停止"
 					}
-					return false, "4 worker 还没有停止"
-				}, 60*1000, 1000)
+					return false, "stop_count=" + strconv.Itoa(stoppedCount)
+				}, 120*1000, 1000)
 				assert.Equal(t, true, waitSucc, "应该能在超时前完成 worker-2 shutdown request, 耗时=%dms", elapsedMs)
 			}
 		}

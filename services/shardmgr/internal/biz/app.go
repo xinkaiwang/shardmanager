@@ -9,6 +9,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/api"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/core"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"go.opencensus.io/metric"
 )
@@ -42,6 +43,24 @@ func (app *App) GetStatus(ctx context.Context, req *api.GetStateRequest) *api.Ge
 	eve := NewGetStateEvent()
 	app.ss.PostEvent(eve)
 	return <-eve.resp
+}
+
+func (app *App) GetCurrentSnapshot(ctx context.Context) *costfunc.SnapshotVm {
+	var snapshot *costfunc.Snapshot
+	app.ss.PostActionAndWait(func(ss *core.ServiceState) {
+		snapshot = ss.GetSnapshotCurrentForClone()
+	}, "GetCurrentSnapshot")
+	snapshotVm := snapshot.ToVm()
+	return snapshotVm
+}
+
+func (app *App) GetFutureSnapshot(ctx context.Context) *costfunc.SnapshotVm {
+	var snapshot *costfunc.Snapshot
+	app.ss.PostActionAndWait(func(ss *core.ServiceState) {
+		snapshot = ss.GetSnapshotFutureForClone(ctx)
+	}, "GetFutureSnapshot")
+	snapshotVm := snapshot.ToVm()
+	return snapshotVm
 }
 
 func (app *App) StartAppMetrics(ctx context.Context) {
@@ -192,7 +211,8 @@ func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
 			IsOffline:           common.Int8FromBool(workerState.IsOffline()),
 			IsShutdownReq:       common.Int8FromBool(workerState.ShutdownRequesting),
 			IsShutdownPermitted: common.Int8FromBool(workerState.GetShutdownPermited()),
-			IsDraning:           common.Int8FromBool(workerState.IsDaining()),
+			IsDraining:          common.Int8FromBool(workerState.IsDraining()),
+			IsNotTarget:         common.Int8FromBool(workerState.IsNotTarget()),
 		}
 		if workerState.WorkerInfo != nil {
 			worker.WorkerStartTimeMs = workerState.WorkerInfo.StartTimeMs

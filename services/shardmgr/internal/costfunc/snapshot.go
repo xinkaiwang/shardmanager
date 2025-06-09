@@ -137,6 +137,28 @@ func (shardSnap *ShardSnap) FindNextAvaReplicaIdx() data.ReplicaIdx {
 	return data.ReplicaIdx(firstAvailableIdx)
 }
 
+func (shardSnap *ShardSnap) ToVm() *ShardSnapVm {
+	vm := NewShardSnapVm(string(shardSnap.ShardId), shardSnap.TargetReplicaCount)
+	for replicaIdx, replicaSnap := range shardSnap.Replicas {
+		replicaVm := replicaSnap.ToVm()
+		replicaVm.ReplicaIdx = replicaIdx
+		vm.Replicas = append(vm.Replicas, replicaVm)
+	}
+	sort.Slice(vm.Replicas, func(i, j int) bool {
+		return vm.Replicas[i].ReplicaIdx < vm.Replicas[j].ReplicaIdx
+	})
+	return vm
+}
+
+func ShardSnapFromVm(vm *ShardSnapVm) *ShardSnap {
+	shardSnap := NewShardSnap(data.ShardId(vm.ShardId), vm.TargetReplicaCount)
+	for _, replicaVm := range vm.Replicas {
+		replicaSnap := ReplicaSnapFromVm(replicaVm, vm)
+		shardSnap.Replicas[replicaSnap.ReplicaIdx] = replicaSnap
+	}
+	return shardSnap
+}
+
 /*********************** ReplicaSnap **********************/
 type ReplicaSnap struct {
 	ShardId     data.ShardId
@@ -210,6 +232,27 @@ func (rep *ReplicaSnap) ToJson() map[string]interface{} {
 	return obj
 }
 
+func (rep *ReplicaSnap) ToVm() *ReplicaVm {
+	vm := NewReplicaVm(rep.ReplicaIdx)
+	vm.LameDuck = rep.LameDuck
+	for assignmentId := range rep.Assignments {
+		vm.Assignments = append(vm.Assignments, assignmentId)
+	}
+	sort.Slice(vm.Assignments, func(i, j int) bool {
+		return vm.Assignments[i] < vm.Assignments[j]
+	})
+	return vm
+}
+
+func ReplicaSnapFromVm(vm *ReplicaVm, shardVm *ShardSnapVm) *ReplicaSnap {
+	replicaSnap := NewReplicaSnap(data.ShardId(shardVm.ShardId), vm.ReplicaIdx)
+	replicaSnap.LameDuck = vm.LameDuck
+	for _, assignmentId := range vm.Assignments {
+		replicaSnap.Assignments[assignmentId] = common.Unit{}
+	}
+	return replicaSnap
+}
+
 /*********************** AssignmentSnap **********************/
 
 // AssignmentSnap: implements TypeT2
@@ -272,11 +315,21 @@ func (asgn *AssignmentSnap) ToJson() map[string]interface{} {
 	return obj
 }
 
+func (asgn *AssignmentSnap) ToVm() *AssignmentVm {
+	return NewAssignmentVm(asgn.AssignmentId, asgn.ShardId, asgn.ReplicaIdx, asgn.WorkerFullId.WorkerId, asgn.WorkerFullId.SessionId)
+}
+
+func AssignmentSnapFromVm(vm *AssignmentVm) *AssignmentSnap {
+	workerFullId := data.NewWorkerFullId(vm.WorkerId, vm.SessionId, data.ST_MEMORY)
+	return NewAssignmentSnap(vm.ShardId, vm.ReplicaIdx, vm.AssignmentId, workerFullId)
+}
+
 /*********************** WorkerSnap **********************/
 
 // WorkerSnap: implements TypeT2
 type WorkerSnap struct {
 	WorkerFullId data.WorkerFullId
+	NotTarget    bool // this worker can not be used as a target worker
 	Draining     bool
 	Offline      bool
 	Assignments  map[data.ShardId]data.AssignmentId
@@ -299,7 +352,7 @@ func (ss WorkerSnap) CompareWith(other TypeT2) []string {
 }
 
 func (worker *WorkerSnap) CanAcceptAssignment(shardId data.ShardId) bool {
-	if worker.Draining || worker.Offline {
+	if worker.NotTarget {
 		return false
 	}
 	// in case this worker already has this shard (maybe from antoher replica)
@@ -358,6 +411,32 @@ func (worker *WorkerSnap) ToJson() map[string]interface{} {
 		obj["Assignments"] = list
 	}
 	return obj
+}
+
+func (worker *WorkerSnap) ToVm() *WorkerVm {
+	// workerVm
+	vm := NewWorkerVm(worker.WorkerFullId.WorkerId, worker.WorkerFullId.SessionId)
+	vm.Draining = worker.Draining
+	vm.Offline = worker.Offline
+	for shardId, assignmentId := range worker.Assignments {
+		assignObj := NewAssObj(shardId, assignmentId)
+		vm.Assignments = append(vm.Assignments, assignObj)
+	}
+	sort.Slice(vm.Assignments, func(i, j int) bool {
+		return vm.Assignments[i].ShardId < vm.Assignments[j].ShardId
+	})
+	return vm
+}
+
+func WorkerSnapFromVm(vm *WorkerVm) *WorkerSnap {
+	workerFullId := data.NewWorkerFullId(vm.WorkerId, vm.SessionId, data.ST_MEMORY)
+	workerSnap := NewWorkerSnap(workerFullId)
+	workerSnap.Draining = vm.Draining
+	workerSnap.Offline = vm.Offline
+	for _, asObj := range vm.Assignments {
+		workerSnap.Assignments[asObj.ShardId] = asObj.AssignmentId
+	}
+	return workerSnap
 }
 
 /*********************** Snapshot **********************/
@@ -639,4 +718,51 @@ func (snap *Snapshot) ToJsonString() string {
 		klogging.Fatal(context.Background()).WithError(err).Log("ToJsonString", "error")
 	}
 	return string(jsonStr)
+}
+
+func (snap *Snapshot) ToVm() *SnapshotVm {
+	vm := NewSnapshotVm(snap.SnapshotId)
+	snap.AllShards.VisitAll(func(shardId data.ShardId, shardSnap *ShardSnap) {
+		shardVm := shardSnap.ToVm()
+		vm.AllShards = append(vm.AllShards, shardVm)
+	})
+	sort.Slice(vm.AllShards, func(i, j int) bool {
+		return vm.AllShards[i].ShardId < vm.AllShards[j].ShardId
+	})
+	snap.AllWorkers.VisitAll(func(workerFullId data.WorkerFullId, workerSnap *WorkerSnap) {
+		workerVm := workerSnap.ToVm()
+		vm.AllWorkers = append(vm.AllWorkers, workerVm)
+	})
+	sort.Slice(vm.AllWorkers, func(i, j int) bool {
+		return vm.AllWorkers[i].WorkerId < vm.AllWorkers[j].WorkerId
+	})
+	snap.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, assignmentSnap *AssignmentSnap) {
+		assignVm := assignmentSnap.ToVm()
+		vm.AllAssignments = append(vm.AllAssignments, assignVm)
+	})
+	sort.Slice(vm.AllAssignments, func(i, j int) bool {
+		if vm.AllAssignments[i].ShardId != vm.AllAssignments[j].ShardId {
+			return vm.AllAssignments[i].ShardId < vm.AllAssignments[j].ShardId
+		}
+		return vm.AllAssignments[i].AssignmentId < vm.AllAssignments[j].AssignmentId
+	})
+	return vm
+}
+
+func SnapshotFromVm(ctx context.Context, vm *SnapshotVm, costfuncCfg config.CostfuncConfig) *Snapshot {
+	snap := NewSnapshot(ctx, costfuncCfg)
+	snap.SnapshotId = vm.SnapshotId
+	for _, shardVm := range vm.AllShards {
+		shardSnap := ShardSnapFromVm(shardVm)
+		snap.AllShards.Set(shardSnap.ShardId, shardSnap)
+	}
+	for _, workerVm := range vm.AllWorkers {
+		workerSnap := WorkerSnapFromVm(workerVm)
+		snap.AllWorkers.Set(workerSnap.WorkerFullId, workerSnap)
+	}
+	for _, assignVm := range vm.AllAssignments {
+		assignSnap := AssignmentSnapFromVm(assignVm)
+		snap.AllAssignments.Set(assignSnap.AssignmentId, assignSnap)
+	}
+	return snap.CompactAndFreeze()
 }

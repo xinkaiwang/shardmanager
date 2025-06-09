@@ -280,6 +280,9 @@ func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
 
 func (ws *WorkerState) setWorkerState(ctx context.Context, newState data.WorkerStateEnum, reason string) {
 	klogging.Info(ctx).With("workerId", ws.GetWorkerFullId().String()).With("oldState", ws.State).With("newState", newState).With("reason", reason).Log("setWorkerState", "worker state changed")
+	if newState == data.WS_Online_shutdown_permit || newState == data.WS_Offline_draining_complete { // this worker draining complete, don't need a hat anymore
+		ws.parent.hatReturn(ctx, ws.GetWorkerFullId())
+	}
 	ws.State = newState
 }
 
@@ -437,6 +440,7 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 				drain := ws.HasShutdownHat()
 				passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
 					ws.Draining = drain
+					ws.NotTarget = true // this worker is not available to move any shard into it
 				}, "WorkerStateUpdate")
 				moves = append(moves, passiveMove)
 			} else {
@@ -545,6 +549,19 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 	}
 
 	return
+}
+
+// checkWorkerForHat: see whether this worker needs shutdown hat.
+func (ws *WorkerState) checkWorkerForHat(ctx context.Context) bool { // return isDirty
+	// check if this worker needs shutdown hat
+	if ws.State == data.WS_Online_shutdown_req || ws.State == data.WS_Offline_draining_candidate {
+		if ws.HasShutdownHat() {
+			return false // already has shutdown hat, no need to get again
+		}
+		hat := ws.parent.hatTryGet(ctx, ws.GetWorkerFullId())
+		return hat
+	}
+	return false
 }
 
 type DirtyFlag struct {

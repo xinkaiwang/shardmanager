@@ -26,6 +26,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// 包装所有处理器以添加错误处理中间件
 	mux.Handle("/api/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.PingHandler)))
 	mux.Handle("/api/get_state", ErrorHandlingMiddleware(http.HandlerFunc(h.GetStateHandler)))
+	mux.Handle("/api/snapshot_current", ErrorHandlingMiddleware(http.HandlerFunc(h.GetCurrentSnapshotHandler)))
+	mux.Handle("/api/snapshot_future", ErrorHandlingMiddleware(http.HandlerFunc(h.GetFutureSnapshotHandler)))
 }
 
 // PingHandler 处理 /api/ping 请求
@@ -91,6 +93,47 @@ func (h *Handler) GetStateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		panic(kerror.Create("EncodingError", "failed to encode response").
+			WithErrorCode(kerror.EC_INTERNAL_ERROR).
+			With("error", err.Error()))
+	}
+}
+
+func (h *Handler) GetCurrentSnapshotHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 只允许 GET 方法
+	if r.Method != http.MethodGet {
+		panic(kerror.Create("MethodNotAllowed", "only GET method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 处理请求
+	snapshot := h.app.GetCurrentSnapshot(r.Context())
+
+	// 返回响应
+	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
+		panic(kerror.Create("EncodingError", "failed to encode response").
+			WithErrorCode(kerror.EC_INTERNAL_ERROR).
+			With("error", err.Error()))
+	}
+}
+func (h *Handler) GetFutureSnapshotHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 只允许 GET 方法
+	if r.Method != http.MethodGet {
+		panic(kerror.Create("MethodNotAllowed", "only GET method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 处理请求
+	snapshot := h.app.GetFutureSnapshot(r.Context())
+
+	// 返回响应
+	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
 		panic(kerror.Create("EncodingError", "failed to encode response").
 			WithErrorCode(kerror.EC_INTERNAL_ERROR).
 			With("error", err.Error()))

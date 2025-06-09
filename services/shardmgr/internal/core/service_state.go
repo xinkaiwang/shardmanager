@@ -63,7 +63,7 @@ type ServiceState struct {
 	// for metrics collection use only
 	MetricsValues MetricsValues // all metrics values are atomic.Int64, so they are thread-safe
 
-	LastSnapshotDumpMs int64 // last snapshot jurnal ms, used for debug log
+	LastHourlyCheckMs int64 // last snapshot jurnal ms, used for debug log
 }
 
 func NewServiceState(ctx context.Context, name string) *ServiceState {
@@ -106,12 +106,12 @@ func (ss *ServiceState) PostEvent(event krunloop.IEvent[*ServiceState]) {
 	ss.runloop.PostEvent(event)
 }
 
-func (ss *ServiceState) PostActionAndWait(fn func(ss *ServiceState)) {
+func (ss *ServiceState) PostActionAndWait(fn func(ss *ServiceState), name string) {
 	ch := make(chan struct{})
 	eve := NewActionEvent(func(ss *ServiceState) {
 		fn(ss)
 		close(ch)
-	})
+	}, name)
 	ss.runloop.PostEvent(eve)
 	<-ch
 }

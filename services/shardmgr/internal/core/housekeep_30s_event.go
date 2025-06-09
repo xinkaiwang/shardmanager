@@ -22,18 +22,19 @@ func (te *Housekeep30sEvent) GetName() string {
 
 func (te *Housekeep30sEvent) Process(ctx context.Context, ss *ServiceState) {
 	ke := kcommon.TryCatchRun(ctx, func() {
-		ss.annualCheckSnapshot(ctx)
-		ss.snapshotDump(ctx)
+		ss.annualCheck(ctx)
+		ss.hourlyCheck(ctx)
+		ss.checkOrphanHats(ctx)
 	})
 	if ke != nil {
-		klogging.Error(ctx).With("error", ke).Log("Housekeep30sEvent", "annualCheckSnapshot failed")
+		klogging.Error(ctx).With("error", ke).Log("Housekeep30sEvent", "snapshotConverge failed")
 	}
 	kcommon.ScheduleRun(30*1000, func() { // 30s
 		ss.PostEvent(NewHousekeep30sEvent())
 	})
 }
 
-func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
+func (ss *ServiceState) annualCheck(ctx context.Context) {
 	// when we have in-flight moves, we don't fatal on snapshot diff. this is to avoid false positive.
 	// For example, after the assignment is confirmed (in ss), but before the move is done (in snapshot current), the snapshot will be different from the current state. this is expected.
 	inFlightMove := len(ss.AllMoves) > 0
@@ -52,33 +53,33 @@ func (ss *ServiceState) annualCheckSnapshot(ctx context.Context) {
 		newStr := newSnapshotCurrent.ToJsonString()
 		if !inFlightMove {
 			ss.CreateSnapshotFromCurrentState(ctx) // redo for debug
-			klogging.Fatal(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).Log("annualCheckSnapshot", "found diffs")
+			klogging.Fatal(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).Log("annualCheck", "found diffs")
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).With("inflight", len(ss.AllMoves)).Log("annualCheckSnapshot", "found diffs")
+			klogging.Warning(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).With("inflight", len(ss.AllMoves)).Log("annualCheck", "found diffs")
 		}
 	}
 	diffs = compareSnapshot(ctx, ss.GetSnapshotFutureForAny(ctx), newSnapshotFuture)
 	if len(diffs) > 0 {
 		if !inFlightMove {
-			klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheckSnapshot", "found diffs")
+			klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheck", "found diffs")
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).With("inflight", len(ss.AllMoves)).Log("annualCheckSnapshot", "found diffs")
+			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).With("inflight", len(ss.AllMoves)).Log("annualCheck", "found diffs")
 		}
 	}
 	ss.SnapshotCurrent = newSnapshotCurrent
 	newSnapshotFuture.Freeze()
-	ss.SetSnapshotFuture(ctx, newSnapshotFuture, "annualCheckSnapshot")
-	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString(ctx)).With("future", newSnapshotFuture.ToShortString(ctx)).Log("annualCheckSnapshot", "done")
+	ss.SetSnapshotFuture(ctx, newSnapshotFuture, "annualCheck")
+	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString(ctx)).With("future", newSnapshotFuture.ToShortString(ctx)).Log("annualCheck", "done")
 }
 
-func (ss *ServiceState) snapshotDump(ctx context.Context) {
+func (ss *ServiceState) hourlyCheck(ctx context.Context) {
 	now := kcommon.GetWallTimeMs()
-	if ss.LastSnapshotDumpMs+20*60*1000 > now {
+	if ss.LastHourlyCheckMs+60*60*1000 > now {
 		return
 	}
-	ss.LastSnapshotDumpMs = now
-	klogging.Info(ctx).With("current", ss.GetSnapshotCurrentForAny().ToJsonString()).Log("SnapshotDump", "dumping current snapshot")
-	klogging.Info(ctx).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).Log("SnapshotDump", "dumping future snapshot")
+	ss.LastHourlyCheckMs = now
+	klogging.Info(ctx).With("current", ss.GetSnapshotCurrentForAny().ToJsonString()).Log("hourlyCheck", "dumping current snapshot")
+	klogging.Info(ctx).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).Log("hourlyCheck", "dumping future snapshot")
 }
 
 // return list of differences
