@@ -14,7 +14,7 @@ import (
 
 var (
 	RunLoopElapsedMsMetric   = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"name", "event"})
-	RunLoopQueueTimeMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_queue_time_ms", "desc", []string{"name"})
+	RunLoopQueueTimeMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_queue_time_ms", "desc", []string{"name", "event"})
 )
 
 // CriticalResource is an interface that represents resources that can be processed by events
@@ -113,8 +113,11 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			// Handle event
 			start := kcommon.GetMonoTimeMs()
 			eveName := event.GetName()
-			waitTimeMs := kcommon.GetMonoTimeMs() - event.GetCreateTimeMs()
-			RunLoopQueueTimeMsMetric.GetTimeSequence(ctx, rl.name).Add(waitTimeMs)
+			if eveName == "" {
+				eveName = "unknown"
+			}
+			waitTimeMs := kcommon.GetWallTimeMs() - event.GetCreateTimeMs()
+			RunLoopQueueTimeMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(waitTimeMs)
 			// 使用原子操作存储当前事件名
 			rl.currentEventName.Store(eveName)
 			ctx2 := klogging.EmbedTraceId(ctx, "rl_"+rl.GetNextEpochId())

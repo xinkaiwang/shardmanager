@@ -417,6 +417,7 @@ func NewActionEvent(fn func(ss *ServiceState), name string) *ActionEvent {
 	return &ActionEvent{
 		createTimeMs: kcommon.GetWallTimeMs(),
 		fn:           fn,
+		name:         name,
 	}
 }
 
