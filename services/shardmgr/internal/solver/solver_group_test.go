@@ -152,7 +152,7 @@ func TestSolverGroup_Basic(t *testing.T) {
 		var proposalMu sync.Mutex
 
 		// 创建 SolverGroup
-		group := NewSolverGroup(ctx, snapshot, func(proposal *costfunc.Proposal) common.EnqueueResult {
+		group := NewSolverGroup(ctx, snapshot, func(ctx context.Context, proposal *costfunc.Proposal) common.EnqueueResult {
 			if proposal == nil {
 				return common.ER_LowGain
 			}
@@ -244,7 +244,7 @@ func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 		var proposalMu sync.Mutex
 
 		// 创建 SolverGroup
-		group := NewSolverGroup(ctx, snapshot, func(proposal *costfunc.Proposal) common.EnqueueResult {
+		group := NewSolverGroup(ctx, snapshot, func(ctx context.Context, proposal *costfunc.Proposal) common.EnqueueResult {
 			if proposal == nil {
 				return common.ER_LowGain
 			}
@@ -356,7 +356,7 @@ func TestSolverGroup_ThreadScaling(t *testing.T) {
 		var proposalMu sync.Mutex
 
 		// 创建 SolverGroup
-		group := NewSolverGroup(ctx, snapshot, func(proposal *costfunc.Proposal) common.EnqueueResult {
+		group := NewSolverGroup(ctx, snapshot, func(ctx context.Context, proposal *costfunc.Proposal) common.EnqueueResult {
 			if proposal == nil {
 				return common.ER_LowGain
 			}

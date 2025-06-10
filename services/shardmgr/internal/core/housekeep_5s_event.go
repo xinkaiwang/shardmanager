@@ -13,10 +13,14 @@ import (
 
 // Housekeep5sEvent implements krunloop.IEvent[*ServiceState] interface
 type Housekeep5sEvent struct {
+	createTimeMs int64 // time when the event was created
 }
 
+func (te *Housekeep5sEvent) GetCreateTimeMs() int64 {
+	return te.createTimeMs
+}
 func (te *Housekeep5sEvent) GetName() string {
-	return "TimerEvent"
+	return "Housekeep5sEvent"
 }
 
 func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
@@ -37,7 +41,9 @@ func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
 }
 
 func NewHousekeep5sEvent() *Housekeep5sEvent {
-	return &Housekeep5sEvent{}
+	return &Housekeep5sEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+	}
 }
 
 func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {

@@ -10,12 +10,18 @@ import (
 
 // Housekeep30sEvent implements krunloop.IEvent[*ServiceState] interface
 type Housekeep30sEvent struct {
+	createTimeMs int64 // time when the event was created
 }
 
 func NewHousekeep30sEvent() *Housekeep30sEvent {
-	return &Housekeep30sEvent{}
+	return &Housekeep30sEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+	}
 }
 
+func (te *Housekeep30sEvent) GetCreateTimeMs() int64 {
+	return te.createTimeMs
+}
 func (te *Housekeep30sEvent) GetName() string {
 	return "Housekeep30sEvent"
 }

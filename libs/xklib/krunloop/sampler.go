@@ -38,3 +38,9 @@ func (rs *RunloopSampler) Run(ctx context.Context) {
 		rs.Run(ctx)
 	})
 }
+
+func (rs *RunloopSampler) InitTimeSeries(ctx context.Context, names ...string) {
+	for _, name := range names {
+		RunLoopSamplerMetric.GetTimeSequence(ctx, rs.name, name).Touch()
+	}
+}

@@ -3,6 +3,7 @@ package shadow
 import (
 	"context"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
@@ -63,44 +64,43 @@ func (shadow *ShadowState) InitDone() {
 
 // StoreShardState: StoreProvider interface methods
 func (shadow *ShadowState) StoreShardState(shardId data.ShardId, shardState *smgjson.ShardStateJson) {
-	eve := &ShardStateJsonEvent{
-		ShardId:    shardId,
-		ShardState: shardState,
-	}
+	eve := NewShardStateJsonEvent(shardId, shardState)
 	shadow.runloop.PostEvent(eve)
 }
 
 // StoreWorkerState: StoreProvider interface methods
 func (shadow *ShadowState) StoreWorkerState(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson) {
-	eve := &WorkerStateJsonEvent{
-		WorkerFullId: workerFullId,
-		WorkerState:  workerState,
-	}
+	eve := NewWorkerStateJsonEvent(workerFullId, workerState)
 	shadow.runloop.PostEvent(eve)
 }
 
 // StoreMoveState: StoreProvider interface methods
 func (shadow *ShadowState) StoreMoveState(proposalId data.ProposalId, proposalState *smgjson.MoveStateJson) {
-	eve := &ExecutionPlanJsonEvent{
-		ProposalId: proposalId,
-		ExtPlan:    proposalState,
-	}
+	eve := NewExecutionPlanJsonEvent(proposalId, proposalState)
 	shadow.runloop.PostEvent(eve)
 }
 
 // Visit: StoreProvider interface methods
 func (shadow *ShadowState) Visit(visitor func(shadowState *ShadowState)) {
-	eve := &ShadowVisitEvent{
-		Visitor: visitor,
-	}
+	eve := NewShadowVisitEvent(visitor)
 	shadow.runloop.PostEvent(eve)
 }
 
 // ShadowVisitEvent implements krunloop.IEvent[*ShadowState]
 type ShadowVisitEvent struct {
-	Visitor func(shadowState *ShadowState)
+	createTimeMs int64 // time when the event was created
+	Visitor      func(shadowState *ShadowState)
 }
 
+func NewShadowVisitEvent(visitor func(shadowState *ShadowState)) *ShadowVisitEvent {
+	return &ShadowVisitEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+		Visitor:      visitor,
+	}
+}
+func (eve *ShadowVisitEvent) GetCreateTimeMs() int64 {
+	return eve.createTimeMs
+}
 func (eve *ShadowVisitEvent) GetName() string {
 	return "ShadowVisitEvent"
 }
@@ -118,8 +118,21 @@ func (shadow *ShadowState) StopAndWaitForExit(ctx context.Context) {
 
 // ShardStateJsonEvent implements krunloop.IEvent[*ShadowState]
 type ShardStateJsonEvent struct {
-	ShardId    data.ShardId
-	ShardState *smgjson.ShardStateJson
+	createTimeMs int64 // time when the event was created
+	ShardId      data.ShardId
+	ShardState   *smgjson.ShardStateJson
+}
+
+func NewShardStateJsonEvent(shardId data.ShardId, shardState *smgjson.ShardStateJson) *ShardStateJsonEvent {
+	return &ShardStateJsonEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+		ShardId:      shardId,
+		ShardState:   shardState,
+	}
+}
+
+func (eve *ShardStateJsonEvent) GetCreateTimeMs() int64 {
+	return eve.createTimeMs
 }
 
 func (eve *ShardStateJsonEvent) GetName() string {
@@ -146,10 +159,21 @@ func (eve *ShardStateJsonEvent) Process(ctx context.Context, shadow *ShadowState
 
 // WorkerStateJsonEvent implements krunloop.IEvent[*ShadowState]
 type WorkerStateJsonEvent struct {
+	createTimeMs int64 // time when the event was created
 	WorkerFullId data.WorkerFullId
 	WorkerState  *smgjson.WorkerStateJson
 }
 
+func NewWorkerStateJsonEvent(workerFullId data.WorkerFullId, workerState *smgjson.WorkerStateJson) *WorkerStateJsonEvent {
+	return &WorkerStateJsonEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+		WorkerFullId: workerFullId,
+		WorkerState:  workerState,
+	}
+}
+func (eve *WorkerStateJsonEvent) GetCreateTimeMs() int64 {
+	return eve.createTimeMs
+}
 func (eve *WorkerStateJsonEvent) GetName() string {
 	return "WorkerStateJsonEvent"
 }
@@ -169,10 +193,21 @@ func (eve *WorkerStateJsonEvent) Process(ctx context.Context, shadow *ShadowStat
 
 // ExecutionPlanJsonEvent implements krunloop.IEvent[*ShadowState]
 type ExecutionPlanJsonEvent struct {
-	ProposalId data.ProposalId
-	ExtPlan    *smgjson.MoveStateJson
+	createTimeMs int64 // time when the event was created
+	ProposalId   data.ProposalId
+	ExtPlan      *smgjson.MoveStateJson
 }
 
+func NewExecutionPlanJsonEvent(proposalId data.ProposalId, extPlan *smgjson.MoveStateJson) *ExecutionPlanJsonEvent {
+	return &ExecutionPlanJsonEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+		ProposalId:   proposalId,
+		ExtPlan:      extPlan,
+	}
+}
+func (eve *ExecutionPlanJsonEvent) GetCreateTimeMs() int64 {
+	return eve.createTimeMs
+}
 func (eve *ExecutionPlanJsonEvent) GetName() string {
 	return "ExecutionPlanJsonEvent"
 }

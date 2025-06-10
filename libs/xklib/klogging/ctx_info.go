@@ -79,7 +79,6 @@ func AttachToCtx(ctx context.Context, ci *CtxInfo) context.Context {
 	return newCtx
 }
 
-// GetOrCreateCtxInfo: this is rarely used, most of the time you need GetOrCreateCtxInfo(), which automatically refers to parents for you. You only need this when (in rare cases) you want to attach CtxInfo onto a different ctx chain (which is not in the same ctx chain).
 // get current CtxInfo (if already exists in ctx), otherwise create a new CtxInfo as well as new ctx
 func GetOrCreateCtxInfo(ctx context.Context) (context.Context, *CtxInfo) {
 	info := GetCurrentCtxInfo(ctx)

@@ -76,19 +76,24 @@ func (ss *ServiceState) LoadCurrentWorkerEph(ctx context.Context) ([]*cougarjson
 
 // WorkerEphEvent: implements IEvent[*ServiceState]
 type WorkerEphEvent struct {
-	Ctx       context.Context
-	WorkerId  data.WorkerId
-	WorkerEph *cougarjson.WorkerEphJson
+	createTimeMs int64 // time when the event was created
+	Ctx          context.Context
+	WorkerId     data.WorkerId
+	WorkerEph    *cougarjson.WorkerEphJson
 }
 
 func NewWorkerEphEvent(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) *WorkerEphEvent {
 	return &WorkerEphEvent{
-		Ctx:       ctx,
-		WorkerId:  workerId,
-		WorkerEph: workerEph,
+		Ctx:          ctx,
+		WorkerId:     workerId,
+		WorkerEph:    workerEph,
+		createTimeMs: kcommon.GetWallTimeMs(),
 	}
 }
 
+func (e *WorkerEphEvent) GetCreateTimeMs() int64 {
+	return e.createTimeMs
+}
 func (e *WorkerEphEvent) GetName() string {
 	return "WorkerEphEvent"
 }

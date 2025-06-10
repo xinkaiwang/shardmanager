@@ -121,9 +121,9 @@ func main() {
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-		<-sigChan
+		sig := <-sigChan
 
-		klogging.Info(ctx).Log("ServerShutdown", "Shutting down servers...")
+		klogging.Info(ctx).With("signal", sig).Log("ServerShutdown", "Shutting down servers...")
 		soloMgr.Close(ctx)
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()

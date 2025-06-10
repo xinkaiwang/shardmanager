@@ -2,6 +2,7 @@ package solver
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -39,10 +40,10 @@ type SolverGroup struct {
 	// Snapshot may have race condition, so we need atomic operations
 	Snapshot         atomic.Value // *costfunc.Snapshot
 	SolverDrivers    map[SolverType]*SolverDriver
-	enqueueProposals func(proposal *costfunc.Proposal) common.EnqueueResult
+	enqueueProposals func(ctx context.Context, proposal *costfunc.Proposal) common.EnqueueResult
 }
 
-func NewSolverGroup(ctx context.Context, snapshot *costfunc.Snapshot, enqueueProposals func(proposal *costfunc.Proposal) common.EnqueueResult) *SolverGroup {
+func NewSolverGroup(ctx context.Context, snapshot *costfunc.Snapshot, enqueueProposals func(ctx context.Context, proposal *costfunc.Proposal) common.EnqueueResult) *SolverGroup {
 	group := &SolverGroup{
 		ThreadPool:       NewThreadPool(ctx, 2 /* how many CPU cores */, "SolverGroup"),
 		SolverDrivers:    map[SolverType]*SolverDriver{},
@@ -82,6 +83,7 @@ type SolverDriver struct {
 	threadsMutex   sync.Mutex // 保护 threads 数组
 	threads        []*DriverThread
 	sleepPerLoopMs atomic.Int64 // 使用原子操作代替互斥锁保护
+	threadIdCt     int          // for logging/debug only, not used in logic
 }
 
 func NewSolverDriver(ctx context.Context, name SolverType, parent *SolverGroup, solver Solver, enqueue func(task Task)) *SolverDriver {
@@ -109,7 +111,8 @@ func (sd *SolverDriver) threadCountWatcher(ctx context.Context) {
 
 	// 添加需要的线程
 	for len(sd.threads) < expectedThreadCount {
-		sd.threads = append(sd.threads, NewDriverThread(ctx, sd))
+		sd.threads = append(sd.threads, NewDriverThread(ctx, sd, "sv_"+string(sd.name)+"_"+strconv.Itoa(sd.threadIdCt)))
+		sd.threadIdCt++
 	}
 
 	// 移除多余的线程
@@ -149,17 +152,21 @@ func (sd *SolverDriver) expectedThreadCount() (threadCount int, sleepPerLoopMs i
 }
 
 type DriverThread struct {
-	ctx    context.Context
-	parent *SolverDriver
-	stop   bool
-	mutex  sync.Mutex // 添加互斥锁保护 stop 字段
+	ctx        context.Context
+	parent     *SolverDriver
+	stop       bool
+	mutex      sync.Mutex // 添加互斥锁保护 stop 字段
+	threadName string     // for logging/debug only
 }
 
-func NewDriverThread(ctx context.Context, parent *SolverDriver) *DriverThread {
+func NewDriverThread(ctx context.Context, parent *SolverDriver, threadName string) *DriverThread {
+	ctx2, info := klogging.GetOrCreateCtxInfo(ctx)
+	info.With("traceId", threadName)
 	dt := &DriverThread{
-		ctx:    ctx,
-		parent: parent,
-		stop:   false,
+		ctx:        ctx2,
+		parent:     parent,
+		threadName: threadName,
+		stop:       false,
 	}
 	go dt.run()
 	return dt
@@ -192,7 +199,6 @@ func (dt *DriverThread) run() {
 		if shouldStop {
 			break
 		}
-
 		task := NewDriverThreadTask(dt.ctx, dt, dt.parent.name)
 		dt.parent.enqueueTask(task)
 		<-task.done
@@ -240,7 +246,7 @@ func (dtt *DriverThreadTask) Execute() {
 	}
 	solverGroupProposalGeneratedMetrics.GetTimeSequence(dtt.ctx, string(dtt.name)).Add(1)
 	// klogging.Verbose(dtt.ctx).With("solver", dtt.name).With("proposalId", proposal.ProposalId).With("signature", proposal.Signature).With("gain", proposal.Gain).With("base", proposal.BasedOn).Log("SolverGroup", "NewProposal")
-	result := dtt.parent.parent.parent.enqueueProposals(proposal)
+	result := dtt.parent.parent.parent.enqueueProposals(dtt.ctx, proposal)
 	if result == common.ER_Enqueued {
 		solverGroupProposalEnqueueMetrics.GetTimeSequence(dtt.ctx, string(dtt.name)).Add(1)
 	}

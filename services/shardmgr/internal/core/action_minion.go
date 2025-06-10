@@ -408,16 +408,21 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 
 // ActionEvent implements IEvent
 type ActionEvent struct {
-	name string
-	fn   func(ss *ServiceState)
+	createTimeMs int64 // time when the event was created
+	name         string
+	fn           func(ss *ServiceState)
 }
 
 func NewActionEvent(fn func(ss *ServiceState), name string) *ActionEvent {
 	return &ActionEvent{
-		fn: fn,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		fn:           fn,
 	}
 }
 
+func (ae *ActionEvent) GetCreateTimeMs() int64 {
+	return ae.createTimeMs
+}
 func (ae *ActionEvent) GetName() string {
 	return ae.name
 }

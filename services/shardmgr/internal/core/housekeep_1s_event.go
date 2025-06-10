@@ -9,10 +9,14 @@ import (
 
 // Housekeep1sEvent implements krunloop.IEvent[*ServiceState] interface
 type Housekeep1sEvent struct {
+	createTimeMs int64
 }
 
+func (te *Housekeep1sEvent) GetCreateTimeMs() int64 {
+	return te.createTimeMs
+}
 func (te *Housekeep1sEvent) GetName() string {
-	return "TimerEvent"
+	return "Housekeep1sEvent"
 }
 
 func (te *Housekeep1sEvent) Process(ctx context.Context, ss *ServiceState) {
@@ -28,7 +32,9 @@ func (te *Housekeep1sEvent) Process(ctx context.Context, ss *ServiceState) {
 }
 
 func NewHousekeep1sEvent() *Housekeep1sEvent {
-	return &Housekeep1sEvent{}
+	return &Housekeep1sEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+	}
 }
 
 func (ss *ServiceState) checkWorkerForTimeout(ctx context.Context) {

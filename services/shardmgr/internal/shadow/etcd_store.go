@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
@@ -181,19 +182,24 @@ func (store *BufferedEtcdStore) initMetrics(ctx context.Context) {
 
 // WriteEvent implements IEvent[*BufferedEtcdStore]
 type WriteEvent struct {
-	Key   string
-	Value string
-	Name  string // for logging/metrics purposes only
+	createTimeMs int64 // time when the event was created
+	Key          string
+	Value        string
+	Name         string // for logging/metrics purposes only
 }
 
 func NewWriteEvent(key string, value string, name string) *WriteEvent {
 	return &WriteEvent{
-		Key:   key,
-		Value: value,
-		Name:  name,
+		Key:          key,
+		Value:        value,
+		Name:         name,
+		createTimeMs: kcommon.GetWallTimeMs(),
 	}
 }
 
+func (eve *WriteEvent) GetCreateTimeMs() int64 {
+	return eve.createTimeMs
+}
 func (eve *WriteEvent) GetName() string {
 	return eve.Name
 }

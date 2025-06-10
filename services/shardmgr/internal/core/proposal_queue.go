@@ -1,6 +1,8 @@
 package core
 
 import (
+	"context"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
@@ -20,7 +22,7 @@ func NewProposalQueue(ss *ServiceState, maxQueueSize int) *ProposalQueue {
 	}
 }
 
-func (pq *ProposalQueue) Push(p *costfunc.Proposal) common.EnqueueResult {
+func (pq *ProposalQueue) Push(ctx context.Context, p *costfunc.Proposal) common.EnqueueResult {
 	isLast := pq.insertProposalWithOrder(p)
 	if len(pq.list) <= pq.maxQueueSize {
 		return common.ER_Enqueued
@@ -32,7 +34,7 @@ func (pq *ProposalQueue) Push(p *costfunc.Proposal) common.EnqueueResult {
 	// new proposal enqueue succ, but need to drop the last proposal
 	result := common.ER_Enqueued
 	lastItem := pq.list[len(pq.list)-1]
-	lastItem.OnClose(common.ER_LowGain)
+	lastItem.OnClose(ctx, common.ER_LowGain)
 	pq.list = pq.list[:len(pq.list)-1]
 	return result
 }

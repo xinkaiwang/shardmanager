@@ -13,7 +13,8 @@ import (
 )
 
 var (
-	RunLoopElapsedMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"name", "event"})
+	RunLoopElapsedMsMetric   = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"name", "event"})
+	RunLoopQueueTimeMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_queue_time_ms", "desc", []string{"name"})
 )
 
 // CriticalResource is an interface that represents resources that can be processed by events
@@ -27,6 +28,7 @@ type CriticalResource interface {
 type IEvent[T CriticalResource] interface {
 	GetName() string
 	Process(ctx context.Context, resource T)
+	GetCreateTimeMs() int64 // for metrics/debugging purposes, returns the time when the event was enqueue/created
 }
 
 type EventPoster[T CriticalResource] interface {
@@ -79,6 +81,13 @@ func (rl *RunLoop[T]) GetNextEpochId() string {
 	return fmt.Sprintf("%d", id)
 }
 
+func (rl *RunLoop[T]) GetQueueLength() int {
+	// 获取队列长度
+	return int(rl.queue.GetSize())
+}
+func (rl *RunLoop[T]) GetName() string {
+	return rl.name
+}
 func (rl *RunLoop[T]) Run(ctx context.Context) {
 	// 使用互斥锁保护 ctx 和 cancel 的设置
 	rl.mu.Lock()
@@ -104,6 +113,8 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			// Handle event
 			start := kcommon.GetMonoTimeMs()
 			eveName := event.GetName()
+			waitTimeMs := kcommon.GetMonoTimeMs() - event.GetCreateTimeMs()
+			RunLoopQueueTimeMsMetric.GetTimeSequence(ctx, rl.name).Add(waitTimeMs)
 			// 使用原子操作存储当前事件名
 			rl.currentEventName.Store(eveName)
 			ctx2 := klogging.EmbedTraceId(ctx, "rl_"+rl.GetNextEpochId())
@@ -140,15 +151,29 @@ func (rl *RunLoop[T]) StopAndWaitForExit() {
 	}
 }
 
+func (rl *RunLoop[T]) InitTimeSeries(ctx context.Context, names ...string) {
+	// 初始化时间序列, 提供0值
+	rl.sampler.InitTimeSeries(ctx, names...)
+	// 初始化时间序列, 提供0值
+	for _, name := range names {
+		RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, name).Touch()
+	}
+}
+
 // ResourceVisitorEvent implements IEvent[T] interface
 type ResourceVisitorEvent[T CriticalResource] struct {
-	callback func(res T)
+	createTimeMs int64 // time when the event was created
+	callback     func(res T)
 }
 
 func NewServiceStateVisitorEvent[T CriticalResource](callback func(res T)) *ResourceVisitorEvent[T] {
 	return &ResourceVisitorEvent[T]{
-		callback: callback,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		callback:     callback,
 	}
+}
+func (e *ResourceVisitorEvent[T]) GetCreateTimeMs() int64 {
+	return e.createTimeMs
 }
 func (e *ResourceVisitorEvent[T]) GetName() string {
 	return "ResourceVisitor"

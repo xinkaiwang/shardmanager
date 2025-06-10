@@ -19,12 +19,18 @@ var (
 
 // AcceptEvent implements krunloop.IEvent[*ServiceState] interface
 type AcceptEvent struct {
+	createTimeMs int64 // time when the event was created
 }
 
 func NewAcceptEvent() *AcceptEvent {
-	return &AcceptEvent{}
+	return &AcceptEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
+	}
 }
 
+func (te *AcceptEvent) GetCreateTimeMs() int64 {
+	return te.createTimeMs
+}
 func (te *AcceptEvent) GetName() string {
 	return "AcceptEvent"
 }
@@ -51,24 +57,37 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	var accpeted []*costfunc.Proposal
 	// var totalImpact costfunc.Gain
 	now := kcommon.GetWallTimeMs()
-	for {
+	stop := false
+	var stopReason string
+	for !stop {
 		if ss.ProposalQueue.IsEmpty() {
-			break
+			stop = true
+			stopReason = "queue is empty"
+			continue
+		}
+		if len(ss.AllMoves) >= int(ss.ServiceConfig.SystemLimit.MaxConcurrentMoveCountLimit) {
+			stop = true
+			stopReason = "too many concurrent moves"
+			continue
 		}
 		proposal := ss.ProposalQueue.Pop()
+		currentSnapshot := ss.GetSnapshotFutureForClone(ctx)
+		klogging.Debug(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("basedOn", proposal.BasedOn).With("currentSnapshot", currentSnapshot.SnapshotId).With("queueLen", ss.ProposalQueue.Size()).Log("AcceptEvent", "candidate proposal")
 		// check 1: is proposal.BasedOn is up to date?
-		if proposal.BasedOn != ss.GetSnapshotFutureForClone(ctx).SnapshotId {
+		if proposal.BasedOn != currentSnapshot.SnapshotId {
 			// re-evaluate the proposal gain (based on the new snapshot)
 			ke := kcommon.TryCatchRun(ctx, func() {
-				currentCost := ss.GetSnapshotFutureForClone(ctx).GetCost(ctx)
-				newCost := ss.GetSnapshotFutureForClone(ctx).Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost(ctx)
+				currentCost := currentSnapshot.GetCost(ctx)
+				newCost := currentSnapshot.Clone().ApplyMove(proposal.Move, costfunc.AM_Strict).GetCost(ctx)
 				gain := currentCost.Substract(newCost)
 				proposal.Gain = gain
-				proposal.BasedOn = ss.GetSnapshotFutureForClone(ctx).SnapshotId
+				proposal.BasedOn = currentSnapshot.SnapshotId
 				// add this proposal back to the queue again
-				ss.ProposalQueue.Push(proposal)
+				ss.ProposalQueue.Push(ctx, proposal)
+				klogging.Debug(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "re-enqueue gain")
 			})
 			if ke != nil {
+				klogging.Debug(ctx).WithError(ke).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "proposal is dropped due to error in re-evaluating gain")
 				proposal.Dropped(ctx, common.ER_Conflict)
 			}
 			continue
@@ -92,13 +111,15 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 			continue
 		} else {
 			// top proposal is not good enough, so we need to wait for a while
-			break
+			stop = true
+			stopReason = "proposal gain too low"
+			continue
 		}
 	}
 	// ss.AcceptedCount += len(accpeted)
 	if len(accpeted) > 0 {
 		future := ss.GetSnapshotFutureForAny(ctx)
-		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost(ctx).String()).Log("AcceptEvent", "broadcastSnapshot")
+		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost(ctx).String()).With("stopReason", stopReason).With("moveCount", len(ss.AllMoves)).Log("AcceptEvent", "broadcastSnapshot")
 		ss.boardcastSnapshotBatchManager.TryScheduleInternal(ctx, "acceptEvent")
 		// ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
 	}

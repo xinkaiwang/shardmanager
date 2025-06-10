@@ -31,19 +31,24 @@ func (ss *ServiceState) LoadServiceConfig(ctx context.Context) (*config.ServiceC
 
 // ServiceConfigUpdateEvent: implement IEvent interface
 type ServiceConfigUpdateEvent struct {
-	Ctx    context.Context
-	Parent *ServiceConfigWatcher
-	NewCfg *config.ServiceConfig
+	createTimeMs int64 // time when the event was created
+	Ctx          context.Context
+	Parent       *ServiceConfigWatcher
+	NewCfg       *config.ServiceConfig
 }
 
 func NewServiceConfigUpdateEvent(ctx context.Context, parent *ServiceConfigWatcher, newCfg *config.ServiceConfig) *ServiceConfigUpdateEvent {
 	return &ServiceConfigUpdateEvent{
-		Ctx:    ctx,
-		Parent: parent,
-		NewCfg: newCfg,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		Ctx:          ctx,
+		Parent:       parent,
+		NewCfg:       newCfg,
 	}
 }
 
+func (e *ServiceConfigUpdateEvent) GetCreateTimeMs() int64 {
+	return e.createTimeMs
+}
 func (e *ServiceConfigUpdateEvent) GetName() string {
 	return "ServiceConfigUpdate"
 }

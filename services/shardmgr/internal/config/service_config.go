@@ -47,6 +47,8 @@ type SystemLimitConfig struct {
 	MaxAssignmentCountLimit int32
 	// MaxHatCount
 	MaxHatCountLimit int32
+	// MaxConcurrentMoveCountLimit 是每次迁移的最大并发数限制
+	MaxConcurrentMoveCountLimit int32
 }
 
 type FaultToleranceConfig struct {
@@ -119,10 +121,11 @@ func WorkerConfigJsonToConfig(wc *smgjson.WorkerConfigJson) WorkerConfig {
 
 func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimitConfig {
 	cfg := SystemLimitConfig{
-		MaxShardsCountLimit:     1000, // default 1000
-		MaxReplicaCountLimit:    1000, // default 1000
-		MaxAssignmentCountLimit: 1000, // default 1000
-		MaxHatCountLimit:        10,   // default 10
+		MaxShardsCountLimit:         1000, // default 1000
+		MaxReplicaCountLimit:        1000, // default 1000
+		MaxAssignmentCountLimit:     1000, // default 1000
+		MaxHatCountLimit:            10,   // default 10
+		MaxConcurrentMoveCountLimit: 30,   // default 30
 	}
 	if sc == nil {
 		return cfg
@@ -138,6 +141,9 @@ func SystemLimitConfigJsonToConfig(sc *smgjson.SystemLimitConfigJson) SystemLimi
 	}
 	if sc.MaxHatCountLimit != nil {
 		cfg.MaxHatCountLimit = *sc.MaxHatCountLimit
+	}
+	if sc.MaxConcurrentMoveCountLimit != nil {
+		cfg.MaxConcurrentMoveCountLimit = *sc.MaxConcurrentMoveCountLimit
 	}
 	return cfg
 }
@@ -210,10 +216,11 @@ func (cfg *WorkerConfig) ToJsonObj() *smgjson.WorkerConfigJson {
 }
 func (cfg *SystemLimitConfig) ToJsonObj() *smgjson.SystemLimitConfigJson {
 	return &smgjson.SystemLimitConfigJson{
-		MaxShardsCountLimit:     &cfg.MaxShardsCountLimit,
-		MaxReplicaCountLimit:    &cfg.MaxReplicaCountLimit,
-		MaxAssignmentCountLimit: &cfg.MaxAssignmentCountLimit,
-		MaxHatCountLimit:        &cfg.MaxHatCountLimit,
+		MaxShardsCountLimit:         &cfg.MaxShardsCountLimit,
+		MaxReplicaCountLimit:        &cfg.MaxReplicaCountLimit,
+		MaxAssignmentCountLimit:     &cfg.MaxAssignmentCountLimit,
+		MaxHatCountLimit:            &cfg.MaxHatCountLimit,
+		MaxConcurrentMoveCountLimit: &cfg.MaxConcurrentMoveCountLimit,
 	}
 }
 func (cfg *DynamicThresholdConfig) ToJsonObj() *smgjson.DynamicThresholdConfigJson {

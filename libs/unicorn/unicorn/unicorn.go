@@ -7,6 +7,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/etcdprov"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 )
@@ -106,9 +107,13 @@ func (uc *Unicorn) VisitUnicornAndWait(ctx context.Context, visitor func(*Unicor
 }
 
 type UnicornVisitorEvent struct {
-	visitor func(uc *Unicorn)
+	createTimeMs int64 // time when the event was created
+	visitor      func(uc *Unicorn)
 }
 
+func (eve *UnicornVisitorEvent) GetCreateTimeMs() int64 {
+	return eve.createTimeMs
+}
 func (eve *UnicornVisitorEvent) GetName() string {
 	return "UnicornVisitorEvent"
 }
@@ -117,6 +122,7 @@ func (eve *UnicornVisitorEvent) Process(ctx context.Context, resource *Unicorn) 
 }
 func NewUnicornVisitorEvent(visitor func(uc *Unicorn)) *UnicornVisitorEvent {
 	return &UnicornVisitorEvent{
-		visitor: visitor,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		visitor:      visitor,
 	}
 }

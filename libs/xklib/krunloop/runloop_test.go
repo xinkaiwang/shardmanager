@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
@@ -16,10 +17,14 @@ func (tr *TestRunLoopResource) IsResource() {}
 
 // Create a test event type
 type RunLoopTestEvent struct {
-	Message  string
-	executed chan bool // For verification
+	CreateTimeMs int64 // time when the event was created
+	Message      string
+	executed     chan bool // For verification
 }
 
+func (te *RunLoopTestEvent) GetCreateTimeMs() int64 {
+	return te.CreateTimeMs
+}
 func (te *RunLoopTestEvent) GetName() string {
 	return "TestEvent"
 }
@@ -35,8 +40,9 @@ func (te *RunLoopTestEvent) Process(ctx context.Context, _ *TestRunLoopResource)
 
 func NewRunLoopTestEvent(msg string) *RunLoopTestEvent {
 	return &RunLoopTestEvent{
-		Message:  msg,
-		executed: make(chan bool, 1),
+		CreateTimeMs: kcommon.GetWallTimeMs(),
+		Message:      msg,
+		executed:     make(chan bool, 1),
 	}
 }
 
@@ -187,9 +193,19 @@ func TestRunLoopHighLoad(t *testing.T) {
 
 // Create a dummy event type for concurrency test
 type DummyEvent struct {
-	Msg string
+	CreateTimeMs int64 // time when the event was created
+	Msg          string
 }
 
+func NewDummyEvent(msg string) DummyEvent {
+	return DummyEvent{
+		CreateTimeMs: kcommon.GetWallTimeMs(),
+		Msg:          msg,
+	}
+}
+func (de DummyEvent) GetCreateTimeMs() int64 {
+	return de.CreateTimeMs
+}
 func (de DummyEvent) GetName() string {
 	return "DummyEvent"
 }
@@ -224,7 +240,7 @@ func TestRunLoopConcurrency(t *testing.T) {
 
 	go func() {
 		for i := 0; i < numEvents; i++ {
-			rl.PostEvent(DummyEvent{Msg: "dummy" + strconv.Itoa(i)})
+			rl.PostEvent(NewDummyEvent("dummy" + strconv.Itoa(i)))
 		}
 		done <- true
 	}()

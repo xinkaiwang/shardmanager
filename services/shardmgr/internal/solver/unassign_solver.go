@@ -67,13 +67,13 @@ func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.S
 		return nil
 	}
 
-	proposal := costfunc.NewProposal(ctx, "UnassignSolver", baseCost.Substract(bestCost), snapshot.SnapshotId)
+	proposal := costfunc.NewProposal(ctx, "unassign", baseCost.Substract(bestCost), snapshot.SnapshotId)
 	proposal.StartTimeMs = kcommon.GetWallTimeMs()
 	proposal.Move = bestMove
 	proposal.Signature = proposal.GetSignature()
-	proposal.OnClose = func(reason common.EnqueueResult) {
+	proposal.OnClose = func(ctx2 context.Context, reason common.EnqueueResult) {
 		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
-		klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "UnassignSolver").Log("ProposalClosed", "")
+		klogging.Debug(ctx2).With("reason", reason).With("elapsedMs", elapsedMs).With("proposalId", proposal.ProposalId).With("solver", "unassign").Log("ProposalClosed", "")
 	}
 	return proposal
 }

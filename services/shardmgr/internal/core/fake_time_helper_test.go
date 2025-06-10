@@ -262,15 +262,22 @@ func (setup *FakeTimeTestSetup) safeAccessServiceState(fn func(*ServiceState)) {
 // 	<-completed
 // }
 
-// serviceStateAccessEvent 是一个用于访问 ServiceState 的事件
+// serviceStateAccessEvent implements krunloop.IEvent interface
 type serviceStateAccessEvent struct {
-	callback func(*ServiceState)
+	createTimeMs int64
+	callback     func(*ServiceState)
 }
 
 func NewServiceStateAccessEvent(callback func(*ServiceState)) *serviceStateAccessEvent {
 	return &serviceStateAccessEvent{
-		callback: callback,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		callback:     callback,
 	}
+}
+
+// GetCreateTimeMs 返回事件创建时间
+func (e *serviceStateAccessEvent) GetCreateTimeMs() int64 {
+	return e.createTimeMs
 }
 
 // GetName 返回事件名称

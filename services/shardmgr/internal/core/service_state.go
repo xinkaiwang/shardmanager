@@ -83,6 +83,7 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 	ss.routingProvider = shadow.NewDefaultRoutingProvider(ss.PathManager)
 	ss.actionProvider = shadow.NewDefaultActionProvider(ss.PathManager)
 	ss.runloop = krunloop.NewRunLoop(ctx, ss, "ss")
+	ss.runloop.InitTimeSeries(ctx, "AcceptEvent", "GetStateEvent", "Housekeep30sEvent", "Housekeep5sEvent", "Housekeep1sEvent", "WorkerEphEvent", "syncWorkerEphBatch", "reCreateSnapshotBatch", "syncShardPlanBatch", "boardcastSnapshotBatch")
 	ss.syncWorkerBatchManager = NewBatchManager(ss, 10, "syncWorkerEphBatch", func(ctx context.Context, ss *ServiceState) {
 		ss.digestStagingWorkerEph(ctx)
 	})
@@ -114,6 +115,10 @@ func (ss *ServiceState) PostActionAndWait(fn func(ss *ServiceState), name string
 	}, name)
 	ss.runloop.PostEvent(eve)
 	<-ch
+}
+
+func (ss *ServiceState) GetRunloopQueueLength() int {
+	return ss.runloop.GetQueueLength()
 }
 
 // IsResource implements the CriticalResource interface

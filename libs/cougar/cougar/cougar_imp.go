@@ -197,13 +197,20 @@ func (c *CougarImpl) ToEphNode(updateReason string) *cougarjson.WorkerEphJson {
 
 // CougarVisitEvent implements krunloop.IEvent interface
 type CougarVisitEvent struct {
-	visitor func(cougarImpl *CougarImpl)
+	createTimeMs int64 // time when the event was created
+	visitor      func(cougarImpl *CougarImpl)
 }
 
 func NewCougarVisitEvent(visitor func(cougarImpl *CougarImpl)) *CougarVisitEvent {
 	return &CougarVisitEvent{
-		visitor: visitor,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		visitor:      visitor,
 	}
+}
+
+// GetCreateTimeMs implements krunloop.IEvent interface
+func (c *CougarVisitEvent) GetCreateTimeMs() int64 {
+	return c.createTimeMs
 }
 
 // GetName implements krunloop.IEvent interface
@@ -218,13 +225,19 @@ func (c *CougarVisitEvent) Process(ctx context.Context, resource *CougarImpl) {
 
 // PilotNodeUpdateEvent implements krunloop.IEvent interface
 type PilotNodeUpdateEvent struct {
+	createTimeMs int64 // time when the event was created
 	newPilotNode *cougarjson.PilotNodeJson
 }
 
 func NewPilotNodeUpdateEvent(newPilotNode *cougarjson.PilotNodeJson) *PilotNodeUpdateEvent {
 	return &PilotNodeUpdateEvent{
+		createTimeMs: kcommon.GetWallTimeMs(),
 		newPilotNode: newPilotNode,
 	}
+}
+
+func (c *PilotNodeUpdateEvent) GetCreateTimeMs() int64 {
+	return c.createTimeMs
 }
 
 // GetName implements krunloop.IEvent interface

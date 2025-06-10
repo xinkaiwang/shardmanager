@@ -15,10 +15,14 @@ func (tr *TestResource) IsResource() {}
 
 // TestEvent is a test event type
 type TestEvent struct {
-	value  int
-	execCh chan int // For verification
+	createTimeMs int64 // time when the event was created
+	value        int
+	execCh       chan int // For verification
 }
 
+func (e *TestEvent) GetCreateTimeMs() int64 {
+	return e.createTimeMs
+}
 func (e *TestEvent) GetName() string {
 	return "TestEvent"
 }
@@ -32,8 +36,9 @@ func (e *TestEvent) Process(ctx context.Context, _ *TestResource) {
 
 func newTestEvent(value int) *TestEvent {
 	return &TestEvent{
-		value:  value,
-		execCh: make(chan int, 1),
+		createTimeMs: kcommon.GetWallTimeMs(),
+		value:        value,
+		execCh:       make(chan int, 1),
 	}
 }
 

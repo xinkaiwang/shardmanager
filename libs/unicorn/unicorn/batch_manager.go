@@ -55,15 +55,21 @@ func (bm *BatchManager) TryScheduleInternal(ctx context.Context, reasons ...stri
 
 // BatchProcessEvent implements krunloop.IEvent interface
 type BatchProcessEvent struct {
-	ctx    context.Context
-	parent *BatchManager
+	createTimeMs int64
+	ctx          context.Context
+	parent       *BatchManager
 }
 
 func NewBatchProcessEvent(ctx context.Context, parent *BatchManager) *BatchProcessEvent {
 	return &BatchProcessEvent{
-		ctx:    ctx,
-		parent: parent,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		ctx:          ctx,
+		parent:       parent,
 	}
+}
+
+func (bpe *BatchProcessEvent) GetCreateTimeMs() int64 {
+	return bpe.createTimeMs
 }
 
 func (bpe *BatchProcessEvent) GetName() string {

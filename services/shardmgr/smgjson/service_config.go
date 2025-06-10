@@ -33,6 +33,8 @@ type SystemLimitConfigJson struct {
 	MaxAssignmentCountLimit *int32 `json:"max_assignment_count_limit"`
 	// MaxHatCount
 	MaxHatCountLimit *int32 `json:"max_hat_count_count"`
+	// MaxConcurrentMoveCountLimit 是每次迁移的最大并发数限制
+	MaxConcurrentMoveCountLimit *int32 `json:"max_concurrent_move_count_limit"`
 }
 
 type CostFuncConfigJson struct {

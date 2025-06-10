@@ -28,9 +28,9 @@ type Proposal struct {
 	StartTimeMs int64 // epoch time in ms
 
 	Move         Move
-	ProposalSize int                               // size of the proposal: foe example, 1 for simple move, 2 for swap move
-	Signature    string                            // signature of the move (redundant info, but useful for debugging)
-	OnClose      func(reason common.EnqueueResult) // will get called when proposal is closed
+	ProposalSize int                                                    // size of the proposal: foe example, 1 for simple move, 2 for swap move
+	Signature    string                                                 // signature of the move (redundant info, but useful for debugging)
+	OnClose      func(ctx context.Context, reason common.EnqueueResult) // will get called when proposal is closed,
 }
 
 func NewProposal(ctx context.Context, solverType string, gain Gain, basedOn SnapshotId) *Proposal {

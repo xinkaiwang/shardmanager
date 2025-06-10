@@ -89,7 +89,7 @@ func TestAssembleFakeSolver2(t *testing.T) {
 			move := costfunc.NewAssignMove(replicaFullId, data.AssignmentId("as1"), workerFullId)
 			proposal := costfunc.NewProposal(ctx, "TestAssembleFakeSolver", costfunc.Gain{HardScore: 1}, setup.FakeSnapshotListener.snapshot.SnapshotId)
 			proposal.Move = move
-			ss.ProposalQueue.Push(proposal)
+			ss.ProposalQueue.Push(ctx, proposal)
 		}
 
 		// Step 5: 等待accept (接受提案)

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
@@ -22,10 +23,15 @@ func (er *ExampleResource) IsResource() {}
 
 // ExampleEvent is an event that works with ExampleResource
 type ExampleEvent struct {
-	Action   string
-	executed chan bool
+	// CreateTimeMs is the time when the event was created
+	CreateTimeMs int64 // time when the event was created
+	Action       string
+	executed     chan bool
 }
 
+func (e *ExampleEvent) GetCreateTimeMs() int64 {
+	return e.CreateTimeMs
+}
 func (e *ExampleEvent) GetName() string {
 	return "ExampleEvent"
 }
@@ -47,8 +53,9 @@ func (e *ExampleEvent) Process(ctx context.Context, resource *ExampleResource) {
 
 func NewExampleEvent(action string) *ExampleEvent {
 	return &ExampleEvent{
-		Action:   action,
-		executed: make(chan bool, 1),
+		CreateTimeMs: kcommon.GetWallTimeMs(),
+		Action:       action,
+		executed:     make(chan bool, 1),
 	}
 }
 

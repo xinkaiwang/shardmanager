@@ -132,13 +132,13 @@ func (as *AssignSolver) FindProposal(ctx context.Context, snapshot *costfunc.Sna
 	}
 
 	// step 6: create a proposal
-	proposal := costfunc.NewProposal(ctx, "AssignSolver", baseCost.Substract(bestCost), snapshot.SnapshotId)
+	proposal := costfunc.NewProposal(ctx, "assign", baseCost.Substract(bestCost), snapshot.SnapshotId)
 	proposal.Move = bestMove
 	proposal.Signature = bestMove.GetSignature()
-	proposal.OnClose = func(reason common.EnqueueResult) {
+	proposal.OnClose = func(ctx2 context.Context, reason common.EnqueueResult) {
 		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
-		klogging.Debug(ctx).With("reason", reason).With("elapsedMs", elapsedMs).With("solver", "AssignSolver").Log("ProposalClosed", "")
+		klogging.Debug(ctx2).With("reason", reason).With("elapsedMs", elapsedMs).With("proposalId", proposal.ProposalId).With("solver", "assign").Log("ProposalClosed", "")
 	}
-	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solver", "AssignSolver").With("signature", proposal.GetSignature()).Log("ProposalCreated", "")
+	klogging.Info(ctx).With("proposalId", proposal.ProposalId).With("solver", "assign").With("signature", proposal.GetSignature()).Log("ProposalCreated", "")
 	return proposal
 }

@@ -1,16 +1,25 @@
 package core
 
-import "context"
+import (
+	"context"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+)
 
 // ServiceStateVisitorEvent implements IEvent interface
 type ServiceStateVisitorEvent struct {
-	callback func(*ServiceState)
+	createTimeMs int64 // time when the event was created
+	callback     func(*ServiceState)
 }
 
 func NewServiceStateVisitorEvent(callback func(*ServiceState)) *ServiceStateVisitorEvent {
 	return &ServiceStateVisitorEvent{
-		callback: callback,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		callback:     callback,
 	}
+}
+func (e *ServiceStateVisitorEvent) GetCreateTimeMs() int64 {
+	return e.createTimeMs
 }
 func (e *ServiceStateVisitorEvent) GetName() string {
 	return "ServiceStateVisitor"

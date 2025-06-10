@@ -6,15 +6,20 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/etcdprov"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // RoutingEvent implements IEvent interface
 type RoutingEvent struct {
-	key  string
-	data *unicornjson.WorkerEntryJson
+	createTimeMs int64 // time when the event was created
+	key          string
+	data         *unicornjson.WorkerEntryJson
 }
 
+func (e *RoutingEvent) GetCreateTimeMs() int64 {
+	return e.createTimeMs
+}
 func (e *RoutingEvent) GetName() string {
 	return "RoutingEvent"
 }
@@ -37,8 +42,9 @@ func (e *RoutingEvent) Process(ctx context.Context, resource *Unicorn) {
 
 func NewRoutingEvent(key string, data *unicornjson.WorkerEntryJson) *RoutingEvent {
 	return &RoutingEvent{
-		key:  key,
-		data: data,
+		createTimeMs: kcommon.GetWallTimeMs(),
+		key:          key,
+		data:         data,
 	}
 }
 

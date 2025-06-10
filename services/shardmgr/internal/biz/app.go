@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/api"
@@ -178,17 +179,63 @@ func (app *App) StartAppMetrics(ctx context.Context) {
 		"Future hard cost of the system",
 		map[string]string{"smg": app.ss.Name},
 	)
+
+	// SystemLimit
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return int64(app.ss.ServiceConfig.SystemLimit.MaxShardsCountLimit) },
+		"system_limit_max_shards_count",
+		"Maximum number of shards allowed in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return int64(app.ss.ServiceConfig.SystemLimit.MaxReplicaCountLimit) },
+		"system_limit_max_replica_count",
+		"Maximum number of replicas allowed in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return int64(app.ss.ServiceConfig.SystemLimit.MaxAssignmentCountLimit) },
+		"system_limit_max_assignment_count",
+		"Maximum number of assignments allowed in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return int64(app.ss.ServiceConfig.SystemLimit.MaxHatCountLimit) },
+		"system_limit_max_hat_count",
+		"Maximum number of hats allowed in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return int64(app.ss.ServiceConfig.SystemLimit.MaxConcurrentMoveCountLimit) },
+		"system_limit_max_concurrent_move_count",
+		"Maximum number of concurrent moves allowed in the system",
+		map[string]string{"smg": app.ss.Name},
+	)
+
+	// runloop metrics
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return int64(app.ss.GetRunloopQueueLength()) },
+		"runloop_queue_length",
+		"Current size of runloop queue",
+		map[string]string{"smg": app.ss.Name},
+	)
 }
 
 // GetStateEvent: implement IEvent[*core.ServiceState]
 type GetStateEvent struct {
-	resp chan *api.GetStateResponse
+	createTimeMs int64 // time when the event was enqueued
+	resp         chan *api.GetStateResponse
 }
 
 func NewGetStateEvent() *GetStateEvent {
 	return &GetStateEvent{
-		resp: make(chan *api.GetStateResponse, 1),
+		createTimeMs: kcommon.GetWallTimeMs(),
+		resp:         make(chan *api.GetStateResponse, 1),
 	}
+}
+
+func (eve *GetStateEvent) GetCreateTimeMs() int64 {
+	return eve.createTimeMs
 }
 
 func (eve *GetStateEvent) GetName() string {

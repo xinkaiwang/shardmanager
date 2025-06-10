@@ -215,7 +215,7 @@ func getDialTimeoutFromEnv() int {
 // LoadAllByPrefix
 func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix string) ([]EtcdKvItem, EtcdRevision) {
 	var items []EtcdKvItem
-	const pageSize = 1000
+	const pageSize = 100
 
 	// 首先获取当前的版本号，后续所有查询都使用这个版本号
 	resp, err := pvd.client.Get(ctx, pathPrefix, clientv3.WithPrefix(), clientv3.WithLimit(1))
@@ -237,16 +237,18 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 	for {
 		// 构建查询选项，始终使用相同的 revision
 		opts := []clientv3.OpOption{
-			clientv3.WithPrefix(),
 			clientv3.WithLimit(pageSize),
 			clientv3.WithRev(revision), // 关键：使用相同的 revision
 		}
 
-		// 如果不是第一页，设置范围
 		if key != pathPrefix {
+			// 如果不是第一页，设置范围
 			opts = append(opts, clientv3.WithFromKey())
 			rangeEnd := clientv3.GetPrefixRangeEnd(pathPrefix)
 			opts = append(opts, clientv3.WithRange(rangeEnd))
+		} else {
+			// 如果是第一页，使用 WithPrefix 选项
+			opts = append(opts, clientv3.WithPrefix())
 		}
 
 		// 执行查询
