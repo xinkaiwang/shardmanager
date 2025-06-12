@@ -102,7 +102,7 @@ func TestSoftSolver_FindProposal(t *testing.T) {
 	assert.NotNil(t, proposal, "应该找到优化方案")
 	if proposal != nil {
 		assert.NotNil(t, proposal.Move, "方案应该包含移动操作")
-		assert.Equal(t, "SoftSolver", proposal.SolverType, "求解器类型应该正确")
+		assert.Equal(t, "soft", proposal.SolverType, "求解器类型应该正确")
 
 		// 验证移动操作是否合理
 		move := proposal.Move.(*costfunc.SimpleMove)

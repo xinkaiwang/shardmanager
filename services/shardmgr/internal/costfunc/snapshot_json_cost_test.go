@@ -233,6 +233,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	snapshot.AllAssignments.Set("assign-1", assignment1)
 	replica0 := NewReplicaSnap("shard_1", 0)
 	shard.Replicas[0] = replica0
+	shard.Snip = nil // 清除Snip，强制重新成本计算
 	replica0.Assignments["assign-1"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-1"
 
@@ -247,6 +248,7 @@ func TestCalCostFromBuildSnapshot(t *testing.T) {
 	// 添加副本1
 	replica1 := NewReplicaSnap("shard_1", 1)
 	shard.Replicas[1] = replica1
+	shard.Snip = nil // 清除Snip，强制重新成本计算
 	replica1.Assignments["assign-2"] = common.Unit{}
 	worker1.Assignments["shard_1"] = "assign-2" // 这里其实有问题，一个worker不能对同一个shard有多个assignments
 

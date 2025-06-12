@@ -83,6 +83,7 @@ func (ss *ServiceState) onServiceConfigUpdate(ctx context.Context, config *confi
 		for _, listener := range ss.ServiceConfigWatcher.CostfuncConfigListener {
 			listener(&config.CostFuncCfg)
 		}
+		ss.reCreateSnapshotBatchManager.TryScheduleInternal(ctx, "cost_func_config_update")
 		configUpdateMetrics.GetTimeSequence(ctx, "cost_func").Add(1)
 	}
 	if oldConfig.SolverConfig != config.SolverConfig {

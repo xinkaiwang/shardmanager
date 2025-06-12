@@ -75,9 +75,15 @@ func (app *App) StartAppMetrics(ctx context.Context) {
 		map[string]string{"smg": app.ss.Name},
 	)
 	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
-		func() int64 { return app.ss.MetricsValues.MetricsValueBestProposalInQueue.Load() },
-		"best_proposal_in_queue",
-		"Best proposal in the queue",
+		func() int64 { return app.ss.MetricsValues.MetricsValueBestSoftScoreInQueue.Load() },
+		"best_soft_score_in_queue",
+		"Best soft score in the queue",
+		map[string]string{"smg": app.ss.Name},
+	)
+	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
+		func() int64 { return app.ss.MetricsValues.MetricsValueBestHardScoreInQueue.Load() },
+		"best_hard_score_in_queue",
+		"Best hard score in the queue",
 		map[string]string{"smg": app.ss.Name},
 	)
 	// worker count

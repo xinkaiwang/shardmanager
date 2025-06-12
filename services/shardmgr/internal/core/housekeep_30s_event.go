@@ -5,6 +5,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 )
 
@@ -99,8 +100,14 @@ func compareSnapshot(ctx context.Context, snap1 *costfunc.Snapshot, snap2 *costf
 
 func (ss *ServiceState) broadcastSnapshot(ctx context.Context, reason string) {
 	if ss.SolverGroup != nil {
-		ss.SolverGroup.OnSnapshot(ctx, ss.GetSnapshotFutureForClone(ctx), reason)
-		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString(ctx)).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
+		var snapshot *costfunc.Snapshot
+		kmetrics.InstrumentSummaryRunVoid(ctx, "SolverGroupOnSnapshot", func() {
+			snapshot = ss.GetSnapshotFutureForClone(ctx)
+			snapshot.GetCost(ctx) // ensure cost is calculated
+			ss.SolverGroup.OnSnapshot(ctx, snapshot, reason)
+		}, reason)
+
+		klogging.Info(ctx).With("snapshot", snapshot.ToShortString(ctx)).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
 	} else {
 		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString(ctx)).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
 	}

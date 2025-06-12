@@ -441,7 +441,7 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 				passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
 					ws.Draining = drain
 					ws.NotTarget = true // this worker is not available to move any shard into it
-				}, "WorkerStateUpdate")
+				}, ws.GetAllShardIds(), "WorkerStateUpdate")
 				moves = append(moves, passiveMove)
 			} else {
 				passiveMove := costfunc.NewPasMoveWorkerSnapAddRemove(ws.GetWorkerFullId(), nil, "WorkerStateAddRemove")
@@ -451,6 +451,14 @@ func (ws *WorkerState) applyNewEph(ctx context.Context, ss *ServiceState, worker
 	}
 
 	return
+}
+
+func (ws *WorkerState) GetAllShardIds() []data.ShardId {
+	shardIds := make([]data.ShardId, 0, len(ws.Assignments))
+	for shardId := range ws.Assignments {
+		shardIds = append(shardIds, shardId)
+	}
+	return shardIds
 }
 
 func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceState) (needsDelete bool) {
@@ -482,7 +490,7 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 				dirty.AddDirtyFlag("hat")
 				passiveMove := costfunc.NewPasMoveWorkerSnapUpdate(ws.GetWorkerFullId(), func(ws *costfunc.WorkerSnap) {
 					ws.Draining = true
-				}, "drainingHat")
+				}, ws.GetAllShardIds(), "drainingHat")
 				passiveMoves = append(passiveMoves, passiveMove)
 			}
 		}

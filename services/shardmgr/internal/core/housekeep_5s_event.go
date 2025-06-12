@@ -7,6 +7,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
@@ -25,12 +26,17 @@ func (te *Housekeep5sEvent) GetName() string {
 
 func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
 	ke := kcommon.TryCatchRun(ctx, func() {
-		ss.checkWorkerTombStone(ctx)
-		ss.checkShardTombStone(ctx)
-		ss.collectDynamicThresholdStats(ctx)
-		ss.collectWorkerStats(ctx)
-		ss.collectShardStats(ctx)
-		ss.collectCurrentScore(ctx)
+		kmetrics.InstrumentSummaryRunVoid(ctx, "checkWorkerTombStone", func() {
+			ss.checkWorkerTombStone(ctx)
+		}, "none")
+		kmetrics.InstrumentSummaryRunVoid(ctx, "checkShardTombStone", func() {
+			ss.checkShardTombStone(ctx)
+		}, "none")
+		kmetrics.InstrumentSummaryRunVoid(ctx, "collectXxxxStats", func() {
+			ss.collectWorkerStats(ctx)
+			ss.collectShardStats(ctx)
+			ss.collectCurrentScore(ctx)
+		}, "none")
 	})
 	if ke != nil {
 		klogging.Error(ctx).With("error", ke).Log("Housekeep5sEvent", "checkWorkerTombStone failed")

@@ -76,16 +76,19 @@ func (move *WorkerSnapAddRemove) Signature() string {
 
 // WorkerSnapUpdate implements PassiveMove
 type WorkerSnapUpdate struct {
-	WorkerId data.WorkerFullId
-	fn       func(*WorkerSnap)
-	reason   string
+	WorkerId       data.WorkerFullId
+	fn             func(*WorkerSnap)
+	affectedShards []data.ShardId
+	reason         string
 }
 
-func NewPasMoveWorkerSnapUpdate(workerId data.WorkerFullId, fn func(*WorkerSnap), reason string) *WorkerSnapUpdate {
+// affectedShards: when a worker goes offline or shutdown_req, it may affect all shards it's currently hosting. So we need to set dirtyflag (clear snips) to all affected shards.
+func NewPasMoveWorkerSnapUpdate(workerId data.WorkerFullId, fn func(*WorkerSnap), affectedShards []data.ShardId, reason string) *WorkerSnapUpdate {
 	return &WorkerSnapUpdate{
-		WorkerId: workerId,
-		fn:       fn,
-		reason:   reason,
+		WorkerId:       workerId,
+		fn:             fn,
+		affectedShards: affectedShards,
+		reason:         reason,
 	}
 }
 
@@ -94,6 +97,7 @@ func (move *WorkerSnapUpdate) Apply(snapshot *Snapshot) {
 		ke := kerror.Create("WorkerStateUpdateApplyFailed", "snapshot is frozen")
 		panic(ke)
 	}
+	// workerSnap
 	workerSnap, ok := snapshot.AllWorkers.Get(move.WorkerId)
 	if !ok {
 		ke := kerror.Create("WorkerStateUpdateApplyFailed", "worker not found in snapshot").With("workerId", move.WorkerId).With("move", move.Signature())
@@ -102,6 +106,17 @@ func (move *WorkerSnapUpdate) Apply(snapshot *Snapshot) {
 	newSnap := workerSnap.Clone()
 	move.fn(newSnap)
 	snapshot.AllWorkers.Set(move.WorkerId, newSnap)
+
+	// affected shards
+	for _, shardId := range move.affectedShards {
+		shardSnap, ok := snapshot.AllShards.Get(shardId)
+		if !ok {
+			ke := kerror.Create("WorkerStateUpdateApplyFailed", "shard not found in snapshot").With("shardId", shardId).With("move", move.Signature())
+			panic(ke)
+		}
+		newShardSnap := shardSnap.Clone() // clone will not copy cached snips, so that will do it.
+		snapshot.AllShards.Set(shardId, newShardSnap)
+	}
 }
 func (move *WorkerSnapUpdate) Signature() string {
 	return move.reason + ":" + move.WorkerId.String()

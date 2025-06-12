@@ -22,6 +22,8 @@ type ShardSnap struct {
 	ShardId            data.ShardId
 	TargetReplicaCount int
 	Replicas           map[data.ReplicaIdx]*ReplicaSnap
+
+	Snip *ShardSnip
 }
 
 func (ss ShardSnap) IsValueTypeT2() {}
@@ -148,6 +150,18 @@ func (shardSnap *ShardSnap) ToVm() *ShardSnapVm {
 		return vm.Replicas[i].ReplicaIdx < vm.Replicas[j].ReplicaIdx
 	})
 	return vm
+}
+
+func (shardSnap *ShardSnap) GetShardCost(ctx context.Context, fn func() *Cost) *Cost {
+	if shardSnap.Snip == nil {
+		shardSnap.Snip = NewShardSnip()
+	}
+	if shardSnap.Snip.Cost != nil {
+		return shardSnap.Snip.Cost
+	}
+	cost := fn()
+	shardSnap.Snip.Cost = cost
+	return cost
 }
 
 func ShardSnapFromVm(vm *ShardSnapVm) *ShardSnap {
@@ -333,6 +347,8 @@ type WorkerSnap struct {
 	Draining     bool
 	Offline      bool
 	Assignments  map[data.ShardId]data.AssignmentId
+
+	Snip *WorkerSnip // Snip is used to cache cost and other info, it is not used in comparison
 }
 
 func (ws WorkerSnap) IsValueTypeT2() {}
@@ -358,6 +374,18 @@ func (worker *WorkerSnap) CanAcceptAssignment(shardId data.ShardId) bool {
 	// in case this worker already has this shard (maybe from antoher replica)
 	_, ok := worker.Assignments[shardId]
 	return !ok
+}
+
+func (worker *WorkerSnap) GetWorkerCost(ctx context.Context, fn func() *Cost) *Cost {
+	if worker.Snip == nil {
+		worker.Snip = NewWorkerSnip()
+	}
+	if worker.Snip.Cost != nil {
+		return worker.Snip.Cost
+	}
+	cost := fn()
+	worker.Snip.Cost = cost
+	return cost
 }
 
 func (worker *WorkerSnap) Clone() *WorkerSnap {

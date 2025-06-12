@@ -57,7 +57,7 @@ type ServiceState struct {
 	syncWorkerBatchManager        *BatchManager // enqueue when any worker eph changed, dequeue= trigger ss.syncEphStagingToWorkerState()
 	reCreateSnapshotBatchManager  *BatchManager // enqueue when any workerState/shardState add/remove/etc. dequeue=trigger snapshot recreate
 	syncShardsBatchManager        *BatchManager // enqueue when 1) shard plan new/changed, 2) shard config changed, etc. dequeue=trigger ss.syncShardPlan()
-	boardcastSnapshotBatchManager *BatchManager // dequeue=trigger snapshot broadcast
+	broadcastSnapshotBatchManager *BatchManager // dequeue=trigger snapshot broadcast
 	// snapshotOperationManager      *SnapshotOperationManager // enqueue when any snapshot operation need to apply, dequeue=apply all operations to snapshot as batch, then broadcast snapshot
 
 	// for metrics collection use only
@@ -96,8 +96,8 @@ func NewServiceState(ctx context.Context, name string) *ServiceState {
 			ss.ReCreateSnapshot(ctx, "syncShardPlanBatch")
 		}
 	})
-	ss.boardcastSnapshotBatchManager = NewBatchManager(ss, 3, "boardcastSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
-		ss.broadcastSnapshot(ctx, "boardcastSnapshotBatch")
+	ss.broadcastSnapshotBatchManager = NewBatchManager(ss, 3, "broadcastSnapshotBatch", func(ctx context.Context, ss *ServiceState) {
+		ss.broadcastSnapshot(ctx, "broadcastSnapshotBatch")
 	})
 	// ss.snapshotOperationManager = NewSnapshotBatchManager(ss)
 	return ss
@@ -221,16 +221,19 @@ func (ss *ServiceState) GetSnapshotCurrentForClone() *costfunc.Snapshot {
 func (ss *ServiceState) ModifySnapshot(ctx context.Context, fn func(*costfunc.Snapshot), reason string) {
 	ss.ModifySnapshotCurrent(ctx, fn, reason)
 	ss.ModifySnapshotFuture(ctx, fn, reason)
-	ss.boardcastSnapshotBatchManager.TryScheduleInternal(ctx, reason)
+	ss.broadcastSnapshotBatchManager.TryScheduleInternal(ctx, reason)
 }
 
 func (ss *ServiceState) ModifySnapshotCurrent(ctx context.Context, fn func(*costfunc.Snapshot), reason string) {
 	if ss.SnapshotCurrent.Frozen {
 		ss.SnapshotCurrent = ss.SnapshotCurrent.Clone()
 	}
-	oldSnapStr := ss.SnapshotCurrent.ToJsonString()
 	fn(ss.SnapshotCurrent)
-	klogging.Info(ctx).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("reason", reason).With("oldSnapshot", oldSnapStr).With("newSnapshot", ss.SnapshotCurrent.ToJsonString()).Log("ModifySnapshotCurrent", "")
+	if klogging.IsVerboseEnabled() {
+		klogging.Info(ctx).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("reason", reason).With("newSnapshot", ss.SnapshotCurrent.ToJsonString()).Log("ModifySnapshotCurrent", "")
+	} else {
+		klogging.Info(ctx).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("reason", reason).Log("ModifySnapshotCurrent", "")
+	}
 }
 
 func (ss *ServiceState) GetSnapshotCurrentForAny() *costfunc.Snapshot {
@@ -241,9 +244,12 @@ func (ss *ServiceState) ModifySnapshotFuture(ctx context.Context, fn func(*costf
 	if ss.SnapshotFuture.Frozen {
 		ss.SnapshotFuture = ss.SnapshotFuture.Clone()
 	}
-	oldSnapStr := ss.SnapshotFuture.ToJsonString()
 	fn(ss.SnapshotFuture)
-	klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("reason", reason).With("oldSnapshot", oldSnapStr).With("newSnapshot", ss.SnapshotFuture.ToJsonString()).Log("ModifySnapshotFuture", "")
+	if klogging.IsVerboseEnabled() {
+		klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("reason", reason).With("newSnapshot", ss.SnapshotFuture.ToJsonString()).Log("ModifySnapshotFuture", "")
+	} else {
+		klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("reason", reason).Log("ModifySnapshotFuture", "")
+	}
 }
 
 func (ss *ServiceState) SetSnapshotCurrent(ctx context.Context, newSnapshot *costfunc.Snapshot, reason string) {
@@ -276,11 +282,19 @@ func (ss *ServiceState) GetSnapshotFutureForClone(ctx context.Context) *costfunc
 	if !ss.SnapshotFuture.Frozen {
 		ss.SnapshotFuture.Freeze()
 	}
-	klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForClone", "")
+	if klogging.IsVerboseEnabled() {
+		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForClone", "")
+	} else {
+		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).Log("GetSnapshotFutureForClone", "")
+	}
 	return ss.SnapshotFuture
 }
 
 func (ss *ServiceState) GetSnapshotFutureForAny(ctx context.Context) *costfunc.Snapshot {
-	klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForAny", "")
+	if klogging.IsVerboseEnabled() {
+		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForAny", "")
+	} else {
+		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).Log("GetSnapshotFutureForAny", "")
+	}
 	return ss.SnapshotFuture
 }

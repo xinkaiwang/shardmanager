@@ -135,6 +135,21 @@ func SetDefaultLogger(logger Logger) {
 	currentLogger.Store(&LoggerHolder{logger})
 }
 
+func IsVerboseEnabled() bool {
+	logger := GetLogger()
+	if logger == nil {
+		return false
+	}
+	return NeedLog(VerboseLevel, logger.Level())
+}
+func IsDebugEnabled() bool {
+	logger := GetLogger()
+	if logger == nil {
+		return false
+	}
+	return NeedLog(DebugLevel, logger.Level())
+}
+
 type Keypair struct {
 	K string
 	V interface{}

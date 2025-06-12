@@ -12,8 +12,9 @@ type MetricsValues struct {
 	// for metrics collection use only
 
 	// dynamic threshold for accepting new moves
-	MetricsValueDynamicThreshold    atomic.Int64
-	MetricsValueBestProposalInQueue atomic.Int64 // best proposal in the queue
+	MetricsValueDynamicThreshold     atomic.Int64
+	MetricsValueBestSoftScoreInQueue atomic.Int64 // best proposal in the queue
+	MetricsValueBestHardScoreInQueue atomic.Int64 // best proposal in the queue
 
 	// worker/shard/replica/assignment counts
 	MetricsValueWorkerCount_total       atomic.Int64
@@ -43,11 +44,13 @@ func (ss *ServiceState) collectDynamicThresholdStats(ctx context.Context) {
 	// proposal queue
 	size := ss.ProposalQueue.Size()
 	if size == 0 {
-		ss.MetricsValues.MetricsValueBestProposalInQueue.Store(0)
+		ss.MetricsValues.MetricsValueBestSoftScoreInQueue.Store(0)
+		ss.MetricsValues.MetricsValueBestHardScoreInQueue.Store(0)
 	} else {
 		bestProposal := ss.ProposalQueue.Peak()
 		softGain := bestProposal.Gain.SoftScore
-		ss.MetricsValues.MetricsValueBestProposalInQueue.Store(int64(softGain + 0.5)) // +0.5 to convert float to int64
+		ss.MetricsValues.MetricsValueBestSoftScoreInQueue.Store(int64(softGain + 0.5)) // +0.5 to convert float to int64
+		ss.MetricsValues.MetricsValueBestHardScoreInQueue.Store(int64(bestProposal.Gain.HardScore))
 	}
 }
 

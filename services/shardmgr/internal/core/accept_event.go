@@ -37,12 +37,12 @@ func (te *AcceptEvent) GetName() string {
 
 func metricsInitAcceptEvent(ctx context.Context) {
 	metricsInitAcceptEventOnce.Do(func() {
-		acceptSoftGainMetrics.GetTimeSequence(ctx, "SoftSolver").Touch()
-		acceptSoftGainMetrics.GetTimeSequence(ctx, "AssignSolver").Touch()
-		acceptSoftGainMetrics.GetTimeSequence(ctx, "UnassignSolver").Touch()
-		acceptHardGainMetrics.GetTimeSequence(ctx, "SoftSolver").Touch()
-		acceptHardGainMetrics.GetTimeSequence(ctx, "AssignSolver").Touch()
-		acceptHardGainMetrics.GetTimeSequence(ctx, "UnassignSolver").Touch()
+		acceptSoftGainMetrics.GetTimeSequence(ctx, "soft").Touch()
+		acceptSoftGainMetrics.GetTimeSequence(ctx, "assign").Touch()
+		acceptSoftGainMetrics.GetTimeSequence(ctx, "unassign").Touch()
+		acceptHardGainMetrics.GetTimeSequence(ctx, "soft").Touch()
+		acceptHardGainMetrics.GetTimeSequence(ctx, "assign").Touch()
+		acceptHardGainMetrics.GetTimeSequence(ctx, "unassign").Touch()
 	})
 }
 
@@ -60,6 +60,7 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	stop := false
 	var stopReason string
 	for !stop {
+		// step 1: get next proposal from queue
 		if ss.ProposalQueue.IsEmpty() {
 			stop = true
 			stopReason = "queue is empty"
@@ -82,14 +83,17 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 				gain := currentCost.Substract(newCost)
 				proposal.Gain = gain
 				proposal.BasedOn = currentSnapshot.SnapshotId
-				// add this proposal back to the queue again
-				ss.ProposalQueue.Push(ctx, proposal)
-				klogging.Debug(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "re-enqueue gain")
 			})
 			if ke != nil {
 				klogging.Debug(ctx).WithError(ke).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "proposal is dropped due to error in re-evaluating gain")
 				proposal.Dropped(ctx, common.ER_Conflict)
 			}
+			// add this proposal back to the queue again
+			result := ss.ProposalQueue.Push(ctx, proposal)
+			if result != common.ER_Enqueued {
+				proposal.Dropped(ctx, result)
+			}
+			klogging.Debug(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "re-enqueue gain")
 			continue
 		}
 		// check 2: is this proposal still valid?
@@ -120,9 +124,10 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 	if len(accpeted) > 0 {
 		future := ss.GetSnapshotFutureForAny(ctx)
 		klogging.Info(ctx).With("accepted", len(accpeted)).With("future", future.SnapshotId).With("cost", future.GetCost(ctx).String()).With("stopReason", stopReason).With("moveCount", len(ss.AllMoves)).Log("AcceptEvent", "broadcastSnapshot")
-		ss.boardcastSnapshotBatchManager.TryScheduleInternal(ctx, "acceptEvent")
+		ss.broadcastSnapshotBatchManager.TryScheduleInternal(ctx, "acceptEvent")
 		// ss.broadcastSnapshot(ctx, "acceptCount="+strconv.Itoa(len(accpeted)))
 	}
+	ss.collectDynamicThresholdStats(ctx)
 }
 
 func (ss *ServiceState) DoAcceptProposal(ctx context.Context, proposal *costfunc.Proposal) {

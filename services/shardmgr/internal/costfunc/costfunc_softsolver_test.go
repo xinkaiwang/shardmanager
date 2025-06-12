@@ -58,7 +58,7 @@ func TestCostfunc_softsolver(t *testing.T) {
 	{
 		move1 := NewPasMoveWorkerSnapUpdate(workerFullId1, func(ws *WorkerSnap) {
 			ws.Draining = true
-		}, "Draining")
+		}, []data.ShardId{shardId1}, "Draining")
 		move1.Apply(snap5)
 		cost5 := snap5.GetCost(ctx)
 		cost4 := snap4.GetCost(ctx)
