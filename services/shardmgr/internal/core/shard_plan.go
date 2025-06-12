@@ -70,17 +70,24 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) bool {
 }
 
 type ShardPlanWatcher struct {
-	parent krunloop.EventPoster[*ServiceState]
-	ch     chan etcdprov.EtcdKvItem
-	path   string
+	parent  krunloop.EventPoster[*ServiceState]
+	ch      chan etcdprov.EtcdKvItem
+	path    string
+	cancel  context.CancelFunc // 用于stop watcher
+	stop    chan struct{}
+	stopped chan struct{}
 }
 
 func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShardPlanRevision etcdprov.EtcdRevision) *ShardPlanWatcher {
 	path := parent.PathManager.GetShardPlanPath()
+	ctx2, cancel := context.WithCancel(ctx)
 	sp := &ShardPlanWatcher{
-		parent: parent,
-		ch:     etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, path, currentShardPlanRevision),
-		path:   path,
+		parent:  parent,
+		ch:      etcdprov.GetCurrentEtcdProvider(ctx2).WatchByPrefix(ctx, path, currentShardPlanRevision),
+		path:    path,
+		cancel:  cancel,
+		stop:    make(chan struct{}),
+		stopped: make(chan struct{}),
 	}
 	go sp.run(klogging.EmbedTraceId(ctx, "spw")) // spw = ShardPlanWatcher
 	return sp
@@ -88,11 +95,12 @@ func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShard
 
 func (sp *ShardPlanWatcher) run(ctx context.Context) {
 	klogging.Info(ctx).With("path", sp.path).Log("ShardPlanWatcher", "start watching")
-	for {
+	stop := false
+	for !stop {
 		select {
 		case <-ctx.Done():
 			klogging.Info(ctx).Log("ShardPlanWatcher", "CtxDone.Exit")
-			return
+			stop = true
 		case item, ok := <-sp.ch:
 			if !ok {
 				klogging.Info(ctx).Log("ShardPlanWatcher", "ch closed")
@@ -106,8 +114,26 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 				ss.stagingShardPlan = shardPlan
 				ss.syncShardsBatchManager.TrySchedule(ctx2, "ShardPlanWatcher")
 			})
+		case <-sp.stop:
+			klogging.Info(ctx).Log("ShardPlanWatcher", "stop signal received")
+			stop = true
 		}
 	}
+	close(sp.stopped) // 发送 thread exit 信号
+}
+
+func (sp *ShardPlanWatcher) Stop() {
+	if sp.cancel != nil {
+		sp.cancel()     // 取消上下文，停止 watcher
+		sp.cancel = nil // 防止重复调用
+	}
+	close(sp.stop) // 发送停止信号
+}
+
+func (sp *ShardPlanWatcher) StopAndWaitForExit() {
+	sp.Stop()
+	<-sp.stopped // 等待 run thread exit
+	klogging.Info(context.Background()).Log("ShardPlanWatcher", "stopped")
 }
 
 // // implements IEvent[*ServiceState]

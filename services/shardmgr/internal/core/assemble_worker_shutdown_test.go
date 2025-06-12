@@ -2,6 +2,9 @@ package core
 
 import (
 	"context"
+	"runtime"
+	"runtime/pprof"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,8 +18,12 @@ func TestAssembleWorker_shutdown(t *testing.T) {
 	ctx := context.Background()
 	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
+	// 记录测试开始时的 goroutine 数量
+	beforeGoroutines := runtime.NumGoroutine()
+
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
+	ctx = setup.ctx
 	setup.SetupBasicConfig(ctx, config.WithSolverConfig(func(sc *config.SolverConfig) {
 		sc.SoftSolverConfig.SolverEnabled = true
 		sc.AssignSolverConfig.SolverEnabled = true
@@ -156,4 +163,23 @@ func TestAssembleWorker_shutdown(t *testing.T) {
 
 	// 使用 FakeTimeProvider 和模拟的 EtcdProvider/EtcdStore 运行测试
 	setup.RunWith(fn)
+
+	// 检查资源泄漏
+	afterGoroutines := runtime.NumGoroutine()
+	if afterGoroutines > beforeGoroutines {
+		// 获取所有 goroutine 的堆栈信息
+		buf := make([]byte, 1<<16)
+		runtime.Stack(buf, true)
+		t.Logf("Goroutine stacks:\n%s", buf)
+
+		// 使用 pprof 获取更详细的 goroutine 信息
+		prof := pprof.Lookup("goroutine")
+		if prof != nil {
+			var w strings.Builder
+			prof.WriteTo(&w, 1)
+			t.Logf("Goroutine profile:\n%s", w.String())
+		}
+
+		t.Errorf("goroutine leak detected: before=%d, after=%d", beforeGoroutines, afterGoroutines)
+	}
 }

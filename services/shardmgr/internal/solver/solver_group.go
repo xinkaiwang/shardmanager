@@ -32,6 +32,7 @@ func metricsInitSolverGroup(ctx context.Context, solverName string) {
 
 type SnapshotListener interface {
 	OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot, reason string)
+	StopAndWaitForExit()
 }
 
 // SolverGroup manages multiple SolverDrivers
@@ -71,6 +72,21 @@ func (sa *SolverGroup) storeSnapshot(snapshot *costfunc.Snapshot) {
 
 func (sa *SolverGroup) loadSnapshot() *costfunc.Snapshot {
 	return sa.Snapshot.Load().(*costfunc.Snapshot)
+}
+
+func (sa *SolverGroup) Stop() {
+	for _, driver := range sa.SolverDrivers {
+		driver.Stop()
+	}
+	sa.ThreadPool.Stop()
+}
+
+func (sa *SolverGroup) StopAndWaitForExit() {
+	for _, driver := range sa.SolverDrivers {
+		driver.StopAndWaitForExit()
+	}
+	// 等待所有线程池中的线程退出
+	sa.ThreadPool.StopAndWaitForExit()
 }
 
 // SolverDriver manages threads for 1 solver
@@ -151,12 +167,35 @@ func (sd *SolverDriver) expectedThreadCount() (threadCount int, sleepPerLoopMs i
 	}
 }
 
+func (sd *SolverDriver) Stop() {
+	// 使用互斥锁保护对 threads 数组的访问
+	sd.threadsMutex.Lock()
+	defer sd.threadsMutex.Unlock()
+
+	for _, thread := range sd.threads {
+		thread.Stop()
+	}
+}
+
+func (sd *SolverDriver) StopAndWaitForExit() {
+	// 使用互斥锁保护对 threads 数组的访问
+	sd.threadsMutex.Lock()
+	defer sd.threadsMutex.Unlock()
+
+	for _, thread := range sd.threads {
+		thread.Stop()
+	}
+	for _, thread := range sd.threads {
+		thread.WaitForExit()
+	}
+}
+
 type DriverThread struct {
 	ctx        context.Context
 	parent     *SolverDriver
-	stop       bool
-	mutex      sync.Mutex // 添加互斥锁保护 stop 字段
-	threadName string     // for logging/debug only
+	stop       chan struct{} // closed means should stop
+	threadName string        // for logging/debug only
+	stopped    chan struct{} // 用于通知线程停止
 }
 
 func NewDriverThread(ctx context.Context, parent *SolverDriver, threadName string) *DriverThread {
@@ -166,16 +205,15 @@ func NewDriverThread(ctx context.Context, parent *SolverDriver, threadName strin
 		ctx:        ctx2,
 		parent:     parent,
 		threadName: threadName,
-		stop:       false,
+		stop:       make(chan struct{}), // 用于控制线程停止
+		stopped:    make(chan struct{}),
 	}
 	go dt.run()
 	return dt
 }
 
 func (dt *DriverThread) Stop() {
-	dt.mutex.Lock()
-	dt.stop = true
-	dt.mutex.Unlock()
+	close(dt.stop) // 关闭 stop 通道，通知线程停止
 }
 
 func (dt *DriverThread) run() {
@@ -183,22 +221,21 @@ func (dt *DriverThread) run() {
 	sleepMs := int(dt.parent.sleepPerLoopMs.Load())
 	// initial sleep
 	initalSleepMs := kcommon.RandomInt(dt.ctx, sleepMs)
+	stop := false
 	if initalSleepMs > 0 {
 		ch := make(chan struct{})
 		kcommon.ScheduleRun(initalSleepMs, func() {
 			close(ch)
 		})
-		<-ch
+		select {
+		case <-ch:
+			// 正常唤醒，继续下一轮
+		case <-dt.stop:
+			stop = true
+		}
 	}
 
-	for {
-		// 检查是否应该停止
-		dt.mutex.Lock()
-		shouldStop := dt.stop
-		dt.mutex.Unlock()
-		if shouldStop {
-			break
-		}
+	for !stop {
 		task := NewDriverThreadTask(dt.ctx, dt, dt.parent.name)
 		dt.parent.enqueueTask(task)
 		<-task.done
@@ -209,8 +246,25 @@ func (dt *DriverThread) run() {
 		kcommon.ScheduleRun(sleepMs, func() {
 			close(ch)
 		})
-		<-ch
+		select {
+		case <-ch:
+			// 正常唤醒，继续下一轮
+		case <-dt.stop:
+			stop = true
+		}
 	}
+	klogging.Info(dt.ctx).With("threadName", dt.threadName).Log("DriverThread", "thread stopped")
+	close(dt.stopped)
+}
+
+func (dt *DriverThread) StopAndWaitForExit() {
+	dt.Stop()
+	dt.WaitForExit()
+}
+
+func (dt *DriverThread) WaitForExit() {
+	// 等待线程停止
+	<-dt.stopped
 }
 
 // DriverThreadTask implements Task interface

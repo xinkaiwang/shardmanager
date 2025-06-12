@@ -40,25 +40,51 @@ func (tp *ThreadPool) EnqueueTask(task Task) {
 	tp.ch <- task
 }
 
+func (tp *ThreadPool) Stop() {
+	for _, td := range tp.agentThreads {
+		td.Stop()
+	}
+}
+func (tp *ThreadPool) WaitForExit() {
+	for _, td := range tp.agentThreads {
+		td.WaitForExit()
+	}
+}
+
+func (tp *ThreadPool) StopAndWaitForExit() {
+	for _, td := range tp.agentThreads {
+		td.Stop()
+	}
+	for _, td := range tp.agentThreads {
+		td.WaitForExit()
+	}
+}
+
 type AgentThread struct {
-	parent *ThreadPool
+	parent  *ThreadPool
+	cancel  context.CancelFunc
+	stopped chan struct{}
 }
 
 func NewAgentThread(ctx context.Context, parent *ThreadPool) *AgentThread {
 	td := &AgentThread{
-		parent: parent,
+		parent:  parent,
+		stopped: make(chan struct{}),
 	}
 	go td.Run(ctx)
 	return td
 }
 
 func (td *AgentThread) Run(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	td.cancel = cancel
 	err := kcommon.TryCatchRun(ctx, func() {
 		td.run(ctx)
 	})
 	if err != nil {
 		klogging.Fatal(ctx).With("err", err).Log("AgentThreadRun", "exit with panic")
 	}
+	close(td.stopped)
 }
 
 func (td *AgentThread) run(ctx context.Context) {
@@ -74,4 +100,16 @@ func (td *AgentThread) run(ctx context.Context) {
 			ThreadPoolElapsedMsMetrics.GetTimeSequence(ctx, td.parent.name, taskName).Add(elapsedMs)
 		}
 	}
+}
+
+func (td *AgentThread) Stop() {
+	if td.cancel != nil {
+		td.cancel()
+		td.cancel = nil
+	}
+}
+
+func (td *AgentThread) WaitForExit() {
+	// 等待线程停止
+	<-td.stopped
 }

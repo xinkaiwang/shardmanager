@@ -13,13 +13,17 @@ import (
 )
 
 type WorkerEphWatcher struct {
-	ss *ServiceState
-	ch chan etcdprov.EtcdKvItem
+	ss      *ServiceState
+	ch      chan etcdprov.EtcdKvItem
+	stop    chan struct{} // used to stop the watcher
+	stopped chan struct{} // used to notify when the watcher has stopped
 }
 
 func NewWorkerEphWatcher(ctx context.Context, ss *ServiceState, currentWorkerEphRevision etcdprov.EtcdRevision) *WorkerEphWatcher {
 	watcher := &WorkerEphWatcher{
-		ss: ss,
+		ss:      ss,
+		stop:    make(chan struct{}),
+		stopped: make(chan struct{}),
 	}
 	watcher.ch = etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, ss.PathManager.GetWorkerEphPathPrefix(), currentWorkerEphRevision)
 	go watcher.Run(klogging.EmbedTraceId(ctx, "wew_")) // wew = worker eph watcher
@@ -28,11 +32,12 @@ func NewWorkerEphWatcher(ctx context.Context, ss *ServiceState, currentWorkerEph
 
 func (w *WorkerEphWatcher) Run(ctx context.Context) {
 	klogging.Info(ctx).Log("WorkerEphWatcher", "Started")
-	for {
+	stop := false
+	for !stop {
 		select {
 		case <-ctx.Done():
 			klogging.Info(ctx).Log("WorkerEphWatcher", "CtxDone.Exit")
-			return
+			stop = true
 		case kvItem := <-w.ch:
 			traceId := kcommon.NewTraceId(ctx, "wew_", 8) // wew = worker eph watcher
 			ctx2 := klogging.EmbedTraceId(ctx, traceId)
@@ -56,8 +61,24 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 			w.ss.PostEvent(NewWorkerEphEvent(ctx2, workerId, workerEph))
 			// klogging.Info(ctx2).With("workerId", workerId).With("eph", workerEph).
 			// 	Log("WorkerEphWatcher", "worker eph event posted")
+		case <-w.stop:
+			klogging.Info(ctx).Log("WorkerEphWatcher", "stop signal received")
+			stop = true
 		}
 	}
+	close(w.stopped)
+}
+
+func (w *WorkerEphWatcher) Stop() {
+	// stop the watcher
+	close(w.stop)
+}
+
+func (w *WorkerEphWatcher) StopAndWaitForExit() {
+	// stop the watcher and wait for it to exit
+	w.Stop()
+	<-w.stopped // wait for the run thread to exit
+	klogging.Info(context.Background()).Log("WorkerEphWatcher", "stopped")
 }
 
 func (w *WorkerEphWatcher) workerIdFromPath(path string) data.WorkerId {

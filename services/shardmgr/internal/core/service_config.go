@@ -109,11 +109,16 @@ type ServiceConfigWatcher struct {
 	CostfuncConfigListener         []func(*config.CostfuncConfig)
 	SolverConfigListener           []func(*config.SolverConfig)
 	DynamicThresholdConfigListener []func(*config.DynamicThresholdConfig)
+
+	stop    chan struct{} // used to stop the watcher
+	stopped chan struct{} // used to notify when the watcher has stopped
 }
 
 func NewServiceConfigWatcher(ctx context.Context, parent *ServiceState, currentServiceConfigRevision etcdprov.EtcdRevision) *ServiceConfigWatcher {
 	watcher := &ServiceConfigWatcher{
-		parent: parent,
+		parent:  parent,
+		stop:    make(chan struct{}),
+		stopped: make(chan struct{}),
 	}
 	path := parent.PathManager.GetServiceConfigPath()
 	klogging.Debug(ctx).With("path", path).With("revision", currentServiceConfigRevision).Log("ServiceConfigWatcher", "创建服务配置观察者")
@@ -148,8 +153,23 @@ func (w *ServiceConfigWatcher) Run(ctx context.Context) {
 			klogging.Info(ctx2).With("serviceConfig", kvItem.Value).With("revision", kvItem.ModRevision).Log("ServiceConfigWatcher", "观察到服务配置已更新")
 			cfg := config.ParseServiceConfigFromJson(kvItem.Value)
 			w.parent.PostEvent(NewServiceConfigUpdateEvent(ctx, w, cfg))
+		case <-w.stop:
+			klogging.Info(ctx).Log("ServiceConfigWatcher", "stop signal received")
+			stop = true
 		}
 	}
+	close(w.stopped) // 发送 thread exit 信号
+}
+
+func (w *ServiceConfigWatcher) Stop() {
+	// stop the watcher
+	close(w.stop)
+}
+
+func (w *ServiceConfigWatcher) StopAndWaitForExit() {
+	// stop the watcher and wait for it to exit
+	w.Stop()
+	<-w.stopped // 等待 run thread exit
 }
 
 func (w *ServiceConfigWatcher) touchAll(ctx context.Context) {

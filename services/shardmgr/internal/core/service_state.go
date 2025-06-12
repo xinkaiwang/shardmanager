@@ -131,6 +131,18 @@ func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
 	if ss.ShadowState != nil {
 		ss.ShadowState.StopAndWaitForExit(ctx)
 	}
+	if ss.SolverGroup != nil {
+		ss.SolverGroup.StopAndWaitForExit()
+	}
+	if ss.ShardPlanWatcher != nil {
+		ss.ShardPlanWatcher.StopAndWaitForExit()
+	}
+	if ss.WorkerEphWatcher != nil {
+		ss.WorkerEphWatcher.StopAndWaitForExit()
+	}
+	if ss.ServiceConfigWatcher != nil {
+		ss.ServiceConfigWatcher.StopAndWaitForExit()
+	}
 }
 
 type FlushScope int // bitmask

@@ -46,8 +46,10 @@ type RunLoop[T CriticalResource] struct {
 	mu               sync.Mutex // 保护 ctx 和 cancel
 	ctx              context.Context
 	cancel           context.CancelFunc
-	exited           chan struct{}
 	epochId          int64 // 事件循环的时间戳
+
+	stop    chan struct{} // 用于停止 RunLoop
+	stopped chan struct{}
 }
 
 // NewRunLoop creates a new RunLoop for the given resource.
@@ -57,8 +59,9 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 		name:     name,
 		resource: resource,
 		queue:    NewUnboundedQueue[T](ctx),
-		exited:   make(chan struct{}), // 初始化 exited 通道
 		epochId:  0,
+		stop:     make(chan struct{}), // 初始化 stop 通道
+		stopped:  make(chan struct{}),
 	}
 	rl.sampler = NewRunloopSampler(ctx, func() string {
 		val := rl.currentEventName.Load()
@@ -95,20 +98,22 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 	rl.mu.Unlock()
 
 	defer func() {
-		rl.queue.Close()
 		// 通知 RunLoop 已退出
-		close(rl.exited)
+		close(rl.stopped)
 	}()
 
-	for {
+	stop := false
+	for !stop {
 		select {
 		case <-rl.ctx.Done():
 			klogging.Info(ctx).Log("RunLoopCtxCanceled", "run loop stopped")
-			return
+			stop = true
+			continue
 		case event, ok := <-rl.queue.GetOutputChan():
 			if !ok {
 				klogging.Info(ctx).Log("EventQueueClosed", "event queue closed")
-				return
+				stop = true
+				continue
 			}
 			// Handle event
 			start := kcommon.GetMonoTimeMs()
@@ -125,6 +130,8 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			rl.currentEventName.Store("")
 			elapsedMs := kcommon.GetMonoTimeMs() - start
 			RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
+		case <-rl.stop:
+			stop = true
 		}
 	}
 }
@@ -141,12 +148,13 @@ func (rl *RunLoop[T]) StopAndWaitForExit() {
 		return
 	}
 
+	rl.queue.StopAndWaitForExit()
 	// 取消 context
 	cancel()
 
 	// 设置短超时，避免无限等待
 	select {
-	case <-rl.exited:
+	case <-rl.stopped:
 		// 正常退出
 	case <-time.After(1000 * time.Millisecond): // 增加超时时间，确保有足够时间退出
 		// 超时，可能 Run 方法尚未完全启动或已异常退出

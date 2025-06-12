@@ -61,6 +61,9 @@ func (l *FakeSnapshotListener) OnSnapshot(ctx context.Context, snapshot *costfun
 	l.Reason = reason
 }
 
+func (l *FakeSnapshotListener) StopAndWaitForExit() {
+}
+
 /******************************* FakeTimeTestSetup *******************************/
 
 // FakeTimeTestSetup 包含服务状态测试所需的基本设置
