@@ -85,15 +85,16 @@ func (ss *ServiceState) TryAccept(ctx context.Context) {
 				proposal.BasedOn = currentSnapshot.SnapshotId
 			})
 			if ke != nil {
-				klogging.Debug(ctx).WithError(ke).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "proposal is dropped due to error in re-evaluating gain")
+				klogging.Verbose(ctx).WithError(ke.WithoutStack()).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "proposal is dropped due to error in re-evaluating gain")
 				proposal.Dropped(ctx, common.ER_Conflict)
+				continue
 			}
 			// add this proposal back to the queue again
 			result := ss.ProposalQueue.Push(ctx, proposal)
 			if result != common.ER_Enqueued {
 				proposal.Dropped(ctx, result)
 			}
-			klogging.Debug(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).Log("AcceptEvent", "re-enqueue gain")
+			klogging.Debug(ctx).With("proposalId", proposal.ProposalId).With("solverType", proposal.SolverType).With("gain", proposal.Gain).With("signature", proposal.Move.GetSignature()).With("currentSnapshot", currentSnapshot.SnapshotId).With("basedOn", proposal.BasedOn).With("result", result).Log("AcceptEvent", "re-enqueue gain")
 			continue
 		}
 		// check 2: is this proposal still valid?

@@ -50,7 +50,7 @@ func (fw *FakeWorker) run() {
 				// fw.Assignments = pilotNode.Assignments
 				fw.Assignments = nil
 				for _, assign := range pilotNode.Assignments {
-					fw.Assignments = append(fw.Assignments, cougarjson.NewAssignmentJson(assign.ShardId, assign.ReplicaIdx, assign.AsginmentId, cougarjson.CAS_Ready))
+					fw.Assignments = append(fw.Assignments, cougarjson.NewAssignmentJson(assign.ShardId, assign.ReplicaIdx, assign.AssignmentId, cougarjson.CAS_Ready))
 				}
 				wej.Assignments = fw.Assignments
 				// Simulate some updates to the worker eph node

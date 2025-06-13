@@ -126,8 +126,8 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 		// Step 5: simulate eph node update
 		if pilotAssign1 != nil && pilotAssign2 != nil {
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign1.ShardId, pilotAssign1.ReplicaIdx, pilotAssign1.AsginmentId, cougarjson.CAS_Ready))
-				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AsginmentId, cougarjson.CAS_Ready))
+				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign1.ShardId, pilotAssign1.ReplicaIdx, pilotAssign1.AssignmentId, cougarjson.CAS_Ready))
+				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AssignmentId, cougarjson.CAS_Ready))
 				wej.LastUpdateAtMs = setup.FakeTime.WallTime
 				wej.LastUpdateReason = "SimulateAddShard"
 				return wej
@@ -143,7 +143,7 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 					return false, "没有 assignment"
 				}
 				{
-					if assign, ok := assigns[data.AssignmentId(pilotAssign1.AsginmentId)]; !ok {
+					if assign, ok := assigns[data.AssignmentId(pilotAssign1.AssignmentId)]; !ok {
 						return false, "没有 assignment"
 					} else {
 						if assign.CurrentConfirmedState != cougarjson.CAS_Ready {
@@ -152,7 +152,7 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 					}
 				}
 				{
-					if assign, ok := assigns[data.AssignmentId(pilotAssign2.AsginmentId)]; !ok {
+					if assign, ok := assigns[data.AssignmentId(pilotAssign2.AssignmentId)]; !ok {
 						return false, "没有 assignment"
 					} else {
 						if assign.CurrentConfirmedState != cougarjson.CAS_Ready {

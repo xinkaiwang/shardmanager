@@ -187,7 +187,7 @@ func TestAssembleFakeSolver(t *testing.T) {
 		}
 
 		// stop
-		ss.StopAndWaitForExit(ctx)
+		// ss.StopAndWaitForExit(ctx)
 		setup.PrintAll(ctx)
 
 		// assert.Equal(t, true, false, "") // 强制查看测试输出

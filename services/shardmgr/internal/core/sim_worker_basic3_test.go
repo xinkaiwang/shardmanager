@@ -52,8 +52,9 @@ func TestSimWorker_basic3(t *testing.T) {
 			// step 4: wait assign to happen
 			klogging.Info(ctx).Log("Step4", "wait for move to happen") // smg will assign shard_1 to worker-1, and worker-1 will become accept it.
 			waitSucc, elapsedMs := setup.WaitUntilSs(t, func(ss *ServiceState) (bool, string) {
-				if ss.SnapshotCurrent.GetCost(ctx).HardScore != 0 {
-					return false, "hard score 不为0"
+				cost := ss.SnapshotCurrent.GetCost(ctx)
+				if cost.HardScore != 0 {
+					return false, "hard score =" + strconv.Itoa(int(cost.HardScore))
 				}
 				return true, "hard score 为0"
 			}, 30*1000, 1000)

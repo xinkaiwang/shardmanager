@@ -8,10 +8,10 @@ import (
 type AssignmentStateJson struct {
 	ShardId      data.ShardId                     `json:"sid"`
 	ReplicaIdx   data.ReplicaIdx                  `json:"rid,omitempty"`
-	CurrentState cougarjson.CougarAssignmentState `json:"current_state,omitempty"`
-	TargetState  cougarjson.CougarAssignmentState `json:"target_state,omitempty"`
-	InPilot      int8                             `json:"in_pilot,omitempty"`   // use int to represent bool
-	InRouting    int8                             `json:"in_routing,omitempty"` // use int to represent bool
+	CurrentState cougarjson.CougarAssignmentState `json:"cur,omitempty"`
+	TargetState  cougarjson.CougarAssignmentState `json:"tgt,omitempty"`
+	InPilot      int8                             `json:"pl,omitempty"` // use int to represent bool
+	InRouting    int8                             `json:"rt,omitempty"` // use int to represent bool
 }
 
 func NewAssignmentStateJson(shardId data.ShardId, replicaIdx data.ReplicaIdx) *AssignmentStateJson {

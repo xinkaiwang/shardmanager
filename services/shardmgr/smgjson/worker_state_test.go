@@ -20,7 +20,7 @@ func TestWorkerStateJsonMarshal(t *testing.T) {
 				data.SessionId("session-1"),
 				string(data.ST_MEMORY),
 			),
-			expected: `{"worker_id":"worker-1","session_id":"session-1","worker_info":null,"assignments":{},"stateful_type":"state_in_mem"}`,
+			expected: `{"worker_id":"worker-1","session_id":"session-1","worker_info":null,"asgs":{},"stateful_type":"state_in_mem"}`,
 		},
 		{
 			name: "带有任务的工作节点状态",
@@ -34,7 +34,7 @@ func TestWorkerStateJsonMarshal(t *testing.T) {
 				ws.Assignments[data.AssignmentId("asg-2")] = NewAssignmentStateJson(data.ShardId("shard-2"), data.ReplicaIdx(0))
 				return ws
 			}(),
-			expected: `{"worker_id":"worker-2","session_id":"session-2","worker_info":null,"assignments":{"asg-1":{"sid":"shard-1"},"asg-2":{"sid":"shard-2"}},"stateful_type":"state_in_mem"}`,
+			expected: `{"worker_id":"worker-2","session_id":"session-2","worker_info":null,"asgs":{"asg-1":{"sid":"shard-1"},"asg-2":{"sid":"shard-2"}},"stateful_type":"state_in_mem"}`,
 		},
 	}
 
@@ -58,7 +58,7 @@ func TestWorkerStateJsonUnmarshal(t *testing.T) {
 	}{
 		{
 			name:  "空的工作节点状态",
-			input: `{"worker_id":"worker-1","session_id":"session-1","assignments":{}}`,
+			input: `{"worker_id":"worker-1","session_id":"session-1","asgs":{}}`,
 			want: NewWorkerStateJson(
 				data.WorkerId("worker-1"),
 				data.SessionId("session-1"),
@@ -68,7 +68,7 @@ func TestWorkerStateJsonUnmarshal(t *testing.T) {
 		},
 		{
 			name:  "带有任务的工作节点状态",
-			input: `{"worker_id":"worker-2","session_id":"session-2","assignments":{"asg-1":{},"asg-2":{}}}`,
+			input: `{"worker_id":"worker-2","session_id":"session-2","asgs":{"asg-1":{},"asg-2":{}}}`,
 			want: func() *WorkerStateJson {
 				ws := NewWorkerStateJson(
 					data.WorkerId("worker-2"),

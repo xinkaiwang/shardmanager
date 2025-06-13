@@ -18,7 +18,7 @@ type WorkerEntryJson struct {
 	// // Capacity 表示工作节点的处理容量
 	// Capacity int32 `json:"capacity"`
 
-	Assignments []*AssignmentJson `json:"assignments,omitempty"` // assignments is always sorted by shardId
+	Assignments []*AssignmentJson `json:"asgs,omitempty"` // assignments is always sorted by shardId
 
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`

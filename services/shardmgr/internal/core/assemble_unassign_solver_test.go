@@ -60,7 +60,7 @@ func TestAssembleUnassignSolver(t *testing.T) {
 			// Step 4: simulate eph node update
 			klogging.Info(ctx).Log("Step4", "simulate eph node update")
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AsginmentId, cougarjson.CAS_Ready))
+				wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AssignmentId, cougarjson.CAS_Ready))
 				wej.LastUpdateAtMs = setup.FakeTime.WallTime
 				wej.LastUpdateReason = "SimulateAddShard"
 				return wej

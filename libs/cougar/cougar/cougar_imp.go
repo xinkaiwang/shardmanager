@@ -260,7 +260,7 @@ func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) 
 		oldAssignment, ok := oldShards[data.ShardId(newAssignment.ShardId)]
 		if ok {
 			// Note: 1) target state changed 2) any custom properties changed 3) assignment id changed (this is rare, but still possible)
-			if oldAssignment.TargetState != newAssignment.State || !compareStringMap(oldAssignment.Properties, newAssignment.CustomProperties) || oldAssignment.AssignmentId != data.AssignmentId(newAssignment.AsginmentId) {
+			if oldAssignment.TargetState != newAssignment.State || !compareStringMap(oldAssignment.Properties, newAssignment.CustomProperties) || oldAssignment.AssignmentId != data.AssignmentId(newAssignment.AssignmentId) {
 				// update assignment
 				needUpdate = append(needUpdate, newAssignment)
 			}
@@ -289,7 +289,7 @@ func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) 
 	for _, newAssignment := range needUpdate {
 		shardInfo := impl.cougarState.AllShards[data.ShardId(newAssignment.ShardId)]
 		shardInfo.CurrentConfirmedState = newAssignment.State
-		shardInfo.AssignmentId = data.AssignmentId(newAssignment.AsginmentId)
+		shardInfo.AssignmentId = data.AssignmentId(newAssignment.AssignmentId)
 		shardInfo.ReplicaIdx = data.ReplicaIdx(newAssignment.ReplicaIdx)
 		shardInfo.Properties = newAssignment.CustomProperties
 		// callback
@@ -297,7 +297,7 @@ func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) 
 	}
 	// add new assignments
 	for _, newAssignment := range needAdd {
-		shardInfo := NewCougarShardInfo(data.ShardId(newAssignment.ShardId), data.ReplicaIdx(newAssignment.ReplicaIdx), data.AssignmentId(newAssignment.AsginmentId))
+		shardInfo := NewCougarShardInfo(data.ShardId(newAssignment.ShardId), data.ReplicaIdx(newAssignment.ReplicaIdx), data.AssignmentId(newAssignment.AssignmentId))
 		shardInfo.CurrentConfirmedState = newAssignment.State
 		shardInfo.Properties = newAssignment.CustomProperties
 		// callback

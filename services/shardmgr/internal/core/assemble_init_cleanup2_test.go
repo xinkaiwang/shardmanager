@@ -93,7 +93,7 @@ func TestAssembleWorkerInitCleanup2(t *testing.T) {
 
 			setup.UpdateEphNode(workerFullId3, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 				for _, assign := range assignments {
-					assItem := cougarjson.NewAssignmentJson(assign.ShardId, assign.ReplicaIdx, assign.AsginmentId, cougarjson.CAS_Ready)
+					assItem := cougarjson.NewAssignmentJson(assign.ShardId, assign.ReplicaIdx, assign.AssignmentId, cougarjson.CAS_Ready)
 					wej.Assignments = append(wej.Assignments, assItem)
 				}
 				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()

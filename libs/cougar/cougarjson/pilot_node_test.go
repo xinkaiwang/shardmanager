@@ -201,8 +201,8 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 					if gotAssignment.ReplicaIdx != wantAssignment.ReplicaIdx {
 						t.Errorf("Assignments[%d].ReplicaIdx = %v, want %v", i, gotAssignment.ReplicaIdx, wantAssignment.ReplicaIdx)
 					}
-					if gotAssignment.AsginmentId != wantAssignment.AsginmentId {
-						t.Errorf("Assignments[%d].AsginmentId = %v, want %v", i, gotAssignment.AsginmentId, wantAssignment.AsginmentId)
+					if gotAssignment.AssignmentId != wantAssignment.AssignmentId {
+						t.Errorf("Assignments[%d].AsginmentId = %v, want %v", i, gotAssignment.AssignmentId, wantAssignment.AssignmentId)
 					}
 					if gotAssignment.State != wantAssignment.State {
 						t.Errorf("Assignments[%d].State = %v, want %v", i, gotAssignment.State, wantAssignment.State)
@@ -289,8 +289,8 @@ func TestNewPilotAssignmentJson(t *testing.T) {
 			if assignment.ReplicaIdx != tt.replicaIdx {
 				t.Errorf("ReplicaIdx = %v, want %v", assignment.ReplicaIdx, tt.replicaIdx)
 			}
-			if assignment.AsginmentId != tt.assignmentId {
-				t.Errorf("AsginmentId = %v, want %v", assignment.AsginmentId, tt.assignmentId)
+			if assignment.AssignmentId != tt.assignmentId {
+				t.Errorf("AsginmentId = %v, want %v", assignment.AssignmentId, tt.assignmentId)
 			}
 			if assignment.State != tt.state {
 				t.Errorf("State = %v, want %v", assignment.State, tt.state)
@@ -346,8 +346,8 @@ func TestPilotNodeJsonRoundTrip(t *testing.T) {
 		if decodedAssignment.ReplicaIdx != originalAssignment.ReplicaIdx {
 			t.Errorf("Assignments[%d].ReplicaIdx mismatch: got %v, want %v", i, decodedAssignment.ReplicaIdx, originalAssignment.ReplicaIdx)
 		}
-		if decodedAssignment.AsginmentId != originalAssignment.AsginmentId {
-			t.Errorf("Assignments[%d].AsginmentId mismatch: got %v, want %v", i, decodedAssignment.AsginmentId, originalAssignment.AsginmentId)
+		if decodedAssignment.AssignmentId != originalAssignment.AssignmentId {
+			t.Errorf("Assignments[%d].AsginmentId mismatch: got %v, want %v", i, decodedAssignment.AssignmentId, originalAssignment.AssignmentId)
 		}
 		if decodedAssignment.State != originalAssignment.State {
 			t.Errorf("Assignments[%d].State mismatch: got %v, want %v", i, decodedAssignment.State, originalAssignment.State)

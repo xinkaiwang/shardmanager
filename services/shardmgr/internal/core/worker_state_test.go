@@ -95,11 +95,11 @@ func TestWorkerState_ToPilotNode(t *testing.T) {
 			}
 
 			// 验证ShardId和ReplicaIdx提取是否正确
-			if assignment.AsginmentId == "shard-1:0" {
+			if assignment.AssignmentId == "shard-1:0" {
 				if assignment.ShardId != "shard-1" || assignment.ReplicaIdx != 0 {
 					t.Errorf("ShardId或ReplicaIdx解析错误：ShardId=%s, ReplicaIdx=%d", assignment.ShardId, assignment.ReplicaIdx)
 				}
-			} else if assignment.AsginmentId == "shard-2:1" {
+			} else if assignment.AssignmentId == "shard-2:1" {
 				if assignment.ShardId != "shard-2" || assignment.ReplicaIdx != 1 {
 					t.Errorf("ShardId或ReplicaIdx解析错误：ShardId=%s, ReplicaIdx=%d", assignment.ShardId, assignment.ReplicaIdx)
 				}

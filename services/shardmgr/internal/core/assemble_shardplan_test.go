@@ -54,7 +54,7 @@ func TestAssembleShardPlan(t *testing.T) {
 			// step4: simulate eph node update
 			klogging.Info(ctx).Log("Step4", "simulate eph node update")
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-				assign := cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AsginmentId, cougarjson.CAS_Ready)
+				assign := cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AssignmentId, cougarjson.CAS_Ready)
 				wej.Assignments = append(wej.Assignments, assign)
 				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()
 				wej.LastUpdateReason = "simulate eph node update"

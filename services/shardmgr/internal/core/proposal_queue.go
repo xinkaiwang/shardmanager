@@ -23,6 +23,11 @@ func NewProposalQueue(ss *ServiceState, maxQueueSize int) *ProposalQueue {
 }
 
 func (pq *ProposalQueue) Push(ctx context.Context, p *costfunc.Proposal) common.EnqueueResult {
+	// drop if proposal gain is not enough
+	if !p.GetEfficiency().IsGreaterThan(costfunc.NewGain(0, 0)) {
+		return common.ER_LowGain
+	}
+	// insert
 	isLast := pq.insertProposalWithOrder(p)
 	if len(pq.list) <= pq.maxQueueSize {
 		return common.ER_Enqueued

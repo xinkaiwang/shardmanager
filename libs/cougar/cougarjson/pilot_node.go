@@ -15,7 +15,7 @@ type PilotNodeJson struct {
 	// SessionId unique ID to identity current process, changes in each restart/reboot.
 	SessionId string `json:"session_id"`
 
-	Assignments []*PilotAssignmentJson `json:"assignments"`
+	Assignments []*PilotAssignmentJson `json:"asgs"`
 
 	ShutdownPermited int8   `json:"shutdown_permited,omitempty"`
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
@@ -56,8 +56,8 @@ func ParsePilotNodeJson(stringJson string) *PilotNodeJson {
 type PilotAssignmentJson struct {
 	ShardId          string                `json:"shd"`
 	ReplicaIdx       int                   `json:"idx,omitempty"`
-	AsginmentId      string                `json:"asg"`
-	CustomProperties map[string]string     `json:"custom_properties,omitempty"`
+	AssignmentId     string                `json:"asg"`
+	CustomProperties map[string]string     `json:"data,omitempty"`
 	State            CougarAssignmentState `json:"sts"`
 }
 
@@ -66,7 +66,7 @@ func NewPilotAssignmentJson(shardId string, replicaIdx int, assignmentId string,
 	return &PilotAssignmentJson{
 		ShardId:          shardId,
 		ReplicaIdx:       replicaIdx,
-		AsginmentId:      assignmentId,
+		AssignmentId:     assignmentId,
 		CustomProperties: make(map[string]string),
 		State:            state,
 	}
@@ -106,7 +106,7 @@ func (obj *PilotAssignmentJson) EqualsTo(other *PilotAssignmentJson) bool {
 	if obj.ReplicaIdx != other.ReplicaIdx {
 		return false
 	}
-	if obj.AsginmentId != other.AsginmentId {
+	if obj.AssignmentId != other.AssignmentId {
 		return false
 	}
 	if obj.State != other.State {

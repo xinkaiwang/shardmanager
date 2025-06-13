@@ -16,7 +16,7 @@ type WorkerStateJson struct {
 
 	WorkerState data.WorkerStateEnum `json:"worker_state,omitempty"`
 
-	Assignments map[data.AssignmentId]*AssignmentStateJson `json:"assignments"`
+	Assignments map[data.AssignmentId]*AssignmentStateJson `json:"asgs"`
 
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`

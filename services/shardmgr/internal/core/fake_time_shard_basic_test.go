@@ -130,7 +130,6 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		})
 
 		// 停止ServiceState
-		ss.StopAndWaitForExit(ctx)
 		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "测试完成，ServiceState已停止")
 	})
 }
@@ -241,7 +240,6 @@ func TestServiceState_ShadowStateWrite(t *testing.T) {
 		t.Logf("分片状态持久化验证通过")
 
 		// 8. 停止ServiceState
-		ss.StopAndWaitForExit(ctx)
 		t.Logf("测试完成，ServiceState已停止")
 	})
 }
@@ -401,7 +399,6 @@ func TestServiceState_PreexistingShardState(t *testing.T) {
 		}
 
 		// 结束前停止 ServiceState
-		ss.StopAndWaitForExit(ctx)
 		t.Logf("ServiceState已停止，测试完成")
 	})
 }
@@ -476,7 +473,6 @@ func TestShardBasic_ConsistencyCheck(t *testing.T) {
 		}
 
 		// 结束前停止 ServiceState
-		ss.StopAndWaitForExit(ctx)
 		t.Logf("ServiceState已停止，测试完成")
 	}
 
@@ -610,7 +606,6 @@ func TestShardBasic_ConflictResolution(t *testing.T) {
 		}
 
 		// 结束前停止 ServiceState
-		ss.StopAndWaitForExit(ctx)
 		t.Logf("ServiceState已停止，测试完成")
 	}
 
@@ -751,7 +746,6 @@ func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 		}
 
 		// 结束前停止 ServiceState
-		ss.StopAndWaitForExit(ctx)
 		t.Logf("ServiceState已停止，测试完成")
 	}
 

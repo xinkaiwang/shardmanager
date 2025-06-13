@@ -43,10 +43,10 @@ func PilotNodeFromJson(node *cougarjson.PilotNodeJson) *PilotNode {
 	pilotNode.LastUpdateAtMs = node.LastUpdateAtMs
 
 	for _, assignment := range node.Assignments {
-		pilotNode.Assignments[data.AssignmentId(assignment.AsginmentId)] = &PilotAssignment{
+		pilotNode.Assignments[data.AssignmentId(assignment.AssignmentId)] = &PilotAssignment{
 			ShardId:     data.ShardId(assignment.ShardId),
 			ReplicaIdx:  data.ReplicaIdx(assignment.ReplicaIdx),
-			AsginmentId: data.AssignmentId(assignment.AsginmentId),
+			AsginmentId: data.AssignmentId(assignment.AssignmentId),
 			State:       assignment.State,
 		}
 	}

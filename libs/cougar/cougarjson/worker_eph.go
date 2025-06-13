@@ -29,7 +29,7 @@ type WorkerEphJson struct {
 	// 键和值都是字符串类型
 	Properties map[string]string `json:"properties,omitempty"` // gpu_ct="1", gpu_type="H100", etc.
 
-	Assignments []*AssignmentJson `json:"assignments"`
+	Assignments []*AssignmentJson `json:"asgs"`
 
 	LastUpdateAtMs   int64  `json:"update_time_ms,omitempty"`
 	LastUpdateReason string `json:"update_reason,omitempty"`

@@ -5,10 +5,15 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
+)
+
+var (
+	shardPlanUpdateMetrics = kmetrics.CreateKmetric(context.Background(), "shard_plan_update_bytes", "shard plan update", []string{})
 )
 
 // digestStagingShardPlan: this must called in runloop
@@ -89,6 +94,7 @@ func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShard
 		stop:    make(chan struct{}),
 		stopped: make(chan struct{}),
 	}
+	sp.InitMetrics(ctx2)                         // 初始化指标
 	go sp.run(klogging.EmbedTraceId(ctx, "spw")) // spw = ShardPlanWatcher
 	return sp
 }
@@ -109,6 +115,7 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 			traceId := kcommon.NewTraceId(ctx, "spw_", 8)
 			ctx2 := klogging.EmbedTraceId(ctx, traceId)
 			klogging.Info(ctx2).With("path", item.Key).With("len", len(item.Value)).With("revision", item.ModRevision).Log("ShardPlanWatcher", "watcher event")
+			shardPlanUpdateMetrics.GetTimeSequence(ctx2).Add(int64(len(item.Value)))
 			shardPlan := smgjson.ParseShardPlan(item.Value)
 			krunloop.VisitResource(sp.parent, func(ss *ServiceState) {
 				ss.stagingShardPlan = shardPlan
@@ -134,6 +141,11 @@ func (sp *ShardPlanWatcher) StopAndWaitForExit() {
 	sp.Stop()
 	<-sp.stopped // 等待 run thread exit
 	klogging.Info(context.Background()).Log("ShardPlanWatcher", "stopped")
+}
+
+func (sp *ShardPlanWatcher) InitMetrics(ctx context.Context) {
+	// 初始化指标
+	shardPlanUpdateMetrics.GetTimeSequence(ctx).Touch()
 }
 
 // // implements IEvent[*ServiceState]

@@ -162,8 +162,6 @@ func TestAssembleFakeSolver2(t *testing.T) {
 			assert.True(t, waitSucc, "应该能在超时前 update worker eph, 耗时=%dms", elapsedMs)
 		}
 
-		// stop
-		ss.StopAndWaitForExit(ctx)
 		setup.PrintAll(ctx)
 
 		// assert.Equal(t, true, false, "") // 强制查看测试输出

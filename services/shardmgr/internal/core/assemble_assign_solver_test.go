@@ -110,7 +110,7 @@ func TestAssembleAssignSolver(t *testing.T) {
 
 		// Step 5: simulate eph node update
 		setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AsginmentId, cougarjson.CAS_Ready))
+			wej.Assignments = append(wej.Assignments, cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AssignmentId, cougarjson.CAS_Ready))
 			wej.LastUpdateAtMs = setup.FakeTime.WallTime
 			wej.LastUpdateReason = "SimulateAddShard"
 			return wej
@@ -124,7 +124,7 @@ func TestAssembleAssignSolver(t *testing.T) {
 				if len(ws.Assignments) == 0 {
 					return false, "没有 assignment"
 				}
-				if assign, ok := assigns[data.AssignmentId(pilotAssign.AsginmentId)]; !ok {
+				if assign, ok := assigns[data.AssignmentId(pilotAssign.AssignmentId)]; !ok {
 					return false, "没有 assignment"
 				} else {
 					if assign.CurrentConfirmedState != cougarjson.CAS_Ready {

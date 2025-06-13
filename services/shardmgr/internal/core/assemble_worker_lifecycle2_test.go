@@ -64,7 +64,7 @@ func TestAssembleWorkerLifeCycle2(t *testing.T) {
 			// step4: simulate eph node update
 			klogging.Info(ctx).Log("Step4", "simulate eph node update")
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-				assign := cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AsginmentId, cougarjson.CAS_Ready)
+				assign := cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AssignmentId, cougarjson.CAS_Ready)
 				wej.Assignments = append(wej.Assignments, assign)
 				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()
 				wej.LastUpdateReason = "simulate eph node update"
@@ -116,7 +116,7 @@ func TestAssembleWorkerLifeCycle2(t *testing.T) {
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
 			// step8b: simulate eph node update
 			setup.UpdateEphNode(workerFullId2, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
-				assign := cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AsginmentId, cougarjson.CAS_Ready)
+				assign := cougarjson.NewAssignmentJson(pilotAssign2.ShardId, pilotAssign2.ReplicaIdx, pilotAssign2.AssignmentId, cougarjson.CAS_Ready)
 				wej.Assignments = append(wej.Assignments, assign)
 				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()
 				wej.LastUpdateReason = "simulate eph node update"

@@ -53,6 +53,11 @@ func (ke *Kerror) Unwrap() error {
 	return ke.CausedBy
 }
 
+func (ke *Kerror) WithoutStack() *Kerror {
+	ke.Stack = "" // clear stack trace
+	return ke
+}
+
 func (ke *Kerror) GetType() string {
 	return ke.Type
 }

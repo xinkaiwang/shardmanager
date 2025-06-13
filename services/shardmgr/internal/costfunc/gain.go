@@ -51,6 +51,13 @@ type Gain struct {
 	SoftScore float64
 }
 
+func NewGain(hardScore int32, softScore float64) Gain {
+	return Gain{
+		HardScore: hardScore,
+		SoftScore: softScore,
+	}
+}
+
 func (g Gain) IsGreaterThan(other Gain) bool {
 	if g.HardScore > other.HardScore {
 		return true
