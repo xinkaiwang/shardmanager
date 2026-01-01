@@ -2,6 +2,7 @@ package solo
 
 import (
 	"context"
+	"sync/atomic"
 
 	cougarEtcd "github.com/xinkaiwang/shardmanager/libs/cougar/etcdprov"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
@@ -69,7 +70,7 @@ func (solo *SoloManagerRobust) onSessionLost(ctx context.Context) {
 type SessionWrapper struct {
 	parent   *SoloManagerRobust
 	session  cougarEtcd.EtcdSession
-	stop     bool
+	stop     atomic.Bool
 	chClosed chan struct{}
 }
 
@@ -90,14 +91,19 @@ func NewSessionWrapper(ctx context.Context, parent *SoloManagerRobust, reason st
 
 func (sw *SessionWrapper) OnStateChange(state cougarEtcd.EtcdSessionState, msg string) {
 	if state == cougarEtcd.ESS_Disconnected {
-		close(sw.chClosed)
+		// 只有在非正常关闭时才触发 session lost 恢复逻辑
+		if !sw.stop.Load() {
+			close(sw.chClosed)
+		}
 	}
-	sw.session.Close(context.Background())
+	if !sw.stop.Load() {
+		sw.session.Close(context.Background())
+	}
 }
 
 // close session and wait for close
 func (sw *SessionWrapper) Close(ctx context.Context) {
-	sw.stop = true
+	sw.stop.Store(true)
 	sw.session.Close(ctx)
 	select {
 	case <-sw.chClosed:

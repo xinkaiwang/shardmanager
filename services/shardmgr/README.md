@@ -9,3 +9,9 @@ export LOG_FORMAT=simple
 export ETCD_ENDPOINTS=localhost:2379
 ./bin/shardmgr
 ```
+
+## how to build shardmgr?
+
+```
+make
+```
