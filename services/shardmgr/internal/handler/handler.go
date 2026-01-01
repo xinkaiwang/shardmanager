@@ -10,6 +10,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/api"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/biz"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
 
 // Handler 处理 HTTP 请求
@@ -29,6 +30,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/get_state", ErrorHandlingMiddleware(http.HandlerFunc(h.GetStateHandler)))
 	mux.Handle("/api/get_shard_plan", ErrorHandlingMiddleware(http.HandlerFunc(h.GetShardPlanHandler)))
 	mux.Handle("/api/set_shard_plan", ErrorHandlingMiddleware(http.HandlerFunc(h.SetShardPlanHandler)))
+	mux.Handle("/api/get_service_config", ErrorHandlingMiddleware(http.HandlerFunc(h.GetServiceConfigHandler)))
+	mux.Handle("/api/set_service_config", ErrorHandlingMiddleware(http.HandlerFunc(h.SetServiceConfigHandler)))
 	mux.Handle("/api/snapshot_current", ErrorHandlingMiddleware(http.HandlerFunc(h.GetCurrentSnapshotHandler)))
 	mux.Handle("/api/snapshot_future", ErrorHandlingMiddleware(http.HandlerFunc(h.GetFutureSnapshotHandler)))
 }
@@ -211,4 +214,96 @@ func (h *Handler) SetShardPlanHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 返回成功响应
 	w.Write([]byte("OK\n"))
+}
+
+// GetServiceConfigHandler 处理 /api/get_service_config 请求
+func (h *Handler) GetServiceConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 只允许 GET 方法
+	if r.Method != http.MethodGet {
+		panic(kerror.Create("MethodNotAllowed", "only GET method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 记录请求信息
+	klogging.Verbose(r.Context()).
+		Log("GetServiceConfigRequest", "received get service config request")
+
+	// 处理请求
+	var configJson *smgjson.ServiceConfigJson
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.GetServiceConfig", func() {
+		configJson = h.app.GetServiceConfig(r.Context())
+	}, "")
+
+	// 记录响应信息
+	klogging.Info(r.Context()).
+		Log("GetServiceConfigResponse", "sending get service config response")
+
+	// 返回 JSON 响应
+	data, err := json.Marshal(configJson)
+	if err != nil {
+		panic(kerror.Create("EncodingError", "failed to encode response").
+			WithErrorCode(kerror.EC_INTERNAL_ERROR).
+			With("error", err.Error()))
+	}
+	w.Write(data)
+}
+
+// SetServiceConfigHandler 处理 /api/set_service_config 请求
+func (h *Handler) SetServiceConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 只允许 POST 方法
+	if r.Method != http.MethodPost {
+		panic(kerror.Create("MethodNotAllowed", "only POST method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 读取请求体
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		panic(kerror.Create("ReadBodyError", "failed to read request body").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER).
+			With("error", err.Error()))
+	}
+	defer r.Body.Close()
+
+	// 解析 JSON
+	var partialConfig smgjson.ServiceConfigJson
+	err = json.Unmarshal(body, &partialConfig)
+	if err != nil {
+		panic(kerror.Create("ParseError", "failed to parse request body").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER).
+			With("error", err.Error()))
+	}
+
+	// 记录请求信息
+	klogging.Info(r.Context()).
+		With("config", string(body)).
+		Log("SetServiceConfigRequest", "received set service config request")
+
+	// 处理请求
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.SetServiceConfig", func() {
+		h.app.SetServiceConfig(r.Context(), &partialConfig)
+	}, "")
+
+	// 记录响应信息
+	klogging.Info(r.Context()).
+		Log("SetServiceConfigResponse", "service config updated successfully")
+
+	// 返回成功响应
+	response := map[string]interface{}{
+		"success": true,
+		"message": "配置更新成功",
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		panic(kerror.Create("EncodingError", "failed to encode response").
+			WithErrorCode(kerror.EC_INTERNAL_ERROR).
+			With("error", err.Error()))
+	}
+	w.Write(data)
 }

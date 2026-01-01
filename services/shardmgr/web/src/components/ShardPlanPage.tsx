@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Typography,
   Box,
@@ -208,7 +208,8 @@ export default function ShardPlanPage() {
   // 初始加载
   useEffect(() => {
     loadShardPlan();
-  }, [loadShardPlan]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 处理保存按钮点击
   const handleSaveClick = () => {

@@ -9,9 +9,12 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/api"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/core"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 	"go.opencensus.io/metric"
 )
 
@@ -70,6 +73,48 @@ func (app *App) GetShardPlan(ctx context.Context) string {
 
 func (app *App) WriteShardPlan(ctx context.Context, shardPlan string) {
 	app.ss.ShardPlanWatcher.WriteShardPlan(ctx, shardPlan)
+}
+
+func (app *App) GetServiceConfig(ctx context.Context) *smgjson.ServiceConfigJson {
+	var cfg *config.ServiceConfig
+	app.ss.PostActionAndWait(func(ss *core.ServiceState) {
+		cfg = ss.ServiceConfig
+	}, "GetServiceConfig")
+	return cfg.ToServiceConfigJson()
+}
+
+func (app *App) SetServiceConfig(ctx context.Context, partialCfg *smgjson.ServiceConfigJson) error {
+	// 读取当前配置
+	currentCfgJson := app.GetServiceConfig(ctx)
+
+	// Merge: 只更新传入的配置组
+	if partialCfg.ShardConfig != nil {
+		currentCfgJson.ShardConfig = partialCfg.ShardConfig
+	}
+	if partialCfg.WorkerConfig != nil {
+		currentCfgJson.WorkerConfig = partialCfg.WorkerConfig
+	}
+	if partialCfg.SystemLimit != nil {
+		currentCfgJson.SystemLimit = partialCfg.SystemLimit
+	}
+	if partialCfg.CostFuncCfg != nil {
+		currentCfgJson.CostFuncCfg = partialCfg.CostFuncCfg
+	}
+	if partialCfg.SolverConfig != nil {
+		currentCfgJson.SolverConfig = partialCfg.SolverConfig
+	}
+	if partialCfg.DynamicThresholdConfig != nil {
+		currentCfgJson.DynamicThresholdConfig = partialCfg.DynamicThresholdConfig
+	}
+	if partialCfg.FaultToleranceConfig != nil {
+		currentCfgJson.FaultToleranceConfig = partialCfg.FaultToleranceConfig
+	}
+
+	// 写回 etcd
+	path := app.ss.PathManager.GetServiceConfigPath()
+	etcdprov.GetCurrentEtcdProvider(ctx).Set(ctx, path, currentCfgJson.ToJson())
+
+	return nil
 }
 
 func (app *App) StartAppMetrics(ctx context.Context) {

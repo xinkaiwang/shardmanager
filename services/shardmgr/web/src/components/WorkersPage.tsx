@@ -614,7 +614,8 @@ export default function WorkersPage() {
   // 初始加载
   useEffect(() => {
     loadData(true);
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 设置定时刷新
   useEffect(() => {

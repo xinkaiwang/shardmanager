@@ -21,6 +21,7 @@ import {
   Settings as SettingsIcon,
   Computer as ComputerIcon,
   FormatListBulleted as FormatListBulletedIcon,
+  Tune as TuneIcon,
 } from '@mui/icons-material';
 
 // 扩展断点类型定义
@@ -39,6 +40,7 @@ declare module '@mui/material/styles' {
 import WorkersPage from './components/WorkersPage';
 import ConfigPage from './components/ConfigPage';
 import ShardPlanPage from './components/ShardPlanPage';
+import ServiceConfigPage from './components/ServiceConfigPage';
 // 导入SVG logo
 import logoSvg from './assets/logo.svg';
 
@@ -115,6 +117,14 @@ export default function App() {
               <FormatListBulletedIcon />
             </ListItemIcon>
             {!sidebarCollapsed && <ListItemText primary="Shard Plan" />}
+          </ListItemButton>
+        </ListItem>
+        <ListItem disablePadding component={Link} to="/service-config" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <ListItemButton sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
+            <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 56 }}>
+              <TuneIcon />
+            </ListItemIcon>
+            {!sidebarCollapsed && <ListItemText primary="Service Config" />}
           </ListItemButton>
         </ListItem>
         <ListItem disablePadding component={Link} to="/config" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -244,6 +254,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<WorkersPage />} />
             <Route path="/shard-plan" element={<ShardPlanPage />} />
+            <Route path="/service-config" element={<ServiceConfigPage />} />
             <Route path="/config" element={<ConfigPage />} />
           </Routes>
         </Box>
