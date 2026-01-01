@@ -85,8 +85,8 @@ func main() {
 	ksysmetrics.StartSysMetricsCollector(ctx, 15*time.Second, Version)
 
 	// 获取端口配置
-	apiPort := getEnvInt("API_PORT", 8080)
-	metricsPort := getEnvInt("METRICS_PORT", 9090)
+	apiPort := getEnvInt("API_PORT", 8070)
+	metricsPort := getEnvInt("METRICS_PORT", 9070)
 
 	// 创建 metrics 路由
 	metricsMux := http.NewServeMux()

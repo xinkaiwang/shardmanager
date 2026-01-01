@@ -20,6 +20,7 @@ import {
   Menu as MenuIcon,
   Settings as SettingsIcon,
   Computer as ComputerIcon,
+  FormatListBulleted as FormatListBulletedIcon,
 } from '@mui/icons-material';
 
 // 扩展断点类型定义
@@ -37,6 +38,7 @@ declare module '@mui/material/styles' {
 // 导入页面组件
 import WorkersPage from './components/WorkersPage';
 import ConfigPage from './components/ConfigPage';
+import ShardPlanPage from './components/ShardPlanPage';
 // 导入SVG logo
 import logoSvg from './assets/logo.svg';
 
@@ -105,6 +107,14 @@ export default function App() {
               <ComputerIcon />
             </ListItemIcon>
             {!sidebarCollapsed && <ListItemText primary="Workers" />}
+          </ListItemButton>
+        </ListItem>
+        <ListItem disablePadding component={Link} to="/shard-plan" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <ListItemButton sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
+            <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 56 }}>
+              <FormatListBulletedIcon />
+            </ListItemIcon>
+            {!sidebarCollapsed && <ListItemText primary="Shard Plan" />}
           </ListItemButton>
         </ListItem>
         <ListItem disablePadding component={Link} to="/config" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -233,6 +243,7 @@ export default function App() {
           <Toolbar />
           <Routes>
             <Route path="/" element={<WorkersPage />} />
+            <Route path="/shard-plan" element={<ShardPlanPage />} />
             <Route path="/config" element={<ConfigPage />} />
           </Routes>
         </Box>
