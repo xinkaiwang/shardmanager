@@ -21,7 +21,6 @@ import {
   Settings as SettingsIcon,
   Computer as ComputerIcon,
   FormatListBulleted as FormatListBulletedIcon,
-  Tune as TuneIcon,
 } from '@mui/icons-material';
 
 // 扩展断点类型定义
@@ -38,7 +37,6 @@ declare module '@mui/material/styles' {
 
 // 导入页面组件
 import WorkersPage from './components/WorkersPage';
-import ConfigPage from './components/ConfigPage';
 import ShardPlanPage from './components/ShardPlanPage';
 import ServiceConfigPage from './components/ServiceConfigPage';
 // 导入SVG logo
@@ -103,7 +101,7 @@ export default function App() {
         </Box>
       </Toolbar>
       <List>
-        <ListItem disablePadding component={Link} to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <ListItem disablePadding component={Link} to="/workers" style={{ textDecoration: 'none', color: 'inherit' }}>
           <ListItemButton sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
             <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 56 }}>
               <ComputerIcon />
@@ -122,17 +120,9 @@ export default function App() {
         <ListItem disablePadding component={Link} to="/service-config" style={{ textDecoration: 'none', color: 'inherit' }}>
           <ListItemButton sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
             <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 56 }}>
-              <TuneIcon />
-            </ListItemIcon>
-            {!sidebarCollapsed && <ListItemText primary="Service Config" />}
-          </ListItemButton>
-        </ListItem>
-        <ListItem disablePadding component={Link} to="/config" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <ListItemButton sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
-            <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 56 }}>
               <SettingsIcon />
             </ListItemIcon>
-            {!sidebarCollapsed && <ListItemText primary="Config" />}
+            {!sidebarCollapsed && <ListItemText primary="Service Config" />}
           </ListItemButton>
         </ListItem>
       </List>
@@ -253,9 +243,9 @@ export default function App() {
           <Toolbar />
           <Routes>
             <Route path="/" element={<WorkersPage />} />
+            <Route path="/workers" element={<WorkersPage />} />
             <Route path="/shard-plan" element={<ShardPlanPage />} />
             <Route path="/service-config" element={<ServiceConfigPage />} />
-            <Route path="/config" element={<ConfigPage />} />
           </Routes>
         </Box>
       </Box>

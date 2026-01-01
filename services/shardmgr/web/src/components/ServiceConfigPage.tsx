@@ -441,7 +441,7 @@ const ServiceConfigPage: React.FC = () => {
                 <Chip label="默认: 1000" size="small" variant="outlined" />
                 <Chip label="推荐: >=1000" size="small" color="primary" variant="outlined" />
                 <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
-                  最大副本总数
+                  最大 replica 总数
                 </Typography>
               </Box>
             </Box>
