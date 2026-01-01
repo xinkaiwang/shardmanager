@@ -21,3 +21,10 @@ func GetEnvStr(key string, defaultValue string) string {
 	}
 	return defaultValue
 }
+
+func StrSizeLimit(input string, maxLen int) string {
+	if len(input) > maxLen {
+		return input[:maxLen] + "..."
+	}
+	return input
+}

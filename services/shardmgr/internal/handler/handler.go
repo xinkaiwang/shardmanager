@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -26,6 +27,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// 包装所有处理器以添加错误处理中间件
 	mux.Handle("/api/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.PingHandler)))
 	mux.Handle("/api/get_state", ErrorHandlingMiddleware(http.HandlerFunc(h.GetStateHandler)))
+	mux.Handle("/api/get_shard_plan", ErrorHandlingMiddleware(http.HandlerFunc(h.GetShardPlanHandler)))
+	mux.Handle("/api/set_shard_plan", ErrorHandlingMiddleware(http.HandlerFunc(h.SetShardPlanHandler)))
 	mux.Handle("/api/snapshot_current", ErrorHandlingMiddleware(http.HandlerFunc(h.GetCurrentSnapshotHandler)))
 	mux.Handle("/api/snapshot_future", ErrorHandlingMiddleware(http.HandlerFunc(h.GetFutureSnapshotHandler)))
 }
@@ -138,4 +141,74 @@ func (h *Handler) GetFutureSnapshotHandler(w http.ResponseWriter, r *http.Reques
 			WithErrorCode(kerror.EC_INTERNAL_ERROR).
 			With("error", err.Error()))
 	}
+}
+
+// GetShardPlanHandler 处理 /api/get_shard_plan 请求
+func (h *Handler) GetShardPlanHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	// 只允许 GET 方法
+	if r.Method != http.MethodGet {
+		panic(kerror.Create("MethodNotAllowed", "only GET method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 记录请求信息
+	klogging.Verbose(r.Context()).
+		Log("GetShardPlanRequest", "received get shard plan request")
+
+	// 处理请求
+	var shardPlan string
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.GetShardPlan", func() {
+		shardPlan = h.app.GetShardPlan(r.Context())
+	}, "")
+
+	// 记录响应信息
+	klogging.Info(r.Context()).
+		With("length", len(shardPlan)).
+		Log("GetShardPlanResponse", "sending get shard plan response")
+
+	// 返回纯文本响应
+	w.Write([]byte(shardPlan))
+}
+
+// SetShardPlanHandler 处理 /api/set_shard_plan 请求
+func (h *Handler) SetShardPlanHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	// 只允许 POST 方法
+	if r.Method != http.MethodPost {
+		panic(kerror.Create("MethodNotAllowed", "only POST method is allowed").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+
+	// 读取请求体
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		panic(kerror.Create("ReadBodyError", "failed to read request body").
+			WithErrorCode(kerror.EC_INVALID_PARAMETER).
+			With("error", err.Error()))
+	}
+	defer r.Body.Close()
+
+	shardPlan := string(body)
+
+	// 记录请求信息
+	klogging.Info(r.Context()).
+		With("length", len(shardPlan)).
+		Log("SetShardPlanRequest", "received set shard plan request")
+
+	// 处理请求
+	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.SetShardPlan", func() {
+		h.app.WriteShardPlan(r.Context(), shardPlan)
+	}, "")
+
+	// 记录响应信息
+	klogging.Info(r.Context()).
+		Log("SetShardPlanResponse", "shard plan updated successfully")
+
+	// 返回成功响应
+	w.Write([]byte("OK\n"))
 }

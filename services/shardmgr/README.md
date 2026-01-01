@@ -15,3 +15,13 @@ export SMG_ETCD_ENDPOINTS=localhost:2379
 ```
 make
 ```
+
+## How to get/set shard plan?
+
+```
+curl http://localhost:8081/api/get_shard_plan
+```
+
+```
+curl http://localhost:8081/api/set_shard_plan -X POST -d "shard_1"
+```

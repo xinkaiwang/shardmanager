@@ -7,6 +7,7 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
+	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -160,3 +161,17 @@ func (sp *ShardPlanWatcher) InitMetrics(ctx context.Context) {
 // func (spue *ShardPlanUpdateEvent) Process(ctx context.Context, ss *ServiceState) {
 // 	ss.digestStagingShardPlan(ctx)
 // }
+
+func (sp *ShardPlanWatcher) GetCurrentShardPlan(ctx context.Context) string {
+	// read from etcd
+	shardPlanItem := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, sp.path)
+	shardPlan := shardPlanItem.Value
+	klogging.Info(ctx).With("path", sp.path).With("len", len(shardPlan)).With("shardPlan", common.StrSizeLimit(shardPlan, 1000)).Log("ShardPlanWatcher", "GetCurrentShardPlan")
+	return shardPlan
+}
+
+func (sp *ShardPlanWatcher) WriteShardPlan(ctx context.Context, shardPlan string) {
+	// write to etcd
+	etcdprov.GetCurrentEtcdProvider(ctx).Set(ctx, sp.path, shardPlan)
+	klogging.Info(ctx).With("path", sp.path).With("len", len(shardPlan)).With("shardPlan", common.StrSizeLimit(shardPlan, 1000)).Log("ShardPlanWatcher", "WriteShardPlan")
+}

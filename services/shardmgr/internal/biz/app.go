@@ -64,6 +64,14 @@ func (app *App) GetFutureSnapshot(ctx context.Context) *costfunc.SnapshotVm {
 	return snapshotVm
 }
 
+func (app *App) GetShardPlan(ctx context.Context) string {
+	return app.ss.ShardPlanWatcher.GetCurrentShardPlan(ctx)
+}
+
+func (app *App) WriteShardPlan(ctx context.Context, shardPlan string) {
+	app.ss.ShardPlanWatcher.WriteShardPlan(ctx, shardPlan)
+}
+
 func (app *App) StartAppMetrics(ctx context.Context) {
 	// 启动应用级别的指标收集
 	klogging.Info(ctx).Log("app.StartAppMetrics", "Starting application metrics")
