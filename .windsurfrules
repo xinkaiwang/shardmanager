@@ -1,0 +1,1978 @@
+Intro
+# Shardmanager 特定规则和知识库
+
+总是用中文回答我，即使我有时会用英文提问。
+本文件包含的是针对本项目的特定规则和经验教训，优先级高于任何通用知识。
+这里是 `/Users/xinkai/src/shardmanager/.windsurfrules` 文件。 ShardManager 相关的详细知识应该记录在本文件中。
+这个文件包含 shardmanager 模块特定的规则和经验教训和Tribe knowledge，主要关注核心功能实现和代码质量。
+
+## Rules Priority System
+[P0] - 关键安全规则，必须严格遵守，违反可能导致严重后果
+[P1] - 重要规则，应该始终遵守，除非有特殊情况
+[P2] - 最佳实践，建议遵守但可以根据具体情况调整
+
+## Critical Safety Rules [P0]
+- 数据安全规则：
+  - 所有数据操作必须有错误处理
+  - 必须验证输入数据的有效性
+  - 敏感数据必须加密存储
+- 服务稳定性规则：
+  - 所有服务必须实现健康检查
+  - 必须处理所有可能的错误状态
+  - 关键操作必须有日志记录
+- 版本兼容性规则：
+  - API 变更必须保持向后兼容
+  - 配置格式变更必须提供迁移方案
+  - 版本号必须遵循语义化版本规范
+- 测试正确性规则 [P0]：
+  - **绝对禁止**在测试中直接调用内部方法（如 onEphNodeLost）
+  - 必须通过公共接口或事件触发机制来测试功能
+  - 测试应验证完整的调用链，而不是绕过部分逻辑
+  - 错误示例：直接调用 `workerState.onEphNodeLost(ctx, ss)`
+  - 正确示例：通过模拟事件或调用公共 API 来触发相应的内部逻辑
+
+## Project Structure
+- cmd/：命令行工具
+- services/：微服务实现
+  - hellosvc/：示例服务
+- libs/：共享库
+  - xklib/：通用工具库
+
+## Service Architecture
+1. 服务设计原则：
+   - 单一职责
+   - 松耦合
+   - 高内聚
+   - 可测试性
+
+2. 通信协议：
+   - 服务间通信使用 gRPC
+   - 外部 API 使用 REST
+   - 事件通知使用 NATS
+
+3. 数据流：
+   - 请求验证 -> 业务逻辑 -> 数据持久化
+   - 错误处理在每一层都必须存在
+   - 日志记录关键操作和错误
+
+## Shardmanager 核心组件 [P1]
+1. 核心组件和数据流：
+   - `ServiceState`：核心状态管理器，使用 runloop 模式保证线程安全
+   - `PathManager`：管理 etcd 中的路径配置
+   - `ShadowState`：实现 `StoreProvider` 接口，负责状态持久化
+   - `EtcdProvider`：etcd 存储接口，可以使用 `FakeEtcdProvider` 进行测试
+
+2. 主要数据存储路径：
+   - `/smg/config/service_info.json`: 服务基本信息
+   - `/smg/config/service_config.json`: 服务配置
+   - `/smg/config/shard_plan.txt`: shard 计划
+   - `/smg/shard_state/*`: shard 状态
+   - `/smg/worker_state/*`: worker 状态
+   - `/smg/eph/*`: 临时状态
+   - `/smg/move/*`: 执行计划
+
+3. 关键数据结构：
+   - `ServiceInfoJson`：服务基本信息，包括服务类型、迁移策略等
+   - `ServiceConfig`：详细配置，包含 shard 配置、系统限制等
+   - `ShardStateJson`：shard 状态信息
+   - `WorkerStateJson`：worker 状态信息
+   - `ExecutionPlanJson`：执行计划
+
+4. 状态管理流程：
+   - 初始化：`NewServiceState` 创建实例，初始化各种映射和 runloop
+   - 配置加载：从 etcd 读取配置信息
+   - 状态加载：从 etcd 读取现有状态
+   - 状态更新：通过 runloop 确保线程安全，并同步到 etcd
+   - 监听变化：通过 watcher 监听配置和状态变化
+
+5. 服务类型：
+   - `ST_STATELESS`：无状态服务
+   - `ST_SOFT_STATEFUL`：软状态，状态在内存中，重启后丢失
+   - `ST_HARD_STATEFUL`：硬状态，状态在硬盘，重启不丢失
+
+6. 迁移策略：
+   - `MP_KillBeforeStart`：先杀后启
+   - `MP_StartBeforeKill`：先启后杀（默认）
+   - `MP_Cocurrent`：同时进行
+
+## Shardmanager Shard Plan 格式 [P1]
+1. Shard Plan 格式说明：
+   - Shard Plan 是由多行 Shard Line 组成的文本格式
+   - 每行表示一个 shard 的配置
+   - 可以包含空行和以 `#` 开头的注释行
+   - 行内也可以包含注释，`#` 后的内容会被忽略
+
+2. Shard Line 格式：
+   ```
+   <shardName>[|<hintsJson>[|<customPropertiesJson>]]
+   ```
+   
+   示例：
+   ```
+   shard-1                                                # 仅有名称
+   shard-2|{"min_replica_count":2,"max_replica_count":5}  # 带有 hints
+   shard-3|{"move_type":"kill_before_start"}              # 设置迁移策略
+   shard-4|{"min_replica_count":3}|{"region":"us-west"}   # 带有自定义属性
+   ```
+
+3. Shard Line 组成部分：
+   - `shardName`: shard 的名称（必须）
+   - `hintsJson`: JSON 格式的 ShardHintsJson 对象（可选）
+     * `min_replica_count`: 最小副本数（可选）
+     * `max_replica_count`: 最大副本数（可选）
+     * `move_type`: 迁移策略（可选，值为 "kill_before_start", "start_before_kill", "concurrent"）
+   - `customPropertiesJson`: JSON 格式的自定义属性（可选）
+
+4. Hints 和默认值：
+   - 如果 shard 没有指定 hints，则使用服务级别的默认值
+   - 服务级别的默认值来自 ServiceInfo 中的设置
+   - 优先级：shard 特定设置 > 服务默认设置
+
+5. 解析流程：
+   - `ParseShardPlan`: 将整个 plan 字符串拆分为多行，并对每行调用 `ParseShardLine`
+   - `ParseShardLine`: 解析单行配置，提取 shardName, hints 和 customProperties
+   - 处理流程包括：移除注释、分割字段、解析 JSON
+
+6. 测试时使用示例：
+   ```go
+   shardPlan := `shard-1
+   shard-2|{"min_replica_count":2,"max_replica_count":5}
+   shard-3|{"move_type":"kill_before_start"}`
+   
+   fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlan)
+   ```
+
+## Common Issues
+1. 部署相关问题：
+   - 服务启动失败：检查配置文件和环境变量
+   - 健康检查失败：查看服务日志和依赖状态
+   - 性能问题：检查资源使用和连接池配置
+
+2. 代码相关问题：
+   - 内存泄漏：检查资源释放和 goroutine 管理
+   - 并发问题：检查锁的使用和竞态条件
+   - 连接问题：检查超时设置和重试策略
+
+## Best Practices [P2]
+1. 代码规范：
+   - 遵循 Go 标准代码风格
+   - 使用 gofmt 格式化代码
+   - 添加适当的注释和文档
+
+2. 测试规范：
+   - 单元测试覆盖率要求 > 80%
+   - 集成测试必须包含错误场景
+   - 性能测试必须有基准数据
+
+3. 日志规范：
+   - 使用结构化日志
+   - 包含必要的上下文信息
+   - 错误日志必须包含堆栈信息
+
+## Version Compatibility
+当前版本：v0.1.0
+- API 版本：v1
+- 配置版本：v1
+- 数据格式版本：v1
+
+#
+
+## 版本依赖：
+- Go 版本：1.21+
+- NATS 版本：2.10+
+- etcd 版本：v3.5.11
+
+## Deployment Requirements
+1. 资源需求：
+   - CPU: 最小 200m，推荐 500m
+   - 内存: 最小 512Mi，推荐 1Gi
+   - 存储: 根据数据量定制
+
+2. 环境要求：
+   - 必需的环境变量
+   - 必需的配置文件
+   - 必需的外部服务
+
+3. 监控指标：
+   - 服务健康状态
+   - 请求延迟
+   - 错误率
+   - 资源使用率
+
+## 包使用指南
+#
+
+## kmetrics 包
+1. 包的位置：libs/xklib/kmetrics
+2. 主要组件：
+   - decorator.go：函数装饰器，用于收集性能指标
+   - gauge.go：实时值测量
+   - gauge_group.go：带标签的实时值组
+   - histogram.go：延迟分布统计
+
+3. 度量指标类型：
+   a. Kmetric (Summary)：
+      - 轻量级指标收集
+      - 适用于普通操作
+      - 记录：方法名、状态、错误、自定义注释
+      - 示例：`OpsLatencyMetric`
+
+   b. Khistogram：
+      - 重量级指标收集
+      - 适用于重要操作
+      - 提供详细的延迟分布
+      - 示例：`OpsLatencyHistogram`
+
+   c. GaugeGroup：
+      - 实时值测量
+      - 支持多维度标签
+      - 适用于状态监控
+
+4. 装饰器使用规范：
+   a. 普通操作：
+      ```go
+      InstrumentSummaryRunVoid(ctx, "method_name", func() {
+          // 业务逻辑
+      }, "custom_note")
+      ```
+
+   b. 重要操作：
+      ```go
+      InstrumentHistogramRunVoid(ctx, "important_method", func() {
+          // 重要业务逻辑
+      })
+      ```
+
+5. 错误处理规范：
+   - 使用 kerror 包装业务错误
+   - 通过 panic 传递错误
+   - 装饰器自动捕获并记录错误
+   - 错误最终会被重新抛出
+
+6. 性能考虑：
+   - Summary 适用于大多数场景
+   - Histogram 开销较大，仅用于重要操作
+   - 合理使用标签，避免标签基数过高
+
+7. 最佳实践：
+   - 在函数入口处使用装饰器
+   - 保持标签维度可控
+   - 使用有意义的方法名和注释
+   - 确保错误类型正确（kerror）
+
+#
+
+## kerror 包
+1. 包的位置：libs/xklib/kerror
+2. 主要组件：
+   - kerror.go：错误类型定义和基本操作
+   - error_code.go：错误码定义和 HTTP 状态码映射
+
+3. 错误类型：
+   a. Kerror 结构：
+      - Type：错误类型标识
+      - Msg：错误描述
+      - Details：键值对形式的详细信息
+      - Stack：调用栈信息（可选）
+      - CausedBy：原始错误（可选）
+      - ErrorCode：错误码（默认 EC_UNKNOWN）
+
+4. 错误创建方式：
+   a. 创建新错误：
+      ```go
+      ke := kerror.Create("MyErr", "错误描述").
+            With("key", "value").
+            WithErrorCode(kerror.EC_INVALID_PARAMETER)
+      ```
+
+   b. 包装已有错误：
+      ```go
+      ke := kerror.Wrap(err, "WrapperType", "包装描述", true /*needStack*/)
+      ```
+
+5. 错误码类型：
+   - EC_OK：正常（200）
+   - EC_UNKNOWN：未知错误（500）
+   - EC_NOT_FOUND：未找到（404）
+   - EC_INVALID_PARAMETER：参数无效（400）
+   - EC_CONFLICT：冲突（409）
+   - EC_INTERNAL_ERROR：内部错误（503）
+   - EC_RETRYABLE：可重试错误（429）
+
+6. 最佳实践：
+   - 使用有意义的错误类型名
+   - 添加足够的上下文信息
+   - 适当时使用调用栈
+   - 正确设置错误码
+   - 处理错误时检查是否可重试
+
+#
+
+## klogging 包
+1. 包的位置：libs/xklib/klogging
+2. 主要组件：
+   - nlogging.go：核心日志功能
+   - ctx_info.go：上下文信息管理
+   - logrus_logger.go：logrus 适配器
+
+3. 日志级别：
+   - FatalLevel：致命错误，记录后退出
+   - ErrorLevel：错误信息
+   - WarnLevel：警告信息
+   - InfoLevel：一般信息
+   - DebugLevel：调试信息
+   - VerboseLevel：详细信息
+
+4. 上下文信息：
+   a. 创建和使用：
+      ```go
+      ctx, info := klogging.CreateCtxInfo(ctx)
+      info.With("sessionID", "123").
+          With("userID", "456")
+      ```
+
+   b. 重要性级别：
+      - HighImportance：所有日志都包含
+      - MidImportance：Debug 级别包含
+      - LowImportance：仅 Verbose 级别包含
+
+5. 日志记录方式：
+   ```go
+   klogging.Info(ctx).
+       With("key", "value").
+       WithError(err).
+       Log("EventType", "描述信息")
+   ```
+
+6. 最佳实践：
+   - 使用合适的日志级别
+   - 添加必要的上下文信息
+   - 使用有意义的事件类型
+   - 错误日志包含完整错误信息
+   - 避免冗余的日志记录
+
+#
+
+## kcommon 包
+1. 包的位置：libs/xklib/kcommon
+2. 主要组件：
+   - try_catch_run.go：错误处理工具
+
+3. 错误处理函数：
+   a. TryCatchRun：
+      ```go
+      ke := kcommon.TryCatchRun(ctx, func() {
+          // 可能抛出错误的代码
+      })
+      ```
+   
+   b. 特点：
+      - 自动捕获 panic
+      - 转换为 Kerror 类型
+      - 处理非 Kerror 的错误
+      - 记录致命错误日志
+
+4. 最佳实践：
+   - 用于包装可能 panic 的代码
+   - 确保错误被正确转换和处理
+   - 配合 kerror 包使用
+   - 在适当的地方使用 defer
+
+5. 注意事项：
+   - 不要在 defer 中使用
+   - 处理所有可能的错误类型
+   - 避免嵌套使用
+   - 保持错误处理的一致性
+
+## 开发侧笔记
+1. 服务结构规范：
+   - api/：对外接口定义
+   - internal/：内部实现
+     - handler/：HTTP 请求处理
+     - biz/：业务逻辑
+   - cmd/：服务入口
+   - API 路径规范：/api/{resource}，例如 /api/hello
+   - 每个服务一个独立目录
+
+2. 开发工具链：
+   - Makefile：标准化开发命令
+   - golangci-lint：代码质量检查
+   - go fmt：代码格式化
+   - go vet：静态分析
+
+3. 开发流程：
+   - 先创建目录结构
+   - 定义 API 接口
+   - 实现业务逻辑
+   - 添加服务入口
+   - 编写 Makefile
+   - 提交前完成 lint 和 fmt
+
+4. 服务启动管理：
+   - 使用 tmux 管理服务进程
+   - 启动前检查现有会话：tmux ls
+   - 需要重启时：
+     1. 先结束现有会话：tmux kill-session -t {session-name}
+     2. 再启动新会话：tmux new-session -d -s {session-name} 'cd /path/to/service && go run cmd/main.go'
+   - 查看日志：tmux attach -t {session-name}
+   - 避免重复创建同名会话
+
+5. 测试策略：
+   - 单元测试：业务逻辑
+   - 集成测试：HTTP 接口
+   - 基准测试：性能验证
+
+6. 代码提交规范：
+   - 提交前先运行 make fmt 和 make lint
+   - 确保 make test 通过
+   - 遵循 Go 项目标准布局
+   - 按功能模块组织代码
+
+7. 模块路径规范：
+   - 主模块：github.com/xinkaiwang/shardmanager
+   - 工具库：github.com/xinkaiwang/shardmanager/libs/xklib
+   - 服务包：github.com/xinkaiwang/shardmanager/services/{服务名}
+   - 注意：不要使用 github.com/xinkai/cursor/shardmanager 这样的路径
+   - 原因：这是一个独立的模块，不应该包含父仓库的路径
+
+## Lessons
+
+
+## 工作流程经验
+
+
+## 分片状态管理经验 [P1]
+1. 分片状态路径和结构：
+   - 分片状态存储在 etcd 中的 `/smg/shard_state/{shard-id}` 路径下
+   - 每个分片状态包含基本信息：shard_name 和 replicas 列表
+   - ShardHint 不会持久化到 ShardStateJson 中，这是设计决策
+   - 因为 Hints 信息可以从 ServiceCfg 和 shardPlan 派生，无需冗余存储
+
+2. 分片删除机制：
+   - 从分片计划中删除分片时，使用软删除机制
+   - 被删除的分片会从内存中的 AllShards 映射中移除
+   - 但分片的状态数据保留在 etcd 中，不被物理删除
+   - **功能缺失**：软删除标记（删除状态）没有被持久化到 etcd
+   - 这导致无法区分"尚未创建的分片"和"已被软删除的分片"
+   - 建议改进：在 ShardStateJson 中添加一个状态字段，用于标记删除状态
+
+3. 分片状态变更过程：
+   - 分片计划变更会触发 syncShardPlan 过程
+   - 此过程会识别新增、更新和删除的分片
+   - 对于新增分片，创建 ShardState 并保存到 etcd
+   - 对于更新分片，更新内存中的 ShardState
+   - 对于删除分片，从内存中移除但保留 etcd 数据
+   - **改进需求**：删除分片时，应将其标记为已删除状态并持久化该标记
+
+4. 测试分片变更的最佳实践：
+   - 设置初始分片计划（可以为空）
+   - 等待处理完成，验证内存状态和 etcd 状态
+   - 更新分片计划，添加或删除分片
+   - 等待处理完成，再次验证状态
+   - 检查 syncShardPlan 日志输出，确认正确的插入、更新和删除操作
+
+5. 分片 Hints 处理说明：
+   - `NewShardStateByPlan` 函数不设置 Hints 属性是有意的设计决策
+   - ShardHint 信息保存在分片计划中，不需要冗余存储在 ShardStateJson 中
+   - 运行时，系统从 ServiceCfg 和 shardPlan 获取 Hints 信息
+   - 在测试中，不应该检查 ShardState 的 Hints 属性是否从 ShardLine 传递
+
+6. 等待异步操作的重要性：
+   - 分片状态管理涉及异步操作
+   - 在验证状态前必须等待足够时间
+   - 推荐等待时间：200-300 毫秒
+   - 对于复杂操作可能需要更长等待时间
+
+## shardmanager 组件使用笔记
+#
+
+## FakeEtcdProvider 使用方法
+1. 创建实例:
+   ```go
+   fakeEtcd := etcdprov.NewFakeEtcdProvider()
+   ```
+
+2. 键值操作:
+   ```go
+   // 读取键值（返回 EtcdKvItem，不返回错误）
+   item := fakeEtcd.Get(ctx, key) // 返回类型: EtcdKvItem，字段: Key, Value, ModRevision
+   
+   // 设置键值
+   fakeEtcd.Set(ctx, key, value) // 无返回值
+   
+   // 删除键（键不存在会 panic）
+   fakeEtcd.Delete(ctx, key)
+   
+   // 列出前缀匹配的键值对
+   items := fakeEtcd.List(ctx, keyPrefix, maxCount) // 返回类型: []EtcdKvItem
+   
+   // 加载前缀匹配的键值对，并返回当前版本
+   items, revision := fakeEtcd.LoadAllByPrefix(ctx, keyPrefix) // 返回类型: []EtcdKvItem, EtcdRevision
+   
+   // 监视键变化
+   ch := fakeEtcd.WatchByPrefix(ctx, keyPrefix, revision) // 返回类型: chan EtcdKvItem
+   ```
+
+3. 在测试中使用:
+   ```go
+   // 使用 RunWithEtcdProvider 临时替换全局 EtcdProvider
+   etcdprov.RunWithEtcdProvider(fakeEtcd, func() {
+      // 在这个函数内，所有调用会使用 fakeEtcd
+      ss := NewServiceState(ctx)
+      // 进行断言...
+   })
+   ```
+
+#
+
+## ShardStateJson 结构
+```go
+type ShardStateJson struct {
+    ShardName data.ShardId `json:"shard_name"` // 注意：字段名是 ShardName 而不是 ShardId
+    Resplicas map[data.ReplicaIdx]*ReplicaStateJson `json:"resplicas"`
+}
+```
+
+#
+
+## ServiceState 关键路径
+1. 配置文件路径:
+   - 服务信息: `/smg/config/service_info.json`
+   - 服务配置: `/smg/config/service_config.json`
+   - 分片计划: `/smg/config/shard_plan.txt`
+   - 分片状态: `/smg/shard_state/{shard_id}` (注意：不是 shadow_state)
+
+2. 初始化服务状态:
+   ```go
+   ss := NewServiceState(ctx) // 会自动从 etcd 加载服务信息和配置
+   ```
+
+3. 访问分片:
+   ```go
+   // 获取所有分片
+   shards := ss.AllShards // 类型: map[string]*Shard
+   
+   // 获取特定分片
+   shard, ok := ss.AllShards[shardId]
+   
+   // 分片的配置信息
+   minReplica := shard.Hints.MinReplicaCount
+   maxReplica := shard.Hints.MaxReplicaCount
+   movePolicy := shard.Hints.MovePolicy
+   ```
+
+#
+
+## 测试辅助函数
+1. 创建测试服务信息:
+   ```go
+   // 使用默认值
+   serviceInfo := smgjson.CreateTestServiceInfo()
+   
+   // 使用自定义值
+   serviceInfo := smgjson.CreateTestServiceInfoWithOptions(
+       "test-service",
+       smgjson.ST_SOFT_STATEFUL,
+       smgjson.MP_StartBeforeKill,
+       10, // maxReplica
+       1,  // minReplica
+   )
+   ```
+
+2. 创建测试服务配置:
+   ```go
+   // 使用默认值
+   serviceConfig := smgjson.CreateTestServiceConfig()
+   
+   // 使用选项模式自定义配置
+   serviceConfig := smgjson.CreateTestServiceConfigWithOptions(
+       smgjson.WithReplicaLimits(1, 10),
+       smgjson.WithMovePolicy(smgjson.MP_StartBeforeKill),
+       smgjson.WithSystemLimits(1000, 1000, 1000, 100),
+   )
+   ```
+
+3. 辅助函数返回值转换:
+   ```go
+   // 对象转 JSON
+   jsonStr := serviceInfo.ToJson()
+   
+   // JSON 转对象
+   serviceInfo := smgjson.ParseServiceInfoJson(jsonStr)
+   ```
+
+#
+
+## 常见测试模式
+1. 设置并验证分片计划:
+   ```go
+   // 设置分片计划
+   shardPlan := `shard-1
+   shard-2|{"min_replica_count":2,"max_replica_count":5}
+   shard-3|{"move_type":"kill_before_start"}`
+   fakeEtcd.Set(ctx, "/smg/config/shard_plan.txt", shardPlan)
+   
+   // 初始化并验证
+   ss := NewServiceState(ctx)
+   assert.Equal(t, 3, len(ss.AllShards))
+   
+   // 验证特定分片配置
+   shard2, ok := ss.AllShards["shard-2"]
+   assert.True(t, ok)
+   assert.Equal(t, int32(2), shard2.Hints.MinReplicaCount)
+   assert.Equal(t, int32(5), shard2.Hints.MaxReplicaCount)
+   ```
+   
+2. 验证分片状态写入:
+   ```go
+   // 获取 shard_state 目录中的所有键
+   shadowStateItems := fakeEtcd.List(ctx, "/smg/shard_state/", 100)
+   assert.Equal(t, expectedCount, len(shadowStateItems))
+   
+   // 验证特定分片状态
+   item := fakeEtcd.Get(ctx, "/smg/shard_state/" + shardId)
+   assert.NotEmpty(t, item.Value)
+   
+   // 解析分片状态
+   var shardState smgjson.ShardStateJson
+   err := json.Unmarshal([]byte(item.Value), &shardState)
+   assert.NoError(t, err)
+   assert.Equal(t, shardId, string(shardState.ShardName))
+   ```
+
+## 错误处理经验
+1. 错误码选择：
+   - 使用 `EC_UNKNOWN` (500) 表示意外的系统错误
+   - 使用 `EC_INTERNAL_ERROR` (503) 表示临时的服务不可用
+   - 区分好这两种情况对客户端重试策略很重要
+
+2. 测试用例设计：
+   - 测试用例的名字要准确反映测试内容
+   - 使用真实场景的错误值进行测试
+   - 不要在测试用例中重用被测试的实现
+
+3. 中间件实现：
+   - 在返回响应前设置 Content-Type
+   - 使用 defer 确保总能处理 panic
+   - 保持错误处理逻辑的一致性
+
+4. 日志记录：
+   - 使用 WithError(ke) 记录 kerror，自动包含堆栈信息
+   - 保留原始错误信息
+   - 记录错误处理过程
+   - 区分不同类型的错误
+
+5. 服务端日志查看：
+   - 使用后台运行（&）启动服务
+   - 重定向输出到日志文件（> server.log 2>&1）
+   - 使用 curl -v 查看详细的请求和响应信息
+
+6. 错误处理调试：
+   - 检查 HTTP 状态码是否符合预期
+   - 验证错误响应格式是否标准
+   - 确认日志中包含必要的调试信息
+   - 验证错误类型转换是否正确
+1. kerror 包装规范：
+   - 错误示例：
+     ```go
+     ke := kerror.Create("InternalServerError", "an unexpected error occurred").
+           WithErrorCode(kerror.EC_INTERNAL_ERROR).
+           With("error", err)  // err 可能已经是 kerror 类型
+     ```
+   - 正确示例：
+     ```go
+     var ke *kerror.Kerror
+     if existingKe, ok := err.(*kerror.Kerror); ok {
+         ke = existingKe
+     } else {
+         ke = kerror.Create("InternalServerError", "an unexpected error occurred").
+              WithErrorCode(kerror.EC_INTERNAL_ERROR).
+              With("error", err)
+     }
+     ```
+   - 原因：避免重复包装已经是 kerror 类型的错误
+   - 好处：
+     1. 保持原始错误的上下文信息
+     2. 避免不必要的错误嵌套
+     3. 保持错误堆栈的清晰性
+
+2. 中间件错误处理最佳实践：
+   - 错误示例：
+     ```go
+     if err := recover(); err != nil {
+         ke := kerror.Create("InternalServerError", "error occurred").
+              WithErrorCode(kerror.EC_INTERNAL_ERROR).
+              With("error", err)
+         // ... 处理错误 ...
+     }
+     ```
+   - 正确示例：
+     ```go
+     if err := recover(); err != nil {
+         logger := klogging.Error(ctx)
+         
+         var ke *kerror.Kerror
+         switch v := err.(type) {
+         case *kerror.Kerror:
+             ke = v
+             logger.WithError(ke)  // kerror 已经包含堆栈信息
+         case error:
+             ke = kerror.Create("InternalServerError", "an unexpected error occurred").
+                  WithErrorCode(kerror.EC_INTERNAL_ERROR).
+                  With("error", v.Error())
+             logger.WithError(ke)
+         default:
+             ke = kerror.Create("UnknownPanic", "unexpected panic with non-error value").
+                  WithErrorCode(kerror.EC_INTERNAL_ERROR).
+                  With("panic_value", v)
+             logger.With("panic_value", v)
+         }
+         
+         // 使用 ErrorCode 的 ToHttpErrorCode 方法转换错误码
+         w.WriteHeader(ke.ErrorCode.ToHttpErrorCode())
+     }
+     ```
+   
+   - 最佳实践：
+     1. 使用 type switch 处理不同类型的错误
+     2. 保持原始的 kerror 类型和上下文
+     3. 使用 ErrorCode 的 ToHttpErrorCode 方法转换错误码
+     4. 统一的日志记录格式
+     5. 设置正确的响应头
+     6. 利用 kerror 内置的堆栈信息
+   
+   - 好处：
+     1. 更准确的错误分类和处理
+     2. 保持错误上下文的完整性
+     3. 避免重复记录堆栈信息
+     4. 统一的错误码转换逻辑
+     5. 更容易维护和扩展
+
+## 目录操作经验
+1. 命令执行目录：
+   - 错误示例：在 cursor/services/hellosvc 下运行命令
+   - 正确示例：在 cursor/shardmanager/services/hellosvc 下运行命令
+   - 原因：shardmanager 是一个子模块，所有操作都应该在子模块目录下进行
+   - 检查方法：
+     1. 使用 pwd 确认当前目录
+     2. 确保路径包含 "shardmanager"
+     3. 如果找不到文件，先检查是否在正确的子模块目录下 
+
+# 错误处理最佳实践
+
+## HTTP 错误码映射 [P1]
+1. 使用 `kerror.EC_UNKNOWN` (500) 处理：
+   - 普通的 error
+   - 未知类型的 panic 值
+   - 其他未预期的错误情况
+
+2. 使用 `kerror.EC_INTERNAL_ERROR` (503) 处理：
+   - 服务暂时不可用
+   - 依赖服务故障
+   - 需要重试的系统错误
+
+3. 其他错误码：
+   - `EC_INVALID_PARAMETER` (400)：参数验证失败
+   - `EC_NOT_FOUND` (404)：资源不存在
+   - `EC_CONFLICT` (409)：资源冲突
+   - `EC_RETRYABLE` (429)：需要客户端重试
+   - `EC_UNAUTHENTICATED` (401)：未认证
+
+## 错误处理中间件 [P1]
+1. 错误类型判断顺序：
+   ```go
+   switch v := err.(type) {
+   case *kerror.Kerror:  // 优先处理已有的 kerror
+   case error:           // 其次处理普通 error
+   default:             // 最后处理其他类型
+   }
+   ```
+
+2. 错误信息格式：
+   ```json
+   {
+     "error": "错误类型",
+     "msg": "错误消息",
+     "code": "错误码"
+   }
+   ```
+
+3. 日志记录：
+   - 使用 WithError(ke) 记录 kerror，自动包含堆栈信息
+   - 保留原始错误信息
+   - 记录错误处理过程
+   - 区分不同类型的错误
+
+## 测试要点 [P1]
+1. 测试场景：
+   - 已有的 kerror
+   - 普通的 error
+   - 字符串类型的 panic
+   - 正常请求流程
+
+2. 验证内容：
+   - HTTP 状态码
+   - 响应头（Content-Type）
+   - 错误响应格式
+   - 错误信息内容
+
+## 错误处理最佳实践 [P1]
+1. 使用中间件统一处理错误：
+   - 错误示例：在每个处理器中都写错误处理逻辑
+   - 正确示例：使用 ErrorHandlingMiddleware 统一处理所有错误
+   - 原因：避免代码重复，保证错误处理的一致性
+   - 实现方式：
+     1. 在中间件中处理所有 panic
+     2. 业务代码直接使用 panic 抛出错误
+     3. 不要在处理器中手动处理错误
+
+2. 错误处理流程：
+   - 业务层：使用 panic 抛出 kerror 或普通 error
+   - 中间件：捕获 panic 并统一处理
+   - 响应：设置正确的状态码和格式化的错误信息
+   - 日志：记录完整的错误上下文
+
+3. 注意事项：
+   - 始终在处理器开始时设置 Content-Type
+   - 使用 kerror 包装业务错误
+   - 在中间件中统一记录错误日志
+   - 保持错误响应格式的一致性
+
+#
+- 键不存在的处理：
+  * 对于 Get 操作：返回空值或默认值
+  * 对于 Delete 操作：返回错误
+  * 原因：Get 操作获取不到值是正常情况，而 Delete 不存在的键通常表示错误
+
+- 错误信息格式：
+  ```go
+  kerror.Create("ErrorType", "human readable message").
+      WithErrorCode(kerror.EC_XXX).
+      With("key1", "value1").
+      With("error", err.Error())
+  ```
+  * ErrorType：使用 PascalCase，表示错误类型
+  * message：使用小写，人类可读的错误描述
+  * 添加有助于调试的上下文信息
+
+## kmetrics 包使用指南
+1. 初始化和配置：
+   ```go
+   // 1. 创建 Prometheus 导出器
+   pe, err := prometheus.NewExporter(prometheus.Options{
+       Namespace: "your_service_name",
+   })
+   if err != nil {
+       log.Fatalf("Failed to create Prometheus exporter: %v", err)
+   }
+
+   // 2. 获取并注册 kmetrics 注册表
+   registry := kmetrics.GetKmetricsRegistry()
+   metricproducer.GlobalManager().AddProducer(registry)
+
+   // 3. 创建 metrics 路由（用于暴露指标）
+   metricsMux := http.NewServeMux()
+   metricsMux.Handle("/metrics", pe)
+   ```
+
+2. 指标类型选择指南：
+   a. 轻量级操作（Kmetric）：
+      - 适用场景：普通 API 调用、简单操作
+      - 记录内容：调用次数、延迟、状态
+      - 示例：
+        ```go
+        // 全局定义
+        var ApiLatencyMetric = kmetrics.CreateKmetric(
+            context.Background(),
+            "api_latency_ms",
+            "API 调用延迟",
+            []string{"method", "status", "error"}
+        )
+
+        // 使用装饰器记录
+        kmetrics.InstrumentSummaryRunVoid(ctx, "method_name", func() {
+            // 业务逻辑
+        }, "custom_note")
+        ```
+
+   b. 重要操作（Khistogram）：
+      - 适用场景：关键业务流程、需要分布统计
+      - 记录内容：详细的延迟分布、百分位数据
+      - 示例：
+        ```go
+        // 全局定义
+        var ApiLatencyHistogram = kmetrics.CreateKhistogram(
+            context.Background(),
+            "api_latency_histogram_ms",
+            "API 调用延迟分布",
+            []string{"method", "status"},
+            []int64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000}  // 分布区间
+        )
+
+        // 使用装饰器记录
+        kmetrics.InstrumentHistogramRunVoid(ctx, "important_method", func() {
+            // 重要业务逻辑
+        })
+        ```
+
+   c. 状态监控（GaugeGroup）：
+      - 适用场景：实时状态、资源使用情况
+      - 记录内容：当前值、多维度标签
+      - 示例：
+        ```go
+        // 创建 GaugeGroup
+        workerLoadGauge := kmetrics.NewGaugeGroup(
+            "worker_load",
+            "Worker 负载情况",
+            "worker_id", "queue_name"
+        )
+
+        // 更新值
+        values := map[string]*kmetrics.GaugeTimeSequence{
+            "worker1-queue1": kmetrics.NewGaugeTimeSequence(
+                workerLoadGauge,
+                100,  // 当前值
+                "worker1", "queue1"  // 标签值
+            ),
+        }
+        workerLoadGauge.UpdateValue(values)
+        ```
+
+3. 全局标签使用：
+   ```go
+   registry := kmetrics.GetKmetricsRegistry()
+   
+   // 添加全局标签（所有指标都会包含这些标签）
+   registry.AddGlobalTag("env", "prod")
+   registry.AddGlobalTag("service", "hellosvc")
+   ```
+
+4. 最佳实践：
+   a. 指标命名规范：
+      - 使用下划线分隔单词：api_latency_ms
+      - 包含单位信息：_ms, _bytes, _count
+      - 使用有意义的前缀：service_name_metric_name
+
+   b. 标签使用规范：
+      - 避免高基数标签（如 user_id）
+      - 限制标签数量（建议不超过 4 个）
+      - 使用有意义的标签名和值
+
+   c. 性能考虑：
+      - 优先使用 Kmetric 而不是 Khistogram
+      - 合理设置直方图的区间
+      - 避免过多的时间序列
+
+5. 错误处理：
+   ```go
+   // 使用 InstrumentSummaryRunVoid 自动处理错误
+   kmetrics.InstrumentSummaryRunVoid(ctx, "method_name", func() {
+       if err := doSomething(); err != nil {
+           // 转换为 kerror 并 panic
+           panic(kerror.Create("OperationFailed", "operation failed").
+               WithErrorCode(kerror.EC_INTERNAL_ERROR).
+               With("error", err.Error()))
+       }
+   }, "")
+   ```
+
+6. 监控指标：
+   a. 基础指标：
+      - 请求计数：xxx_count
+      - 请求延迟：xxx_latency_ms
+      - 错误计数：xxx_error_count
+
+   b. 业务指标：
+      - 队列长度：queue_length
+      - 处理速率：process_rate
+      - 资源使用：resource_usage
+
+7. 调试技巧：
+   - 使用 curl http://localhost:9090/metrics 查看原始指标
+   - 在 Prometheus 中使用 rate() 函数查看速率
+   - 使用 histogram_quantile() 查看延迟分布
+
+8. 注意事项：
+   - 在包初始化时创建指标对象
+   - 避免在热路径创建新的时间序列
+   - 定期检查指标数量，避免过多
+   - 及时清理不再使用的指标
+
+## 子模块版本管理最佳实践 [P0]
+1. 版本更新流程
+   - 子模块重大变更后，必须更新主仓库的模块引用
+   - 遵循语义化版本规范 (SemVer)
+   - 保持子模块和主仓库的版本一致性
+
+2. 版本更新检查清单
+   a. 子模块变更后：
+      - 更新子模块 VERSION 文件
+      - 在子模块中创建 git tag
+      - 更新主仓库 go.mod 中的模块引用版本
+
+   b. 版本号规则：
+      - 主版本号：重大架构变更
+      - 次版本号：新功能、向后兼容
+      - 修订版本号：bug 修复、小的改进
+
+3. 自动化版本管理
+   ```bash
+   # 更新子模块版本
+   cat VERSION # 查看当前版本
+   echo "v0.1.1" > VERSION
+   git add VERSION
+   git commit -m "bump version to v0.1.1"
+   git tag v0.1.1
+
+   # 更新主仓库依赖
+   # 在 cursor/go.mod 中
+   replace github.com/xinkaiwang/shardmanager => ./shardmanager@v0.1.1
+   ```
+
+4. 版本同步警告
+   - 禁止手动修改 go.mod 中的模块引用
+   - 始终使用 `go get` 或 `go mod tidy` 更新依赖
+   - 定期检查模块版本一致性
+
+5. 持续集成检查
+   - CI 流水线中添加版本一致性检查
+   - 自动验证子模块和主仓库的版本匹配
+   - 阻止不一致的版本合并
+
+6. 文档和通知
+   - 在 CHANGELOG.md 记录每个版本的变更
+   - 在 README 中说明版本依赖关系
+   - 团队内部及时沟通重大变更
+
+## 信息准确性和诚信原则 [P0]
+1. 绝对禁止虚构或编造信息
+   - 所有文档、注释、日志必须基于事实
+   - 不确定时，明确表示"不确定"
+   - 优先查证，而非臆测
+
+2. 信息获取与验证流程
+   - 遇到不确定信息，必须：
+     a. 查阅官方文档
+     b. 检查实际代码或配置
+     c. 使用可靠的工具验证
+   - 不得依赖记忆或假设
+
+3. 错误处理与透明度
+   - 发现错误时，立即承认并更正
+   - 详细记录错误产生的原因
+   - 分享学习和改进的过程
+
+4. 文档和注释规范
+   - 注释必须准确反映代码实际功能
+   - 版本号、变更记录必须与实际一致
+   - 保持文档的最新性和准确性
+
+5. 团队协作原则
+   - 信息的准确性高于完成速度
+   - 鼓励相互验证和质疑
+1. 绝对禁止虚构或编造信息
+   - 所有文档、注释、日志必须基于事实
+   - 不确定时，明确表示"不确定"
+   - 优先查证，而非臆测
+
+2. 信息获取与验证流程
+   - 遇到不确定信息，必须：
+     a. 查阅官方文档
+     b. 检查实际代码或配置
+     c. 使用可靠的工具验证
+   - 不得依赖记忆或假设
+
+3. 错误处理与透明度
+   - 发现错误时，立即承认并更正
+   - 详细记录错误产生的原因
+   - 分享学习和改进的过程
+
+4. 文档和注释规范
+   - 注释必须准确反映代码实际功能
+   - 版本号、变更记录必须与实际一致
+   - 保持文档的最新性和准确性
+
+5. 团队协作原则
+   - 信息的准确性高于完成速度
+   - 鼓励相互验证和质疑
+   - 培养严谨和诚实的工作文化
+
+违反这些原则可能导致严重的技术债务和团队信任危机。
+
+## Makefile 版本注入 [P1]
+- 始终使用 VERSION 文件作为版本号的唯一来源
+- Makefile 中必须使用 $(shell cat VERSION) 读取版本号
+- 错误示例：硬编码版本号或手动更新
+- 正确示例：通过 VERSION 文件自动获取版本号
+- 原因：
+  1. 保持版本号的一致性
+  2. 减少手动更新的错误
+  3. 确保构建时使用最新的版本号
+- 实践步骤：
+  1. 更新 VERSION 文件
+  2. 使用 make build 自动读取新版本
+  3. 验证构建输出中的版本号
+
+## 变量命名规范 [P1]
+- 避免使用单字母变量名
+- 使用有意义的缩写（2-4个字母）
+- 缩写应该来自类型名称
+- 常见缩写示例：
+  * Provider -> pvd
+  * Service -> svc
+  * Client -> cli
+  * Handler -> hdl
+  * Manager -> mgr
+- 保持项目内一致性
+
+## 环境变量配置最佳实践 [P1]
+- 使用独立的函数获取每个配置项
+- 函数名应该表明配置的用途
+- 提供合理的默认值
+- 示例：
+  ```go
+  func getEndpointsFromEnv() []string {
+      if v := os.Getenv("ETCD_ENDPOINTS"); v != "" {
+          return strings.Split(v, ",")
+      }
+      return []string{"localhost:2379"}
+  }
+  ```
+
+- 配置验证：
+  * 在服务启动时验证所有必需的配置
+  * 对配置值进行合理性检查
+  * 提供清晰的错误信息，说明配置问题
+
+- 配置文档：
+  * 在代码注释中说明每个配置项的：
+    - 名称和格式
+    - 默认值
+    - 可选值范围
+    - 使用示例
+
+## 代码注释规范 [P1]
+- 函数注释模板：
+  ```go
+  // FuncName 函数功能简述
+  // 参数：
+  // - param1: 参数说明
+  // - param2: 参数说明
+  // 返回：
+  // - 返回值说明
+  // 错误处理：
+  // - 错误情况说明
+  ```
+
+- 注释内容要求：
+  * 说明函数的主要功能
+  * 列出所有参数的含义和格式
+  * 说明返回值的含义
+  * 详细说明错误处理逻辑
+  * 提供使用示例（如果需要）
+
+- 注释更新：
+  * 代码改动时同步更新注释
+  * 确保注释与实现保持一致
+  * 删除过时或错误的注释
+
+## Go 版本注入最佳实践 [P1]
+1. 版本注入路径：
+   - 错误示例：`-X internal.common.Version=$(VERSION)`
+   - 正确示例：`-X github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common.Version=$(VERSION)`
+   - 原因：
+     1. 必须使用完整的包路径
+     2. 包路径必须与 go.mod 中的模块路径一致
+     3. 相对路径不会被正确解析
+
+2. 验证版本注入：
+   ```bash
+   # 构建时
+   go build -ldflags "-X github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common.Version=v0.1.0"
+
+   # 验证
+   ./bin/hello  # 应该输出正确的版本号
+   ```
+
+3. 常见问题：
+   - 使用不完整的包路径
+   - 包路径与 go.mod 不一致
+   - 忘记在 Makefile 中更新 LDFLAGS
+
+4. 最佳实践：
+   - 始终使用完整的包路径
+   - 在 Makefile 中正确设置 LDFLAGS
+   - 构建后验证版本信息
+   - 保持包路径与 go.mod 一致
+
+## 命名约定最佳实践 [P1]
+1. 常量命名规范：
+   - Go 代码中使用大写下划线命名（如 `MP_KillBeforeStart`）
+   - JSON 中使用小写下划线命名（如 `kill_before_start`）
+   - 原因：
+     1. 保持与现有代码一致
+     2. 遵循各自语言的惯例
+     3. 便于在不同上下文中使用
+
+2. 常量定义原则：
+   - 使用有意义的前缀（如 MP_ 表示 MovePolicy）
+   - 在注释中说明常量的用途
+   - 保持命名的一致性和可读性
+   - 示例：
+     ```go
+     const (
+         MP_KillBeforeStart  MovePolicy = "kill_before_start"  // 先杀后启
+         MP_StartBeforeKill  MovePolicy = "start_before_kill"  // 先启后杀
+         MP_Cocurrent        MovePolicy = "concurrent"         // 同时进行
+     )
+     ```
+
+## 测试用例设计最佳实践 [P1]
+1. 测试用例结构：
+   - 使用表驱动测试（table-driven tests）
+   - 每个测试用例包含：
+     * name：测试用例名称
+     * input：输入数据
+     * want：期望输出
+     * description：测试用例的详细描述
+   - 示例：
+     ```go
+     tests := []struct {
+         name        string
+         input       string
+         want        *ShardPlan
+         description string
+     }{
+         {
+             name: "基本测试",
+             input: "test_input",
+             want: expectedOutput,
+             description: "测试基本功能",
+         },
+     }
+     ```
+
+2. 测试场景覆盖：
+   - 基本功能测试
+   - 边界条件测试
+   - 错误处理测试
+   - 特殊格式处理（如 Windows CRLF）
+   - 注释和空白处理
+   - 示例：
+     ```go
+     {
+         name: "空行处理",
+         input: "line1\n\nline2\n",
+         description: "测试空行处理逻辑",
+     },
+     {
+         name: "注释处理",
+         input: "# 注释\nline1  # 行尾注释",
+         description: "测试注释处理逻辑",
+     }
+     ```
+
+3. 测试数据准备：
+   - 使用有意义的测试数据
+   - 包含实际场景中可能出现的情况
+   - 避免使用随机生成的数据
+   - 注意数据的可读性和可维护性
+
+4. 错误检查：
+   - 详细的错误信息
+   - 包含期望值和实际值的比较
+   - 使用 t.Errorf 而不是 t.Error
+   - 示例：
+     ```go
+     if got != want {
+         t.Errorf("got %v, want %v", got, want)
+     }
+     ```
+
+5. 测试注释：
+   - 使用清晰的测试用例名称
+   - 添加详细的测试场景描述
+   - 说明测试的目的和预期结果
+   - 记录特殊的测试条件或假设
+
+## 测试中的时间处理最佳实践 [P1]
+1. 使用 `kcommon.TimeProvider` 而不是真实时间：
+   - 错误示例：使用 `time.Now()` 获取当前时间
+   - 正确示例：使用 `kcommon.FakeTimeProvider` 控制时间
+   - 原因：
+     1. 测试应该是确定性的，不依赖外部因素
+     2. 避免使用误差范围进行时间比较
+     3. 加快测试执行速度
+     4. 提高测试可靠性
+
+2. 时间相关测试的标准模式：
+   ```go
+   // 创建并配置 FakeTimeProvider
+   fakeTime := kcommon.NewFakeTimeProvider()
+   fakeTime.WallTime = 1234567890000
+   fakeTime.MonoTime = 1234567890000
+
+   // 使用 RunWithTimeProvider 临时替换默认时间提供者
+   kcommon.RunWithTimeProvider(fakeTime, func() {
+       // 测试代码
+   })
+   ```
+
+3. 时间值验证：
+   - 错误示例：使用误差范围比较
+     ```go
+     if node.LastUpdateAtMs < now-1000 || node.LastUpdateAtMs > now+1000 {
+         t.Errorf("LastUpdateAtMs not in range")
+     }
+     ```
+   - 正确示例：精确匹配
+     ```go
+     if node.LastUpdateAtMs != 1234567890000 {
+         t.Errorf("LastUpdateAtMs = %v, want %v", node.LastUpdateAtMs, 1234567890000)
+     }
+     ```
+
+4. JSON 序列化测试：
+   - 错误示例：使用 fmt.Sprintf 动态生成 JSON
+     ```go
+     expected := fmt.Sprintf(`{"time":%d}`, now)
+     ```
+   - 正确示例：使用固定时间戳的字符串
+     ```go
+     expected := `{"time":1234567890000}`
+     ```
+
+5. 注意事项：
+   - 在测试开始时设置固定的时间戳
+   - 使用 RunWithTimeProvider 确保时间提供者的正确清理
+   - 对于需要时间流逝的测试，使用 FakeTimeProvider.SimulateForward
+   - 在测试文件中统一使用相同的时间戳值
+   - 使用容易识别的时间戳（如 1234567890000）
+
+## 配置文件格式最佳实践 [P1]
+1. 配置文件格式规范：
+   - 支持注释（以 # 开头）
+   - 支持空行和空白字符
+   - 使用 | 分隔不同部分
+   - 示例：
+     ```
+     # 这是注释
+     shard_1  # 这是行尾注释
+     shard_2|{"min_replica_count":2}  # 带配置的分片
+     shard_3|{"move_type":"kill_before_start"}|{"region":"us-west"}
+     ```
+
+2. JSON 字段命名：
+   - 使用小写下划线命名（snake_case）
+   - 字段名要有描述性
+   - 保持命名一致性
+   - 示例：
+     ```json
+     {
+       "min_replica_count": 2,
+       "max_replica_count": 10,
+       "move_type": "kill_before_start"
+     }
+     ```
+
+3. 配置解析原则：
+   - 提供合理的默认值
+   - 优雅处理格式错误
+   - 支持部分配置覆盖
+   - 详细的错误提示
+   - 示例：
+     ```go
+     defaultHints := ShardHints{
+         MinReplicaCount: 1,
+         MaxReplicaCount: 10,
+         MoveType:        MP_StartBeforeKill,
+     }
+     ```
+
+4. 特殊字符处理：
+   - 正确处理 Windows 换行符（CRLF）
+   - 处理前导和尾随空白
+   - 忽略空行
+   - 支持行尾注释
+   - 示例：
+     ```go
+     // 处理 Windows 换行符
+     line = strings.TrimRight(line, "\r")
+     
+     // 处理注释
+     if idx := strings.Index(line, "#"); idx >= 0 {
+         line = line[:idx]
+     }
+     
+     // 处理空白
+     line = strings.TrimSpace(line)
+     ```
+
+5. 配置文件组织：
+   - 按功能分组
+   - 使用注释说明配置项的用途
+   - 提供配置示例
+   - 记录配置的默认值
+   - 示例：
+     ```
+     # 基本配置
+     shard_1
+     
+     # 高级配置
+     shard_2|{"min_replica_count":2}
+     
+     # 自定义属性
+     shard_3|{"move_type":"kill_before_start"}|{"region":"us-west"}
+     ```
+
+## 核心系统知识
+#
+
+## Worker Eph 到 Worker State 同步流程
+ShardManager 中 worker 状态管理的关键流程如下：
+
+1. **事件触发流程**：
+   - 测试设置 worker eph 节点到 etcd
+   - FakeEtcdProvider 的 Set 方法触发 notifyWatchers
+   - WorkerEphWatcher 的 Run 方法接收到通知
+   - WorkerEphWatcher 创建 WorkerEphEvent 并通过 PostEvent 发送
+   - RunLoop 处理 WorkerEphEvent
+   - WorkerEphEvent 的 Process 方法调用 writeWorkerEphToStaging
+   - writeWorkerEphToStaging 更新 EphWorkerStaging 和 EphDirty，并调度 BatchManager
+   - BatchManager 延迟一段时间后发送 BatchProcessEvent
+   - RunLoop 处理 BatchProcessEvent
+   - BatchProcessEvent 的 Process 方法调用 syncEphStagingToWorkerState
+   - syncEphStagingToWorkerState 创建或更新 WorkerState
+
+2. **关键数据结构**：
+   - `WorkerEphWatcher`：监听 etcd 中 worker eph 节点的变化
+   - `EphWorkerStaging`：存储从 etcd 获取的 worker eph 数据
+   - `EphDirty`：标记哪些 worker 需要更新状态
+   - `AllWorkers`：存储所有 worker 的当前状态
+   - `WorkerState`：表示 worker 的状态，包含 WorkerId、SessionId 等信息
+
+## 测试相关知识
+#
+
+## WorkerFullId 格式问题
+- 创建 WorkerFullId 时需要注意格式为 `{workerId}:{sessionId}`
+- 在测试查找 worker 时，应确保使用相同的 workerId 和 sessionId
+- 如果 sessionId 未知，可以通过遍历 AllWorkers 并使用 `strings.HasPrefix` 来匹配以指定 workerId 开头的 workerFullId
+
+#
+
+## 异步测试等待策略
+- 使用 `WaitUntil` 函数等待异步操作完成
+- 设置合理的超时时间，考虑到 BatchManager 的延迟
+- 提供详细的调试信息，包括当前检查的状态和期望的状态
+
+#
+
+## 调试技巧
+- 在关键函数（如 writeWorkerEphToStaging、syncEphStagingToWorkerState）中添加详细日志
+- 日志应包含关键参数值、操作类型和当前状态
+- 使用 `t.Logf` 在测试中输出关键步骤和状态变化
+- 对比预期结果和实际结果，特别是在状态转换过程中
+
+#
+
+## ServiceState 测试经验
+1. **FakeEtcdProvider 使用注意事项**：
+   - 使用 `RunWithEtcdProvider(fakeEtcd, func() { ... })` 来设置测试环境
+   - `FakeEtcdProvider.Set()` 会自动触发 watcher 通知，不需要额外调用通知方法
+   - 测试中需要等待异步事件处理完成，不能直接在设置后立即验证结果
+
+2. **ServiceState 同步访问**：
+   - 使用 `withServiceStateSync(ss, func(ss *ServiceState) { ... })` 安全访问 ServiceState 内部状态
+   - 这个函数通过 `serviceStateAccessEvent` 确保访问是在 RunLoop 的上下文中进行的
+   - 避免直接访问 ServiceState 字段，因为可能会导致并发问题
+
+3. **测试超时设置**：
+   - `TestServiceState_WorkerEphToState` 需要足够的等待时间（至少 5 秒）
+   - BatchManager 默认有延迟处理机制，需要考虑到这个延迟
+   - 使用 `WaitUntil` 时指定合理的超时和检查间隔，例如 `WaitUntil(t, fn, 5000, 100)`
+
+4. **常见的测试失败原因**：
+   - WorkerFullId 格式不匹配（创建和查找使用不同的 SessionId）
+   - 等待时间不足，没有给异步处理留出足够时间
+   - 没有正确使用 `withServiceStateSync` 访问 ServiceState
+   - FakeEtcdProvider 的 notifyWatchers 逻辑存在问题，可能需要检查
+
+## 错误处理最佳实践
+1. kerror 包装规范：
+   - 错误示例：
+     ```go
+     ke := kerror.Create("InternalServerError", "an unexpected error occurred").
+           WithErrorCode(kerror.EC_INTERNAL_ERROR).
+           With("error", err)  // err 可能已经是 kerror 类型
+     ```
+   - 正确示例：
+     ```go
+     var ke *kerror.Kerror
+     if existingKe, ok := err.(*kerror.Kerror); ok {
+         ke = existingKe
+     } else {
+         ke = kerror.Create("InternalServerError", "an unexpected error occurred").
+              WithErrorCode(kerror.EC_INTERNAL_ERROR).
+              With("error", err)
+     }
+     ```
+   - 原因：避免重复包装已经是 kerror 类型的错误
+   - 好处：
+     1. 保持原始错误的上下文信息
+     2. 避免不必要的错误嵌套
+     3. 保持错误堆栈的清晰性
+
+2. 中间件错误处理最佳实践：
+   - 错误示例：
+     ```go
+     if err := recover(); err != nil {
+         ke := kerror.Create("InternalServerError", "error occurred").
+              WithErrorCode(kerror.EC_INTERNAL_ERROR).
+              With("error", err)
+         // ... 处理错误 ...
+     }
+     ```
+   - 正确示例：
+     ```go
+     if err := recover(); err != nil {
+         logger := klogging.Error(ctx)
+         
+         var ke *kerror.Kerror
+         switch v := err.(type) {
+         case *kerror.Kerror:
+             ke = v
+             logger.WithError(ke)  // kerror 已经包含堆栈信息
+         case error:
+             ke = kerror.Create("InternalServerError", "an unexpected error occurred").
+                  WithErrorCode(kerror.EC_INTERNAL_ERROR).
+                  With("error", v.Error())
+             logger.WithError(ke)
+         default:
+             ke = kerror.Create("UnknownPanic", "unexpected panic with non-error value").
+                  WithErrorCode(kerror.EC_INTERNAL_ERROR).
+                  With("panic_value", v)
+             logger.With("panic_value", v)
+         }
+         
+         // 使用 ErrorCode 的 ToHttpErrorCode 方法转换错误码
+         w.WriteHeader(ke.ErrorCode.ToHttpErrorCode())
+     }
+     ```
+   
+   - 最佳实践：
+     1. 使用 type switch 处理不同类型的错误
+     2. 保持原始的 kerror 类型和上下文
+     3. 使用 ErrorCode 的 ToHttpErrorCode 方法转换错误码
+     4. 统一的日志记录格式
+     5. 设置正确的响应头
+     6. 利用 kerror 内置的堆栈信息
+   
+   - 好处：
+     1. 更准确的错误分类和处理
+     2. 保持错误上下文的完整性
+     3. 避免重复记录堆栈信息
+     4. 统一的错误码转换逻辑
+     5. 更容易维护和扩展
+
+## BatchManager 工作原理 [P1]
+1. 基本功能：
+   - 批处理管理器，用于延迟处理事件
+   - 合并短时间内的多个事件，减少处理次数
+   - 确保在一定时间后一定会处理积累的事件
+
+2. 关键参数：
+   - `batchTriggerTimeMs`：触发处理的延迟时间（默认 100ms）
+   - `maxTimeoutMs`：最大等待时间（默认 500ms）
+   - `lastScheduledTimeMs`：上次调度的时间戳
+
+3. 工作流程：
+   1. 调用 Schedule 方法调度处理
+   2. 如果是首次调度，立即设置定时器
+   3. 如果已经调度过，检查是否需要重置定时器
+   4. 定时器触发后，发送 BatchProcessEvent 到事件循环
+   5. 事件循环处理 BatchProcessEvent
+
+4. 调度策略：
+   ```go
+   func (bm *BatchManager) Schedule(ctx context.Context) {
+       nowMs := bm.timeProvider.GetWallTimeMs()
+       
+       // 如果是首次调度，立即设置定时器
+       if bm.lastScheduledTimeMs == 0 {
+           bm.lastScheduledTimeMs = nowMs
+           bm.setTimer(ctx, bm.batchTriggerTimeMs)
+           return
+       }
+       
+       // 计算已经等待的时间
+       elapsedMs := nowMs - bm.lastScheduledTimeMs
+       
+       // 如果已经等待超过最大等待时间，不需要重置定时器
+       if elapsedMs >= bm.maxTimeoutMs {
+           return
+       }
+       
+       // 如果距离上次调度的时间短于触发时间的一半，重置定时器
+       if elapsedMs < bm.batchTriggerTimeMs/2 {
+           bm.timer.Stop()
+           bm.setTimer(ctx, bm.batchTriggerTimeMs)
+           bm.lastScheduledTimeMs = nowMs
+       }
+   }
+   ```
+
+5. 测试注意事项：
+   - 默认的批处理延迟为 100ms
+   - 使用 WaitUntil 时，至少等待 500ms
+   - 对于复杂场景，可能需要更长的等待时间（1-5秒）
+   - 考虑批处理延迟对测试的影响
+
+## WorkerState 系统机制 [P1]
+1. **数据流和架构**：
+   - **Worker临时节点(WorkerEph)**：存储在etcd的`/smg/eph/{worker_id}:{session_id}`路径
+   - **临时节点暂存区(EphWorkerStaging)**：ServiceState内存中的暂存区
+   - **状态对象(WorkerState)**：完整的Worker状态和生命周期管理
+   - **持久化存储**：通过ShadowState和StoreProvider接口存储到etcd的`/smg/worker_state/{worker_full_id}`
+
+2. **新Worker出现的完整流程**：
+   - etcd中创建新的`/smg/eph/{worker_id}:{session_id}`节点
+   - WorkerEphWatcher检测到变更，创建WorkerEphEvent
+   - 更新EphWorkerStaging暂存区，标记EphDirty
+   - BatchManager调度syncEphStagingToWorkerState执行批量同步
+   - 创建新的WorkerState对象，初始状态为WS_Online_healthy
+   - 通过StoreProvider (ShadowState)同时写入内存缓存和etcd
+
+3. **Worker状态机**：
+   - **在线状态**：
+     * WS_Online_healthy：正常在线工作
+     * WS_Online_shutdown_req：请求关闭
+     * WS_Online_shutdown_hat：关闭已在处理中
+     * WS_Online_shutdown_permit：允许关闭
+   - **离线状态**：
+     * WS_Offline_graceful_period：优雅期，临时离线可能恢复
+     * WS_Offline_draining_candidate：排空候选，准备移除分配
+     * WS_Offline_draining_hat：正在排空中
+     * WS_Offline_draining_complete：排空完成
+     * WS_Offline_dead：已死亡，等待清理
+     * WS_Deleted：已删除，标记为需要从管理中移除
+
+4. **状态转换触发事件**：
+   - **临时节点更新**：通过onEphNodeUpdate处理
+   - **临时节点丢失**：通过onEphNodeLost处理
+     * 在线状态 → WS_Offline_graceful_period（开始优雅期）
+     * WS_Online_shutdown_hat → WS_Offline_draining_hat
+     * WS_Online_shutdown_permit → WS_Offline_dead
+   - **超时检查**：通过checkWorkerForTimeout处理
+     * WS_Offline_graceful_period优雅期过期 → WS_Offline_draining_candidate
+     * WS_Offline_dead持续20秒 → WS_Deleted并标记删除
+
+5. **批处理优化机制**：
+   - 使用BatchManager延迟处理（最多延迟10ms）合并多次更新
+   - 使用EphDirty映射跟踪需要更新的Worker
+   - 使用DirtyFlag跟踪WorkerState中变更的字段
+   - 只有变更时才进行持久化操作
+   - 变更时通过NotifyCh通知其他组件
+
+6. **存储机制**：
+   - **双层存储**：同时写入内存缓存和etcd持久化存储
+   - **数据一致性**：通过etcd的版本机制和事务保证
+   - **故障恢复**：可从etcd重新加载所有状态
+
+7. **标识体系**：
+   - **WorkerId**：基本标识符，通常是Worker的主机名或Pod名称
+   - **SessionId**：会话标识符，每次重启时更改
+   - **WorkerFullId**：组合标识符`{worker_id}:{session_id}`
+   - **在内存状态模式下**：WorkerFullId必须包含SessionId
+   - **在持久化状态模式下**：WorkerFullId可以只包含WorkerId
+
+8. **注意事项和常见问题**：
+   - 时间比较逻辑：优雅期和死亡状态的时间比较逻辑需要注意（小于等于表示已过期）
+   - 状态冲突：当Worker已处于离线状态时收到临时节点更新会触发严重错误
+   - 线程安全：所有状态更新必须在runloop中执行，确保状态一致性
+
+## 测试用例设计原则 [P0]
+1. 测试必须模拟真实场景，绝不调用内部函数绕过产品代码：
+   - **绝对禁止**在测试中直接调用内部方法（如 `workerState.onEphNodeLost(ctx, ss)`）
+   - **必须**通过公共接口或事件触发机制来测试行为
+   - **必须**使用与生产环境一致的调用路径
+   - **必须**遵循实际用户操作流程而不是捷径
+
+2. 为什么这很重要：
+   - 直接调用内部方法会错过真实调用路径上的问题
+   - 绕过触发机制可能导致测试通过但实际代码有缺陷
+   - 真实场景测试可验证整个流程而非单个函数
+   - 完整的调用链才能发现集成问题和边界条件
+
+3. 测试路径完整性准则：
+   - 所有事件必须通过正确的触发机制产生
+   - 状态变化必须通过标准路径传播
+   - 异步操作必须使用真实的等待和同步机制
+   - 不能假设或模拟中间状态
+
+这条原则适用于所有测试场景，没有例外。即使测试难度增加，也必须模拟真实场景，否则测试将失去其价值和意义。
+
+## FakeTime 风格测试规范 [P1]
+
+FakeTime 风格测试是一种可控、确定性强的测试方法，通过模拟时间流逝和外部依赖，使复杂系统的行为可预测且快速验证。
+
+### 1. 核心概念
+
+FakeTime 测试的核心是控制时间，而不是依赖真实系统时钟，通过这种方式可以：
+- 加速测试执行（毫秒级模拟数小时的操作）
+- 确保测试结果的可重复性和确定性
+- 精确控制状态转换的时机
+- 避免使用 Sleep 等不稳定的等待机制
+
+### 2. 测试基础结构
+
+#### 2.1 测试环境设置
+
+```go
+// 创建测试环境
+setup := NewFakeTimeTestSetup(t)
+// 配置基本环境
+setup.SetupBasicConfig(ctx, WithOfflineGracePeriodSec(gracePeriodSec))
+// 获取FakeTime引用便于后续使用
+fakeTime := setup.FakeTime
+
+// 使用依赖注入运行测试函数
+setup.RunWith(func() {
+    // 测试代码
+})
+```
+
+#### 2.2 测试辅助结构
+
+```go
+type FakeTimeTestSetup struct {
+    ctx          context.Context
+    ServiceState *ServiceState      // 被测服务
+    FakeEtcd     *FakeEtcdProvider  // 模拟存储提供者
+    FakeStore    *FakeEtcdStore     // 模拟持久化存储
+    FakeTime     *FakeTimeProvider  // 模拟时间提供者
+}
+```
+
+### 3. 时间控制机制
+
+#### 3.1 时间推进
+
+```go
+// 推进虚拟时间（毫秒）
+fakeTime.VirtualTimeForward(ctx, 1000)  // 推进1秒
+
+// 等待特定状态出现，带超时
+waitSucc, elapsedMs := WaitUntilWorkerState(t, ss, workerFullId, 
+    data.WS_Offline_graceful_period, 1000, 10)
+```
+
+#### 3.2 调度任务
+
+```go
+// 调度延时任务
+kcommon.ScheduleRun(100, func() {
+    // 在虚拟时间推进100ms后执行
+})
+```
+
+### 4. 状态验证技术
+
+#### 4.1 等待条件满足
+
+```go
+// 等待特定数量的分片加载
+waitSucc, elapsedMs := WaitUntilShardCount(t, ss, 3, 1000, 100)
+assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
+
+// 等待任意条件满足
+waitSucc, elapsedMs := WaitUntil(t, func() (bool, string) {
+    results := verifyAllShardsInStorage(t, setup, expectedShardStates)
+    if len(results) > 0 {
+        return false, strings.Join(results, ",")
+    }
+    return true, ""
+}, 100, 10)
+```
+
+#### 4.2 安全访问内部状态
+
+```go
+// 安全访问ServiceState内部状态
+safeAccessServiceState(ss, func(ss *ServiceState) {
+    count = len(ss.AllShards)
+    // 执行验证逻辑
+})
+```
+
+### 5. 测试数据设置
+
+#### 5.1 初始状态设置
+
+```go
+// 设置分片计划
+shardPlan := []string{"shard-1", "shard-2", "shard-3"}
+setShardPlan(t, setup.FakeEtcd, ctx, shardPlan)
+
+// 创建工作节点
+workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, 
+    "worker-1", "session-1", "localhost:8080")
+```
+
+#### 5.2 模拟事件触发
+
+```go
+// 模拟节点临时失败（删除临时节点）
+setup.FakeEtcd.Delete(ctx, ephPath)
+
+// 更新分片计划触发状态变化
+newShardPlan := []string{"shard-1", "shard-3", "shard-4"}
+setShardPlan(t, setup.FakeEtcd, ctx, newShardPlan)
+```
+
+### 6. 常见测试模式
+
+#### 6.1 状态转换测试
+
+1. 设置初始状态
+2. 触发状态转换事件
+3. 等待特定状态出现
+4. 推进时间验证状态变化
+5. 验证最终状态
+
+#### 6.2 一致性验证测试
+
+1. 设置初始数据
+2. 加载服务组件
+3. 验证所有状态是否一致
+4. 验证持久化一致性
+
+#### 6.3 冲突解决测试
+
+1. 创建有冲突的初始状态
+2. 触发冲突解决机制
+3. 验证系统自动修复冲突
+4. 验证最终一致性
+
+### 7. 依赖注入机制
+
+```go
+// RunWith实现方式
+func (setup *FakeTimeTestSetup) RunWith(fn func()) {
+    etcdprov.RunWithEtcdProvider(setup.FakeEtcd, func() {
+        shadow.RunWithEtcdStore(setup.FakeStore, func() {
+            kcommon.RunWithTimeProvider(setup.FakeTime, func() {
+                fn()
+            })
+        })
+    })
+}
+```
+
+### 8. 最佳实践
+
+1. **隔离性原则**：每个测试应该独立，通过依赖注入确保状态不泄漏
+2. **确定性原则**：避免使用真实时间、随机数和其他不确定因素
+3. **等待机制**：使用`WaitUntil`系列函数等待条件满足，不使用固定等待时间
+4. **安全访问**：使用`safeAccessServiceState`访问内部状态而非直接访问
+5. **完整验证**：验证内存状态和持久化状态的一致性
+6. **时间控制**：使用虚拟时间推进，避免测试执行时间过长
+7. **详细日志**：记录关键步骤和状态变化，便于调试
+8. **清理资源**：测试结束时停止所有服务和资源
+
+### 9. 注意事项
+
+1. 在`safeAccessServiceState`回调中避免耗时操作，防止阻塞runloop
+2. 使用`RunWithXxx`模式而非直接设置全局provider，确保测试结束后状态恢复
+3. 设置合理的等待超时时间，过长会降低测试效率，过短可能导致误报
+4. 模拟时间推进时，确保推进足够的时间触发所有相关事件
+
+### 10. 典型测试案例解析
+
+#### TestWorkerGracePeriodExpiration_waitUntil（工作节点优雅期测试）
+
+```go
+func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
+    // 1. 设置测试环境
+    setup := NewFakeTimeTestSetup(t)
+    gracePeriodSec := int32(10)
+    setup.SetupBasicConfig(ctx, WithOfflineGracePeriodSec(gracePeriodSec))
+    fakeTime := setup.FakeTime
+
+    fn := func() {
+        // 2. 创建ServiceState
+        ss := NewServiceState(ctx, "TestWorkerGracePeriodExpiration_waitUntil")
+
+        // 3. 创建工作节点
+        workerFullId, ephPath := ftCreateAndSetWorkerEph(t, ss, setup, 
+            "worker-1", "session-1", "localhost:8080")
+        
+        // 4. 等待节点初始状态为健康
+        waitSucc, _ := WaitUntilWorkerState(t, ss, workerFullId, 
+            data.WS_Online_healthy, 1000, 10)
+        assert.True(t, waitSucc)
+
+        // 5. 模拟节点临时失败
+        setup.FakeEtcd.Delete(ctx, ephPath)
+        
+        // 6. 验证节点进入优雅期
+        waitSucc, _ = WaitUntilWorkerState(t, ss, workerFullId, 
+            data.WS_Offline_graceful_period, 1000, 10)
+        assert.True(t, waitSucc)
+
+        // 7. 推进时间，验证优雅期结束后状态变为离线
+        fakeTime.VirtualTimeForward(ctx, 10100)
+        waitSucc, _ = WaitUntilWorkerState(t, ss, workerFullId, 
+            data.WS_Offline_dead, 1000, 10)
+        assert.True(t, waitSucc)
+    }
+
+    // 使用依赖注入运行测试
+    setup.RunWith(fn)
+}
+```
+
+#### TestShardBasic_ConsistencyCheck（分片一致性测试）
+
+```go
+func TestShardBasic_ConsistencyCheck(t *testing.T) {
+    // 1. 设置测试环境
+    setup := NewFakeTimeTestSetup(t)
+    setup.SetupBasicConfig(ctx)
+
+    fn := func() {
+        // 2. 创建ServiceState
+        ss := NewServiceState(ctx, "TestShardBasic_ConsistencyCheck")
+        setup.ServiceState = ss
+
+        // 3. 设置分片计划
+        shardPlan := []string{"shard-1", "shard-2", "shard-3"}
+        setShardPlan(t, setup.FakeEtcd, ctx, shardPlan)
+
+        // 4. 等待分片加载
+        waitSucc, _ := WaitUntilShardCount(t, ss, 3, 1000, 100)
+        assert.True(t, waitSucc)
+
+        // 5. 验证分片状态
+        expectedShardStates := map[data.ShardId]ExpectedShardState{
+            "shard-1": {LameDuck: false},
+            "shard-2": {LameDuck: false},
+            "shard-3": {LameDuck: false},
+        }
+        allPassed := verifyAllShardState(t, ss, expectedShardStates)
+        assert.Equal(t, 0, len(allPassed))
+
+        // 6. 验证持久化状态
+        waitSucc, _ = WaitUntil(t, func() (bool, string) {
+            results := verifyAllShardsInStorage(t, setup, expectedShardStates)
+            return len(results) == 0, strings.Join(results, ",")
+        }, 100, 10)
+        assert.True(t, waitSucc)
+    }
+
+    // 使用依赖注入运行测试
+    setup.RunWith(fn)
+}
+```
+
+通过掌握FakeTime风格测试，我们可以高效地测试复杂的分布式系统，尤其是对时间敏感的状态转换逻辑，同时保持测试的快速执行和可重复性。

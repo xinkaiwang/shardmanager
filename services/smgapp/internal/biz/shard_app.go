@@ -69,14 +69,17 @@ func (app *MyCougarApp) GetShard(ctx context.Context, shardId data.ShardId) *MyA
 type MyAppShard struct {
 	shardInfo *cougar.ShardInfo
 	// currentQpm int64
-	qpm *cougar.ShardQpm
+	qpm           *cougar.ShardQpm
+	Mu            sync.Mutex       // per shard lock
+	currentValues map[uint32]int64 // key is value, value is count
 }
 
 func NewAppShard(ctx context.Context, shardInfo *cougar.ShardInfo) *MyAppShard {
 	return &MyAppShard{
 		shardInfo: shardInfo,
 		// currentQpm: 300,
-		qpm: cougar.NewShardQpm(ctx, shardInfo.ShardId),
+		qpm:           cougar.NewShardQpm(ctx, shardInfo.ShardId),
+		currentValues: make(map[uint32]int64),
 	}
 }
 
@@ -102,4 +105,18 @@ func (shard *MyAppShard) GetShardStats(ctx context.Context) cougarjson.ShardStat
 func (shard *MyAppShard) Ping(ctx context.Context, name string) string {
 	shard.qpm.Inc(1)
 	return "pong, name=" + name + ", shardId=" + string(shard.shardInfo.ShardId)
+}
+
+func (shard *MyAppShard) GetAndInc(ctx context.Context, objKey uint32, inc int64) int64 {
+	shard.qpm.Inc(1)
+	shard.Mu.Lock()
+	defer shard.Mu.Unlock()
+	var currentValue int64
+	var ok bool
+	if currentValue, ok = shard.currentValues[objKey]; !ok {
+		shard.currentValues[objKey] = 0
+	} else {
+		shard.currentValues[objKey] = currentValue + inc
+	}
+	return currentValue
 }

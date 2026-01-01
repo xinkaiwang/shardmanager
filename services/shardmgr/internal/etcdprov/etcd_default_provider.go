@@ -13,13 +13,13 @@ import (
 )
 
 var (
-	timeoutMs = common.GetEnvInt("ETCD_TIMEOUT_MS", 60*1000)
+	timeoutMs = common.GetEnvInt("SMG_ETCD_TIMEOUT_MS", 60*1000)
 )
 
 // etcdDefaultProvider 是默认的 etcd 客户端实现
 // 支持通过环境变量配置：
-// - ETCD_ENDPOINTS: etcd 服务器地址，多个地址用逗号分隔，默认为 "localhost:2379"
-// - ETCD_DIAL_TIMEOUT: 连接超时时间（秒），默认为 5
+// - SMG_ETCD_ENDPOINTS: etcd 服务器地址，多个地址用逗号分隔，默认为 "localhost:2379"
+// - SMG_ETCD_TIMEOUT_MS: 连接超时时间（毫秒），默认为 60000
 type etcdDefaultProvider struct {
 	client *clientv3.Client
 }
@@ -190,10 +190,10 @@ func (pvd *etcdDefaultProvider) Delete(ctx context.Context, key string, structMo
 
 // getEndpointsFromEnv 从环境变量获取 etcd 端点配置
 // 返回：
-// - 如果设置了 ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
+// - 如果设置了 SMG_ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
 // - 否则返回默认值 ["localhost:2379"]
 func getEndpointsFromEnv() []string {
-	if endpoints := os.Getenv("ETCD_ENDPOINTS"); endpoints != "" {
+	if endpoints := os.Getenv("SMG_ETCD_ENDPOINTS"); endpoints != "" {
 		return strings.Split(endpoints, ",")
 	}
 	return []string{"localhost:2379"}
@@ -201,10 +201,10 @@ func getEndpointsFromEnv() []string {
 
 // getDialTimeoutFromEnv 从环境变量获取连接超时配置
 // 返回：
-// - 如果设置了 ETCD_DIAL_TIMEOUT 环境变量且为有效整数，返回该值
+// - 如果设置了 SMG_ETCD_TIMEOUT_MS 环境变量且为有效整数，返回该值（毫秒）
 // - 否则返回默认值 5（秒）
 func getDialTimeoutFromEnv() int {
-	if timeout := os.Getenv("ETCD_DIAL_TIMEOUT"); timeout != "" {
+	if timeout := os.Getenv("SMG_ETCD_TIMEOUT_MS"); timeout != "" {
 		if value, err := time.ParseDuration(timeout); err == nil {
 			return int(value.Seconds())
 		}

@@ -15,13 +15,13 @@ import (
 )
 
 var (
-	etcdQueryTimeoutMs = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 5*1000)
+	etcdQueryTimeoutMs = kcommon.GetEnvInt("UNICORN_ETCD_TIMEOUT_MS", 5*1000)
 )
 
 // etcdDefaultProvider 是默认的 etcd 客户端实现
 // 支持通过环境变量配置：
-// - ETCD_ENDPOINTS: etcd 服务器地址，多个地址用逗号分隔，默认为 "localhost:2379"
-// - ETCD_DIAL_TIMEOUT: 连接超时时间（秒），默认为 5
+// - UNICORN_ETCD_ENDPOINTS: etcd 服务器地址，多个地址用逗号分隔，默认为 "localhost:2379"
+// - UNICORN_ETCD_TIMEOUT_MS: 连接超时时间（毫秒），默认为 5000
 type etcdDefaultProvider struct {
 	client *clientv3.Client
 }
@@ -53,19 +53,19 @@ func NewDefaultEtcdProvider(_ context.Context) EtcdProvider {
 
 // getEndpointsFromEnv 从环境变量获取 etcd 端点配置
 // 返回：
-// - 如果设置了 ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
+// - 如果设置了 UNICORN_ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
 // - 否则返回默认值 ["localhost:2379"]
 func getEndpointsFromEnv() []string {
-	endpoints := kcommon.GetEnvString("ETCD_ENDPOINTS", "localhost:2379")
+	endpoints := kcommon.GetEnvString("UNICORN_ETCD_ENDPOINTS", "localhost:2379")
 	return strings.Split(endpoints, ",")
 }
 
 // getDialTimeoutFromEnv 从环境变量获取连接超时配置
 // 返回：
-// - 如果设置了 ETCD_DIAL_TIMEOUT 环境变量且为有效整数，返回该值
+// - 如果设置了 UNICORN_ETCD_TIMEOUT_MS 环境变量且为有效整数，返回该值（毫秒）
 // - 否则返回默认值 5（秒）
 func getDialTimeoutFromEnv() int {
-	if timeout := os.Getenv("ETCD_DIAL_TIMEOUT"); timeout != "" {
+	if timeout := os.Getenv("UNICORN_ETCD_TIMEOUT_MS"); timeout != "" {
 		if value, err := time.ParseDuration(timeout); err == nil {
 			return int(value.Seconds())
 		}

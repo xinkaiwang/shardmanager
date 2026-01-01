@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	etcdTimeoutMs      = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 3*1000)
-	etcdLeaseTimeoutMs = kcommon.GetEnvInt("ETCD_LEASE_TIMEOUT_MS", 15*1000)
+	etcdTimeoutMs      = kcommon.GetEnvInt("UNICORN_ETCD_TIMEOUT_MS", 3*1000)
+	etcdLeaseTimeoutMs = kcommon.GetEnvInt("UNICORN_ETCD_LEASE_TIMEOUT_MS", 15*1000)
 
 	currentEtcdProvider EtcdProvider
 )

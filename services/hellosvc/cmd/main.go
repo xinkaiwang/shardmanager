@@ -35,6 +35,7 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
+// curl localhost:8091/api/ping
 func main() {
 	ctx := context.Background()
 	// 从环境变量读取日志配置

@@ -40,10 +40,10 @@ type RoutingTreeBuilder func(map[data.WorkerId]*unicornjson.WorkerEntryJson) Rou
 
 // getEndpointsFromEnv 从环境变量获取 etcd 端点配置
 // 返回：
-// - 如果设置了 ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
+// - 如果设置了 UNICORN_ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
 // - 否则返回默认值 ["localhost:2379"]
 func getEndpointsFromEnv() []string {
-	if endpoints := os.Getenv("ETCD_ENDPOINTS"); endpoints != "" {
+	if endpoints := os.Getenv("UNICORN_ETCD_ENDPOINTS"); endpoints != "" {
 		return strings.Split(endpoints, ",")
 	}
 	return []string{"localhost:2379"}

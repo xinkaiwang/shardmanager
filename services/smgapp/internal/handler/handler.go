@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
@@ -91,10 +92,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// 包装所有处理器以添加错误处理中间件
 	mux.Handle("/api/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.PingHandler)))
 	mux.Handle("/api/hello", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloHandler)))
-	mux.Handle("/api/test_kerror", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloKerrorHandler)))
-	mux.Handle("/api/test_error", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloErrorHandler)))
-	mux.Handle("/api/test_panic", ErrorHandlingMiddleware(http.HandlerFunc(h.HelloPanicHandler)))
 	mux.Handle("/smg/ping", ErrorHandlingMiddleware(http.HandlerFunc(h.SmgPingHandler)))
+	mux.Handle("/smg/get_and_inc", ErrorHandlingMiddleware(http.HandlerFunc(h.SmgGetAndInc)))
 }
 
 // PingHandler 处理 /api/ping 请求
@@ -132,42 +131,7 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HelloKerrorHandler 处理 /hello/kerror 请求，总是抛出 kerror
-func (h *Handler) HelloKerrorHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		name = "test"
-	}
-	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.HelloWithKerror", func() {
-		h.app.HelloWithKerror(name)
-	}, "")
-}
-
-// HelloErrorHandler 处理 /hello/error 请求，总是抛出普通 error
-func (h *Handler) HelloErrorHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		name = "test"
-	}
-	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.HelloWithError", func() {
-		h.app.HelloWithError(name)
-	}, "")
-}
-
-// HelloPanicHandler 处理 /hello/panic 请求，总是抛出非错误类型的 panic
-func (h *Handler) HelloPanicHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		name = "test"
-	}
-	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.HelloWithPanic", func() {
-		h.app.HelloWithPanic(name)
-	}, "")
-}
-
+// SmgPingHandler 处理 /smg/ping?name=xxx 请求
 func (h *Handler) SmgPingHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {
@@ -178,4 +142,40 @@ func (h *Handler) SmgPingHandler(w http.ResponseWriter, r *http.Request) {
 	shard := h.cougurApp.GetShard(r.Context(), data.ShardId(shardId))
 	resp := shard.Ping(r.Context(), name)
 	w.Write([]byte(resp))
+}
+
+// SmgGetAndInc 处理 /smg/get_and_inc?objKey=xxx&inc=xxx 请求
+func (h *Handler) SmgGetAndInc(w http.ResponseWriter, r *http.Request) {
+	var objKey uint32
+	var err error
+	{
+		objKeyStr := r.URL.Query().Get("objKey")
+		if objKeyStr == "" {
+			objKeyStr = "0"
+		}
+		// parse as hex string to uint32
+		objKeyuint64, err := strconv.ParseUint(objKeyStr, 16, 32)
+		if err != nil {
+			panic(kerror.Create("objKeyInvalid", "").WithErrorCode(kerror.EC_INVALID_PARAMETER).With("objKey", objKeyStr))
+		}
+		objKey = uint32(objKeyuint64)
+	}
+	var inc int64
+	{
+		incStr := r.URL.Query().Get("inc")
+		if incStr == "" {
+			incStr = "1"
+		}
+		inc, err = strconv.ParseInt(incStr, 10, 64)
+		if err != nil {
+			panic(kerror.Create("incInvalid", "").WithErrorCode(kerror.EC_INVALID_PARAMETER).With("inc", incStr))
+		}
+	}
+	shardId := r.Header.Get("X-Shard-Id")
+	if shardId == "" {
+		panic(kerror.Create("shardIdEmpty", "").WithErrorCode(kerror.EC_INVALID_PARAMETER))
+	}
+	shard := h.cougurApp.GetShard(r.Context(), data.ShardId(shardId))
+	resp := shard.GetAndInc(r.Context(), objKey, inc)
+	w.Write([]byte(strconv.FormatInt(resp, 10)))
 }

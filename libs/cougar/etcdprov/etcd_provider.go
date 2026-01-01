@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	etcdTimeoutMs      = kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 3*1000)
-	etcdLeaseTimeoutMs = kcommon.GetEnvInt("ETCD_LEASE_TIMEOUT_MS", 15*1000)
+	etcdTimeoutMs      = kcommon.GetEnvInt("COUGAR_ETCD_TIMEOUT_MS", 3*1000)
+	etcdLeaseTimeoutMs = kcommon.GetEnvInt("COUGAR_ETCD_LEASE_TIMEOUT_MS", 15*1000)
 
 	currentEtcdProvider EtcdProvider
 )
@@ -66,10 +66,10 @@ type EtcdRevision int64
 
 // getEndpointsFromEnv 从环境变量获取 etcd 端点配置
 // 返回：
-// - 如果设置了 ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
+// - 如果设置了 COUGAR_ETCD_ENDPOINTS 环境变量，返回解析后的端点列表
 // - 否则返回默认值 ["localhost:2379"]
 func getEndpointsFromEnv() []string {
-	if endpoints := os.Getenv("ETCD_ENDPOINTS"); endpoints != "" {
+	if endpoints := os.Getenv("COUGAR_ETCD_ENDPOINTS"); endpoints != "" {
 		return strings.Split(endpoints, ",")
 	}
 	return []string{"localhost:2379"}
@@ -77,8 +77,8 @@ func getEndpointsFromEnv() []string {
 
 // getDialTimeoutFromEnv 从环境变量获取连接超时配置
 // 返回：
-// - 如果设置了 ETCD_DIAL_TIMEOUT 环境变量且为有效整数，返回该值
+// - 如果设置了 COUGAR_ETCD_TIMEOUT_MS 环境变量且为有效整数，返回该值
 // - 否则返回默认值 5000（毫秒）
 func getDialTimeoutMsFromEnv() int {
-	return kcommon.GetEnvInt("ETCD_TIMEOUT_MS", 5000)
+	return kcommon.GetEnvInt("COUGAR_ETCD_TIMEOUT_MS", 5000)
 }
