@@ -1,5 +1,12 @@
-# What is HelloBlits?
-Its the load test driver for hellosvc
+# What is Blitz?
+Blitz is a load test stype/framework.
+1) Blitz tests typically run as N number threads, 
+2) each thread run as infinit loop to makes requests to the target service. 
+3) typically each thread makes requests to the target service at a variable rate, depend on a) sleep per loop, b) actrual call elapsed time. which means this provide "soft" load and it respect server-side back-pressure.
+
+
+# What is HelloBlitz?
+Its the blitz style load test driver for hellosvc
 
 ## How to build?
 ```

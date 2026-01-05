@@ -41,8 +41,10 @@ func (app *UnicornBlitzApp) RunLoadTest(ctx context.Context, objId string) {
 	shardingKey := unicorn.JavaStringHashCode(objId)
 	target := app.GetTargetByShardingKey(ctx, shardingKey)
 	if target == nil {
-		panic("target is nil")
+		ke := kerror.Create("UnicornBlitzApp", "RunLoadTest").With("shardingKey", Uint32ToHexString(shardingKey)).With("objId", objId).With("error", "target is nil")
+		panic(ke)
 	}
+	klogging.Debug(ctx).With("shardingKey", Uint32ToHexString(shardingKey)).With("objId", objId).With("target", target.String()).Log("RunLoadTest", "TargetFound")
 	startMs := kcommon.GetWallTimeMs()
 	var resp string
 	ke := kcommon.TryCatchRun(ctx, func() {
@@ -75,19 +77,19 @@ func CallShardPing(portAddr string, shardId data.ShardId, objectId string) strin
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		ke := kerror.Wrap(err, "HttpCallError", "failed to call http", false)
+		ke := kerror.Wrap(err, "CallShardPing", "failed to call http", false).With("url", url).With("shardId", shardId)
 		panic(ke)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		ke := kerror.Create("HttpCallError", "http call failed").With("statusCode", resp.StatusCode).With("url", url)
+		ke := kerror.Create("CallShardPing", "http call failed").With("statusCode", resp.StatusCode).With("url", url)
 		panic(ke)
 	}
 	// readAll response body
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		ke := kerror.Wrap(err, "HttpCallError", "failed to read response body", false)
-		// klogging.Error(ctx).With("error", ke).Log("HttpCallError", "failed to read response body")
+		ke := kerror.Wrap(err, "CallShardPing", "failed to read response body", false)
+		// klogging.Error(ctx).With("error", ke).Log("CallShardPing", "failed to read response body")
 		panic(ke)
 	}
 	return string(data)

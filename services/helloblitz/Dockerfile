@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
@@ -8,12 +8,13 @@ RUN apk add --no-cache git make
 
 # 复制源代码
 COPY libs/xklib ./libs/xklib/
+COPY libs/unicorn ./libs/unicorn/
 COPY services/helloblitz ./services/helloblitz/
 COPY go.mod go.sum ./
 
 # 构建应用
 WORKDIR /app/services/helloblitz
-RUN make build
+RUN make all
 
 # Final stage
 FROM alpine:3.19
