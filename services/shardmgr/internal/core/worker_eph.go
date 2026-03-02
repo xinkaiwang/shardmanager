@@ -2,11 +2,11 @@ package core
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
@@ -26,43 +26,47 @@ func NewWorkerEphWatcher(ctx context.Context, ss *ServiceState, currentWorkerEph
 		stopped: make(chan struct{}),
 	}
 	watcher.ch = etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, ss.PathManager.GetWorkerEphPathPrefix(), currentWorkerEphRevision)
-	go watcher.Run(klogging.EmbedTraceId(ctx, "wew_")) // wew = worker eph watcher
+	go watcher.Run(ctx) // wew = worker eph watcher
 	return watcher
 }
 
 func (w *WorkerEphWatcher) Run(ctx context.Context) {
-	klogging.Info(ctx).Log("WorkerEphWatcher", "Started")
+	slog.InfoContext(ctx, "Started",
+		slog.String("event", "WorkerEphWatcher"))
 	stop := false
 	for !stop {
 		select {
 		case <-ctx.Done():
-			klogging.Info(ctx).Log("WorkerEphWatcher", "CtxDone.Exit")
+			slog.InfoContext(ctx, "CtxDone.Exit",
+				slog.String("event", "WorkerEphWatcher"))
 			stop = true
 		case kvItem := <-w.ch:
-			traceId := kcommon.NewTraceId(ctx, "wew_", 8) // wew = worker eph watcher
-			ctx2 := klogging.EmbedTraceId(ctx, traceId)
 			if kvItem.Value == "" {
 				// this is a delete event
 				// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
 				workerId := w.workerIdFromPath(kvItem.Key)
-				klogging.Info(ctx2).With("workerId", workerId).With("path", kvItem.Key).
-					Log("WorkerEphWatcher", "观察到worker eph已删除")
-				w.ss.PostEvent(NewWorkerEphEvent(ctx2, workerId, nil))
-				// klogging.Info(ctx2).With("workerId", workerId).
+				slog.InfoContext(ctx, "观察到worker eph已删除",
+					slog.String("event", "WorkerEphWatcher"),
+					slog.Any("workerId", workerId),
+					slog.Any("path", kvItem.Key))
+				w.ss.PostEvent(NewWorkerEphEvent(ctx, workerId, nil))
+				// klogging.Info(ctx).With("workerId", workerId).
 				// 	Log("WorkerEphWatcher", "worker eph event posted")
 				continue
 			}
 			// this is a add or update event
-			klogging.Info(ctx2).With("workerFullId", kvItem.Key).WithDebug("eph", kvItem.Value).
-				Log("WorkerEphWatcher", "观察到worker eph已更新")
+			slog.InfoContext(ctx, "观察到worker eph已更新",
+				slog.String("event", "WorkerEphWatcher"),
+				slog.Any("workerFullId", kvItem.Key))
 			// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
 			workerId := w.workerIdFromPath(kvItem.Key)
 			workerEph := cougarjson.WorkerEphJsonFromJson(kvItem.Value)
-			w.ss.PostEvent(NewWorkerEphEvent(ctx2, workerId, workerEph))
-			// klogging.Info(ctx2).With("workerId", workerId).With("eph", workerEph).
+			w.ss.PostEvent(NewWorkerEphEvent(ctx, workerId, workerEph))
+			// klogging.Info(ctx).With("workerId", workerId).With("eph", workerEph).
 			// 	Log("WorkerEphWatcher", "worker eph event posted")
 		case <-w.stop:
-			klogging.Info(ctx).Log("WorkerEphWatcher", "stop signal received")
+			slog.InfoContext(ctx, "stop signal received",
+				slog.String("event", "WorkerEphWatcher"))
 			stop = true
 		}
 	}
@@ -78,7 +82,8 @@ func (w *WorkerEphWatcher) StopAndWaitForExit() {
 	// stop the watcher and wait for it to exit
 	w.Stop()
 	<-w.stopped // wait for the run thread to exit
-	klogging.Info(context.Background()).Log("WorkerEphWatcher", "stopped")
+	slog.InfoContext(context.Background(), "stopped",
+		slog.String("event", "WorkerEphWatcher"))
 }
 
 func (w *WorkerEphWatcher) workerIdFromPath(path string) data.WorkerId {
@@ -125,14 +130,18 @@ func (e *WorkerEphEvent) Process(ctx context.Context, ss *ServiceState) {
 
 // stagingWorkerEph: must call in runloop. Staging area is write by (individual) worker eph event(s), read by digestStagingWorkerEph (in batch)
 func (ss *ServiceState) StagingWorkerEph(ctx context.Context, workerId data.WorkerId, workerEph *cougarjson.WorkerEphJson) {
-	klogging.Verbose(ctx).With("workerId", workerId).
-		With("hasEph", workerEph != nil).With("eph", workerEph).
-		Log("stagingWorkerEph", "开始处理worker eph")
+	slog.DebugContext(ctx, "开始处理worker eph",
+		slog.String("event", "stagingWorkerEph"),
+		slog.Any("workerId", workerId),
+		slog.Any("hasEph", workerEph != nil),
+		slog.Any("eph", workerEph))
 
 	defer func() {
-		klogging.Verbose(ctx).With("workerId", workerId).
-			With("hasEph", workerEph != nil).With("eph", workerEph).
-			Log("stagingWorkerEph", "处理worker eph完成")
+		slog.DebugContext(ctx, "处理worker eph完成",
+			slog.String("event", "stagingWorkerEph"),
+			slog.Any("workerId", workerId),
+			slog.Any("hasEph", workerEph != nil),
+			slog.Any("eph", workerEph))
 	}()
 
 	ss.syncWorkerBatchManager.TryScheduleInternal(ctx, "StagingWorkerEph:"+string(workerId))

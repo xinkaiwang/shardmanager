@@ -2,9 +2,9 @@ package core
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
@@ -24,7 +24,11 @@ func (ss *ServiceState) LoadServiceConfig(ctx context.Context) (*config.ServiceC
 		etcdprov.GetCurrentEtcdProvider(ctx).Set(ctx, path, defVal.ToServiceConfigJson().ToJson())
 		node = etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, path) // read the value again
 	}
-	klogging.Info(ctx).With("path", path).With("value", node.Value).With("revision", node.ModRevision).Log("LoadServiceConfig", "读取服务配置")
+	slog.InfoContext(ctx, "读取服务配置",
+		slog.String("event", "LoadServiceConfig"),
+		slog.Any("path", path),
+		slog.Any("value", node.Value),
+		slog.Any("revision", node.ModRevision))
 	sc := config.ParseServiceConfigFromJson(node.Value)
 	return sc, node.ModRevision
 }
@@ -58,7 +62,9 @@ func (e *ServiceConfigUpdateEvent) Process(ctx context.Context, ss *ServiceState
 }
 
 func (ss *ServiceState) onServiceConfigUpdate(ctx context.Context, config *config.ServiceConfig) {
-	klogging.Info(ctx).With("newCfg", config.ToServiceConfigJson().ToJson()).Log("ServiceConfigUpdate", "service config updated")
+	slog.InfoContext(ctx, "service config updated",
+		slog.String("event", "ServiceConfigUpdate"),
+		slog.Any("newCfg", config.ToServiceConfigJson().ToJson()))
 	oldConfig := ss.ServiceConfig
 	ss.ServiceConfig = config
 	if oldConfig.ShardConfig != config.ShardConfig {
@@ -121,7 +127,10 @@ func NewServiceConfigWatcher(ctx context.Context, parent *ServiceState, currentS
 		stopped: make(chan struct{}),
 	}
 	path := parent.PathManager.GetServiceConfigPath()
-	klogging.Debug(ctx).With("path", path).With("revision", currentServiceConfigRevision).Log("ServiceConfigWatcher", "创建服务配置观察者")
+	slog.DebugContext(ctx, "创建服务配置观察者",
+		slog.String("event", "ServiceConfigWatcher"),
+		slog.Any("path", path),
+		slog.Any("revision", currentServiceConfigRevision))
 	watcher.ch = etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, path, currentServiceConfigRevision)
 	go watcher.Run(ctx)
 	watcher.touchAll(ctx)
@@ -129,32 +138,39 @@ func NewServiceConfigWatcher(ctx context.Context, parent *ServiceState, currentS
 }
 
 func (w *ServiceConfigWatcher) Run(ctx context.Context) {
-	klogging.Info(ctx).Log("ServiceConfigWatcherRun", "started")
+	slog.InfoContext(ctx, "started",
+		slog.String("event", "ServiceConfigWatcherRun"))
 	stop := false
 	for !stop {
 		select {
 		case <-ctx.Done():
-			klogging.Info(ctx).Log("ServiceConfigWatcherExit", "exit")
+			slog.InfoContext(ctx, "exit",
+				slog.String("event", "ServiceConfigWatcherExit"))
 			return
 		case kvItem, ok := <-w.ch:
-			traceId := kcommon.NewTraceId(ctx, "ServiceConfigWatcher", 6)
-			ctx2 := klogging.EmbedTraceId(ctx, traceId)
 			if !ok {
-				klogging.Info(ctx2).Log("ServiceConfigWatcherExit", "exit")
+				slog.InfoContext(ctx, "exit",
+					slog.String("event", "ServiceConfigWatcherExit"))
 				stop = true
 				continue
 			}
 			if kvItem.Value == "" {
 				// this is a delete event
-				klogging.Info(ctx2).With("path", kvItem.Key).Log("ServiceConfigWatcher", "观察到服务配置已删除") // this should not happen, we ignore it
+				slog.InfoContext(ctx, "观察到服务配置已删除",
+					slog.String("event", "ServiceConfigWatcher"),
+					slog.Any("path", kvItem.Key))
 				continue
 			}
 			// this is a add or update event
-			klogging.Info(ctx2).With("serviceConfig", kvItem.Value).With("revision", kvItem.ModRevision).Log("ServiceConfigWatcher", "观察到服务配置已更新")
+			slog.InfoContext(ctx, "观察到服务配置已更新",
+				slog.String("event", "ServiceConfigWatcher"),
+				slog.Any("serviceConfig", kvItem.Value),
+				slog.Any("revision", kvItem.ModRevision))
 			cfg := config.ParseServiceConfigFromJson(kvItem.Value)
 			w.parent.PostEvent(NewServiceConfigUpdateEvent(ctx, w, cfg))
 		case <-w.stop:
-			klogging.Info(ctx).Log("ServiceConfigWatcher", "stop signal received")
+			slog.InfoContext(ctx, "stop signal received",
+				slog.String("event", "ServiceConfigWatcher"))
 			stop = true
 		}
 	}

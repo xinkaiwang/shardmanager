@@ -3,7 +3,9 @@ package costfunc
 import (
 	"context"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"log/slog"
+	"os"
+
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -67,12 +69,14 @@ func (snap *Snapshot) CollectAssignments(ctx context.Context, assigns map[data.A
 	for assignmentId := range assigns {
 		assignment, ok := snap.AllAssignments.Get(assignmentId)
 		if !ok {
-			klogging.Fatal(ctx).With("assignId", assignmentId).With("snapshotId", snap.SnapshotId).Log("CostFuncSimpleProvider", "assignment not found")
+			slog.ErrorContext(ctx, "assignment not found", slog.String("event", "CostFuncSimpleProvider"), slog.Any("assignId", assignmentId), slog.Any("snapshotId", snap.SnapshotId))
+			os.Exit(1)
 			continue
 		}
 		worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
 		if !ok {
-			klogging.Fatal(ctx).With("assignId", assignmentId).With("workerId", assignment.WorkerFullId.String()).With("snapshotId", snap.SnapshotId).Log("CostFuncSimpleProvider", "worker not found")
+			slog.ErrorContext(ctx, "worker not found", slog.String("event", "CostFuncSimpleProvider"), slog.Any("assignId", assignmentId), slog.String("workerId", assignment.WorkerFullId.String()), slog.Any("snapshotId", snap.SnapshotId))
+			os.Exit(1)
 			continue
 		}
 		av := &AssignmentView{
@@ -103,7 +107,8 @@ func (simple *CostFuncSimpleProvider) CalCost(ctx context.Context, snap *Snapsho
 		snap.AllShards.VisitAll(func(shardId data.ShardId, shard *ShardSnap) {
 			for replicaIdx, replica := range shard.Replicas {
 				if !replica.LameDuck && len(replica.Assignments) == 0 {
-					klogging.Fatal(context.Background()).With("shardId", shardId).With("replicaIdx", replicaIdx).Log("CostFuncSimpleProvider", "replica without assignments should be lame duck")
+					slog.ErrorContext(context.Background(), "replica without assignments should be lame duck", slog.String("event", "CostFuncSimpleProvider"), slog.Any("shardId", shardId), slog.Any("replicaIdx", replicaIdx))
+					os.Exit(1)
 				}
 			}
 		})
@@ -113,10 +118,12 @@ func (simple *CostFuncSimpleProvider) CalCost(ctx context.Context, snap *Snapsho
 		snap.AllAssignments.VisitAll(func(assignmentId data.AssignmentId, assignment *AssignmentSnap) {
 			worker, ok := snap.AllWorkers.Get(assignment.WorkerFullId)
 			if !ok {
-				klogging.Fatal(context.Background()).With("assignmentId", assignmentId).With("workerId", assignment.WorkerFullId.String()).Log("CostFuncSimpleProvider", "worker not found for assignment")
+				slog.ErrorContext(context.Background(), "worker not found for assignment", slog.String("event", "CostFuncSimpleProvider"), slog.Any("assignmentId", assignmentId), slog.String("workerId", assignment.WorkerFullId.String()))
+				os.Exit(1)
 			}
 			if _, ok := worker.Assignments[assignment.ShardId]; !ok {
-				klogging.Fatal(context.Background()).With("assignmentId", assignmentId).With("workerId", assignment.WorkerFullId.String()).Log("CostFuncSimpleProvider", "assignment not found in worker's assignments")
+				slog.ErrorContext(context.Background(), "assignment not found in worker's assignments", slog.String("event", "CostFuncSimpleProvider"), slog.Any("assignmentId", assignmentId), slog.String("workerId", assignment.WorkerFullId.String()))
+				os.Exit(1)
 			}
 		})
 	}
@@ -199,7 +206,8 @@ func (simple *CostFuncSimpleProvider) CalCost(ctx context.Context, snap *Snapsho
 				for _, assignmentId := range worker.Assignments {
 					assignment, ok := snap.AllAssignments.Get(assignmentId)
 					if !ok {
-						klogging.Fatal(context.Background()).With("worker", workerId).With("assignId", assignmentId).Log("CostFuncSimpleProvider", "assignment not found")
+						slog.ErrorContext(context.Background(), "assignment not found", slog.String("event", "CostFuncSimpleProvider"), slog.Any("worker", workerId), slog.Any("assignId", assignmentId))
+						os.Exit(1)
 						continue
 					}
 					if _, ok := dict[assignment.ShardId]; ok {

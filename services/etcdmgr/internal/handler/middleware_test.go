@@ -1,22 +1,23 @@
 package handler
 
 import (
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // withSilentLog 临时禁用日志输出
 func withSilentLog(t *testing.T, fn func()) {
-	// 保存当前的 logger
-	oldLogger := klogging.GetDefaultLogger()
-	// 设置 null logger
-	klogging.SetDefaultLogger(klogging.NewNullLogger())
+	// 保存当前的 default logger
+	oldLogger := slog.Default()
+	// 设置 discard logger
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	// 确保在函数结束时恢复原来的 logger
-	defer klogging.SetDefaultLogger(oldLogger)
+	defer slog.SetDefault(oldLogger)
 	// 执行测试函数
 	fn()
 }

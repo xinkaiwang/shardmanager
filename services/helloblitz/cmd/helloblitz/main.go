@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog" // Added slog
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,7 +13,7 @@ import (
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging" // Retained for InitOpenTelemetry, NewHandler, ParseLevel
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/ksysmetrics"
 	"github.com/xinkaiwang/shardmanager/services/helloblitz/internal/biz"
@@ -38,13 +39,15 @@ func runLoadTest(ctx context.Context, app *biz.App, targetURL string, loopSleepM
 
 			// 记录结果
 			if result.Error != "" {
-				klogging.Error(ctx).With("latency_ms", result.LatencyMs).
-					With("status_code", result.StatusCode).
-					Log("LoadTestError", result.Error)
+				slog.ErrorContext(ctx, result.Error,
+					slog.String("event", "LoadTestError"),
+					slog.Float64("latency_ms", result.LatencyMs),
+					slog.Int("status_code", result.StatusCode))
 			} else {
-				klogging.Info(ctx).With("latency_ms", result.LatencyMs).
-					With("status_code", result.StatusCode).
-					Log("LoadTestSuccess", "Request completed successfully")
+				slog.InfoContext(ctx, "Request completed successfully",
+					slog.String("event", "LoadTestSuccess"),
+					slog.Float64("latency_ms", result.LatencyMs),
+					slog.Int("status_code", result.StatusCode))
 			}
 
 			// 如果需要，在请求之间休眠
@@ -68,24 +71,34 @@ func main() {
 		logFormat = "json" // 默认 JSON 格式
 	}
 
-	// 创建并配置 LogrusLogger
-	logrusLogger := klogging.NewLogrusLogger(ctx)
-	logrusLogger.SetConfig(ctx, logLevel, logFormat)
-	klogging.SetDefaultLogger(logrusLogger)
-	klogging.Info(ctx).With("logLevel", logLevel).With("logFormat", logFormat).Log("LogLevelSet", "")
+	// Initialize OpenTelemetry
+	klogging.InitOpenTelemetry()
+
+	// Create slog handler
+	handler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.ParseLevel(logLevel),
+		Format: logFormat,
+	})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	slog.InfoContext(ctx, "", slog.String("event", "LogLevelSet"), slog.String("logLevel", logLevel), slog.String("logFormat", logFormat))
 
 	// 记录启动信息
-	klogging.Info(ctx).With("version", Version).
-		With("commit", GitCommit).
-		With("buildTime", BuildTime).
-		Log("Starting", "Starting helloblitz load test driver")
+	slog.InfoContext(ctx, "Starting helloblitz load test driver",
+		slog.String("event", "Starting"),
+		slog.String("version", Version),
+		slog.String("commit", GitCommit),
+		slog.String("buildTime", BuildTime))
 
 	// 创建 Prometheus 导出器
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "helloblitz",
 	})
 	if err != nil {
-		klogging.Fatal(ctx).With("error", err).Log("PrometheusExporterError", "Failed to create Prometheus exporter")
+		slog.ErrorContext(ctx, "Failed to create Prometheus exporter",
+			slog.String("event", "PrometheusExporterError"),
+			slog.Any("error", err))
+		os.Exit(1) // Added os.Exit(1) for Fatal
 	}
 
 	// 注册 kmetrics 注册表
@@ -111,9 +124,9 @@ func main() {
 
 	// 启动 metrics 服务器
 	go func() {
-		klogging.Info(ctx).With("addr", metricsServer.Addr).Log("MetricsServerStarting", "Starting metrics server")
+		slog.InfoContext(ctx, "Starting metrics server", slog.String("event", "MetricsServerStarting"), slog.String("addr", metricsServer.Addr))
 		if err := metricsServer.ListenAndServe(); err != http.ErrServerClosed {
-			klogging.Error(ctx).With("error", err).Log("MetricsServerError", "Metrics server error")
+			slog.ErrorContext(ctx, "Metrics server error", slog.String("event", "MetricsServerError"), slog.Any("error", err))
 		}
 	}()
 
@@ -125,11 +138,12 @@ func main() {
 		targetURL = "http://localhost:8080/api/ping"
 	}
 
-	klogging.Info(ctx).With("thread_count", threadCount).
-		With("loop_sleep_ms", loopSleepMs).
-		With("target_url", targetURL).
-		With("metrics_port", metricsPort).
-		Log("Config", "Load test configuration")
+	slog.InfoContext(ctx, "Load test configuration",
+		slog.String("event", "Config"),
+		slog.Int("thread_count", threadCount),
+		slog.Int("loop_sleep_ms", loopSleepMs),
+		slog.String("target_url", targetURL),
+		slog.Int("metrics_port", metricsPort))
 
 	// 创建应用实例
 	app := biz.NewApp()
@@ -163,8 +177,8 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-		klogging.Error(ctx).With("error", err).Log("MetricsServerShutdownError", "Error shutting down metrics server")
+		slog.ErrorContext(ctx, "Error shutting down metrics server", slog.String("event", "MetricsServerShutdownError"), slog.Any("error", err))
 	}
 
-	klogging.Info(ctx).Log("Shutdown", "Load test driver stopped")
+	slog.InfoContext(ctx, "Load test driver stopped", slog.String("event", "Shutdown"))
 }

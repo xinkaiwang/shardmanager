@@ -2,13 +2,13 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/smgapp/api"
 	"github.com/xinkaiwang/shardmanager/services/smgapp/internal/biz"
@@ -54,12 +54,12 @@ func (h *Handler) HelloHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 使用 Verbose 记录请求详情，只保留一个日志事件
-	klogging.Verbose(r.Context()).
-		With("method", r.Method).
-		With("path", r.URL.Path).
-		With("userAgent", r.Header.Get("User-Agent")).
-		With("name", req.Name).
-		Log("HelloRequest", "Received hello request")
+	slog.DebugContext(r.Context(), "Received hello request",
+		slog.String("event", "HelloRequest"),
+		slog.String("method", r.Method),
+		slog.String("path", r.URL.Path),
+		slog.String("userAgent", r.Header.Get("User-Agent")),
+		slog.String("name", req.Name))
 
 	// 处理请求
 	var message string
@@ -74,10 +74,10 @@ func (h *Handler) HelloHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 移除之前的 Info 日志事件
 	// 记录响应信息，使用默认重要性
-	klogging.Debug(r.Context()).
-		With("message", resp.Message).
-		With("time", resp.Time).
-		Log("HelloResponse", "Sending hello response")
+	slog.DebugContext(r.Context(), "Sending hello response",
+		slog.String("event", "HelloResponse"),
+		slog.String("message", resp.Message),
+		slog.String("time", resp.Time))
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -108,8 +108,8 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).
-		Log("PingRequest", "received ping request")
+	slog.DebugContext(r.Context(), "received ping request",
+		slog.String("event", "PingRequest"))
 
 	// 处理请求
 	var resp api.PingResponse
@@ -118,10 +118,10 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		With("status", resp.Status).
-		With("version", resp.Version).
-		Log("PingResponse", "sending ping response")
+	slog.InfoContext(r.Context(), "sending ping response",
+		slog.String("event", "PingResponse"),
+		slog.String("status", resp.Status),
+		slog.String("version", resp.Version))
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

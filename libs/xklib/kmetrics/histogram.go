@@ -2,13 +2,14 @@ package kmetrics
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"go.opencensus.io/metric/metricdata"
 	"go.opencensus.io/resource"
 )
@@ -103,7 +104,11 @@ type HistoSequence struct {
 
 func CreateHistoSequence(ctx context.Context, key string, parent *Khistogram, tagValues []string) *HistoSequence {
 	if len(tagValues) != len(parent.tagNames) {
-		klogging.Fatal(ctx).With("tagsCount", len(parent.tagNames)).With("valueCount", len(tagValues)).Log("TagCountDoesNotMatch", "")
+		slog.ErrorContext(ctx, "Tag count does not match",
+			slog.String("event", "TagCountDoesNotMatch"),
+			slog.Int("tagsCount", len(parent.tagNames)),
+			slog.Int("valueCount", len(tagValues)))
+		os.Exit(1)
 	}
 	hs := &HistoSequence{
 		parent:    parent,

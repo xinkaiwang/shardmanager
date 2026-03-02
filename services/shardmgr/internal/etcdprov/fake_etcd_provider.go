@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"log/slog"
 )
 
 // FakeEtcdProvider 是一个纯内存实现的 EtcdProvider
@@ -65,7 +65,7 @@ func (f *FakeEtcdProvider) Get(ctx context.Context, key string) EtcdKvItem {
 
 // Set 实现
 func (f *FakeEtcdProvider) Set(ctx context.Context, key, value string) {
-	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).With("value", value).Log("FakeEtcdProviderSet", "设置键值")
+	slog.InfoContext(ctx, "设置键值", slog.String("event", "FakeEtcdProviderSet"), slog.String("key", key), slog.Int("valueLength", len(value)), slog.String("value", value))
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -89,17 +89,17 @@ func (f *FakeEtcdProvider) Set(ctx context.Context, key, value string) {
 		Value:       value,
 		ModRevision: f.currentRevision,
 	})
-	klogging.Info(ctx).With("key", key).With("revision", f.currentRevision).Log("FakeEtcdProviderSet", "键值设置完成")
+	slog.InfoContext(ctx, "键值设置完成", slog.String("event", "FakeEtcdProviderSet"), slog.String("key", key), slog.Any("revision", f.currentRevision))
 }
 
 // Delete 实现
 func (f *FakeEtcdProvider) Delete(ctx context.Context, key string, strictMode bool) {
-	klogging.Info(ctx).With("key", key).Log("FakeEtcdProviderDelete", "删除键")
+	slog.InfoContext(ctx, "删除键", slog.String("event", "FakeEtcdProviderDelete"), slog.String("key", key))
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if _, exists := f.data[key]; !exists {
-		klogging.Info(ctx).With("key", key).Log("FakeEtcdProviderDelete", "键不存在，无需删除")
+		slog.InfoContext(ctx, "键不存在，无需删除", slog.String("event", "FakeEtcdProviderDelete"), slog.String("key", key))
 		panic(ErrKeyNotFound.With("key", key))
 	}
 
@@ -112,7 +112,7 @@ func (f *FakeEtcdProvider) Delete(ctx context.Context, key string, strictMode bo
 		Value:       "", // 删除事件值为空
 		ModRevision: f.currentRevision,
 	})
-	klogging.Info(ctx).With("key", key).With("revision", f.currentRevision).Log("FakeEtcdProviderDelete", "键删除完成")
+	slog.InfoContext(ctx, "键删除完成", slog.String("event", "FakeEtcdProviderDelete"), slog.String("key", key), slog.Any("revision", f.currentRevision))
 }
 
 // List 实现
@@ -120,24 +120,24 @@ func (f *FakeEtcdProvider) List(ctx context.Context, startKey string, maxCount i
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	klogging.Info(ctx).With("startKey", startKey).With("maxCount", maxCount).With("dataCount", len(f.data)).Log("FakeEtcdProviderList", "列出键值")
+	slog.InfoContext(ctx, "列出键值", slog.String("event", "FakeEtcdProviderList"), slog.String("startKey", startKey), slog.Any("maxCount", maxCount), slog.Int("dataCount", len(f.data)))
 
 	// 打印所有存储的键值，帮助调试
 	for k, v := range f.data {
-		klogging.Info(ctx).With("key", k).With("valueLength", len(v.Value)).With("revision", v.ModRevision).Log("FakeEtcdProviderListData", "存储的键值")
+		slog.InfoContext(ctx, "存储的键值", slog.String("event", "FakeEtcdProviderListData"), slog.String("key", k), slog.Int("valueLength", len(v.Value)), slog.Any("revision", v.ModRevision))
 	}
 
 	var items []EtcdKvItem
 	for k, v := range f.data {
 		if strings.HasPrefix(k, startKey) {
-			klogging.Info(ctx).With("key", k).With("matches", true).Log("FakeEtcdProviderListCheck", "键前缀匹配")
+			slog.InfoContext(ctx, "键前缀匹配", slog.String("event", "FakeEtcdProviderListCheck"), slog.String("key", k), slog.Bool("matches", true))
 			items = append(items, EtcdKvItem{
 				Key:         k,
 				Value:       v.Value,
 				ModRevision: v.ModRevision,
 			})
 		} else {
-			klogging.Info(ctx).With("key", k).With("matches", false).Log("FakeEtcdProviderListCheck", "键前缀不匹配")
+			slog.InfoContext(ctx, "键前缀不匹配", slog.String("event", "FakeEtcdProviderListCheck"), slog.String("key", k), slog.Bool("matches", false))
 		}
 	}
 
@@ -151,7 +151,7 @@ func (f *FakeEtcdProvider) List(ctx context.Context, startKey string, maxCount i
 		items = items[:maxCount]
 	}
 
-	klogging.Info(ctx).With("startKey", startKey).With("count", len(items)).Log("FakeEtcdProviderList", "列出键值完成")
+	slog.InfoContext(ctx, "列出键值完成", slog.String("event", "FakeEtcdProviderList"), slog.String("startKey", startKey), slog.Int("count", len(items)))
 	return items
 }
 
@@ -303,8 +303,8 @@ func (f *FakeEtcdProvider) DebugDump() string {
 func (f *FakeEtcdProvider) PrintAll(ctx context.Context) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	klogging.Info(ctx).With("data", f.DebugDump()).Log("FakeEtcdProvider.PrintAll", "打印所有键值对")
+	slog.InfoContext(ctx, "打印所有键值对", slog.String("event", "FakeEtcdProvider.PrintAll"), slog.Any("data", f.DebugDump()))
 	for k, v := range f.data {
-		klogging.Info(ctx).With("key", k).With("value", v.Value).Log("FakeEtcdProviderPrintAllData", "存储的键值")
+		slog.InfoContext(ctx, "存储的键值", slog.String("event", "FakeEtcdProviderPrintAllData"), slog.String("key", k), slog.String("value", v.Value))
 	}
 }

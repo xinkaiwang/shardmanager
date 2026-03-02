@@ -3,8 +3,9 @@ package shadow
 import (
 	"context"
 
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -141,10 +142,10 @@ func (eve *ShardStateJsonEvent) GetName() string {
 
 func (eve *ShardStateJsonEvent) Process(ctx context.Context, shadow *ShadowState) {
 	if eve.ShardState == nil {
-		klogging.Info(ctx).With("shardId", eve.ShardId).Log("ShardStateJsonEventDelete", "正在删除分片状态")
+		slog.InfoContext(ctx, "正在删除分片状态", slog.String("event", "ShardStateJsonEventDelete"), slog.Any("shardId", eve.ShardId))
 		delete(shadow.AllShards, eve.ShardId)
 		key := shadow.PathManager.FmtShardStatePath(eve.ShardId)
-		klogging.Info(ctx).With("key", key).Log("ShardStateJsonEventDelete", "从etcd中删除键")
+		slog.InfoContext(ctx, "从etcd中删除键", slog.String("event", "ShardStateJsonEventDelete"), slog.String("key", key))
 		GetCurrentEtcdStore(ctx).Put(ctx, key, "", "ShardState")
 		return
 	}
@@ -153,7 +154,7 @@ func (eve *ShardStateJsonEvent) Process(ctx context.Context, shadow *ShadowState
 	// write to etcd
 	key := shadow.PathManager.FmtShardStatePath(eve.ShardId)
 	value := eve.ShardState.ToJson()
-	klogging.Debug(ctx).With("key", key).With("valueLength", len(value)).Log("ShardStateJsonEventUpdate", "向etcd写入数据")
+	slog.DebugContext(ctx, "向etcd写入数据", slog.String("event", "ShardStateJsonEventUpdate"), slog.String("key", key), slog.Int("valueLength", len(value)))
 	GetCurrentEtcdStore(ctx).Put(ctx, key, value, "ShardState")
 }
 

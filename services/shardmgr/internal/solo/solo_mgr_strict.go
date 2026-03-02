@@ -7,8 +7,9 @@ import (
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 
 	cougarEtcd "github.com/xinkaiwang/shardmanager/libs/cougar/etcdprov"
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // SoloManagerStrict will maintain an lock in etcd and make sure only one shardmgr is running
@@ -50,7 +51,7 @@ func (solo *SoloManagerStrict) PutNode(reason string) {
 }
 
 func (solo *SoloManagerStrict) OnStateChange(state cougarEtcd.EtcdSessionState, msg string) {
-	klogging.Info(context.Background()).With("newState", state).With("reason", msg).Log("SoloManager", "etcd state change")
+	slog.InfoContext(context.Background(), "etcd state change", slog.String("event", "SoloManager"), slog.Any("newState", state), slog.String("reason", msg))
 	if state == cougarEtcd.ESS_Disconnected {
 		close(solo.ChLockLost)
 	}

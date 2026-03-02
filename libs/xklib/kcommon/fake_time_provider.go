@@ -66,10 +66,7 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 		needSleep := false
 		RunWithLock(&provider.mu, func() {
 			topTask := provider.taskQueue.Peek()
-			// entry := klogging.Info(ctx).With("topTask", topTask).With("currentVt", currentVt).With("vtDeadline", vtDeadline).With("sleepCounter", sleepCounter).With("sleepAtThisTime", sleepAtThisTime)
-			// defer func() {
-			// 	entry.With("needSleep", needSleep).With("needRunTask", needRunTask).Log("SimulateForward", "topItem")
-			// }()
+			// Debug logging removed (use debugger if needed)
 			if topTask == nil {
 				needSleep = true
 				sleepCounter++

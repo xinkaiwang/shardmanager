@@ -3,11 +3,11 @@ package core
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -36,46 +36,57 @@ import (
 
 func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
-	klogging.Info(ctx).Log("DynamicShardPlanUpdate", "设置测试环境...")
+	slog.InfoContext(ctx, "设置测试环境...",
+		slog.String("event", "DynamicShardPlanUpdate"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
 	setup.SetupBasicConfig(ctx)
-	klogging.Info(ctx).Log("DynamicShardPlanUpdate", "测试环境已配置")
+	slog.InfoContext(ctx, "测试环境已配置",
+		slog.String("event", "DynamicShardPlanUpdate"))
 
 	// 使用FakeTime环境运行测试
 	setup.RunWith(func() {
 		// 创建 ServiceState (shard plan为空)
 		ss := AssembleSsWithShadowState(ctx, "TestServiceState_DynamicShardPlanUpdate")
 		setup.ServiceState = ss
-		klogging.Info(ctx).With("serviceName", ss.Name).Log("DynamicShardPlanUpdate", "ServiceState已创建")
+		slog.InfoContext(ctx, "ServiceState已创建",
+			slog.String("event", "DynamicShardPlanUpdate"),
+			slog.Any("serviceName", ss.Name))
 
 		// 初始阶段：验证服务状态的初始状态 - 应该没有分片
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "验证初始状态...")
+		slog.InfoContext(ctx, "验证初始状态...",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		{
 			var initialCount int
 			setup.safeAccessServiceState(func(ss *ServiceState) {
 				initialCount = len(ss.AllShards)
 			})
-			klogging.Info(ctx).With("initialCount", initialCount).Log("DynamicShardPlanUpdate", "初始状态")
+			slog.InfoContext(ctx, "初始状态",
+				slog.String("event", "DynamicShardPlanUpdate"),
+				slog.Any("initialCount", initialCount))
 		}
 
 		// 第一次更新：添加三个分片 (shard-a, shard-b, shard-c)
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "第一次更新：添加三个分片 (shard-a, shard-b, shard-c)")
+		slog.InfoContext(ctx, "第一次更新：添加三个分片 (shard-a, shard-b, shard-c)",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		firstShardPlan := []string{"shard-a", "shard-b", "shard-c"}
 		setShardPlan(t, setup.FakeEtcd, ctx, firstShardPlan)
 
 		// 等待ServiceState加载分片状态
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "等待ServiceState加载分片状态...")
+		slog.InfoContext(ctx, "等待ServiceState加载分片状态...",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		{
 			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 3, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前加载所有分片, 耗时=%dms", elapsedMs)
-			klogging.Info(ctx).With("elapsedMs", elapsedMs).Log("DynamicShardPlanUpdate", "分片加载完成")
+			slog.InfoContext(ctx, "分片加载完成",
+				slog.String("event", "DynamicShardPlanUpdate"),
+				slog.Any("elapsedMs", elapsedMs))
 		}
 
 		// 验证第一次更新后的分片状态
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "验证第一次更新后的分片状态...")
+		slog.InfoContext(ctx, "验证第一次更新后的分片状态...",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		expectedStates1 := map[data.ShardId]ExpectedShardState{
 			"shard-a": {LameDuck: false},
 			"shard-b": {LameDuck: false},
@@ -85,27 +96,33 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		assert.Empty(t, errors1, "第一次更新后分片状态验证失败: %v", errors1)
 
 		// 确保状态已持久化
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "确保第一次更新的状态已持久化...")
+		slog.InfoContext(ctx, "确保第一次更新的状态已持久化...",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		setup.FakeTime.VirtualTimeForward(ctx, 500) // 前进500ms，确保持久化完成
 		errors1storage := verifyAllShardsInStorage(t, setup, expectedStates1)
 		assert.Empty(t, errors1storage, "第一次更新后分片状态持久化验证失败: %v", errors1storage)
 
 		// 第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c")
+		slog.InfoContext(ctx, "第二次更新：保留shard-a，添加shard-d，移除shard-b和shard-c",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		secondShardPlan := []string{"shard-a", "shard-d"}
 		setShardPlan(t, setup.FakeEtcd, ctx, secondShardPlan)
 
 		// 等待ServiceState更新分片状态（保留原有分片并标记删除）
 		// 预期会有4个分片：shard-a（保留）, shard-b（标记删除）, shard-c（标记删除）, shard-d（新增）
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "等待ServiceState更新分片状态...")
+		slog.InfoContext(ctx, "等待ServiceState更新分片状态...",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		{
 			waitSucc, elapsedMs := setup.WaitUntilShardCount(t, 4, 1000, 100)
 			assert.True(t, waitSucc, "应该能在超时前更新所有分片, 耗时=%dms", elapsedMs)
-			klogging.Info(ctx).With("elapsedMs", elapsedMs).Log("DynamicShardPlanUpdate", "分片更新完成")
+			slog.InfoContext(ctx, "分片更新完成",
+				slog.String("event", "DynamicShardPlanUpdate"),
+				slog.Any("elapsedMs", elapsedMs))
 		}
 
 		// 验证第二次更新后的分片状态
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "验证第二次更新后的分片状态...")
+		slog.InfoContext(ctx, "验证第二次更新后的分片状态...",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		expectedStates2 := map[data.ShardId]ExpectedShardState{
 			"shard-a": {LameDuck: false}, // 保留的分片
 			"shard-b": {LameDuck: true},  // 被移除的分片，标记为lameDuck
@@ -116,21 +133,28 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 		assert.Empty(t, errors2, "第二次更新后分片状态验证失败: %v", errors2)
 
 		// 确保状态已持久化
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "确保第二次更新的状态已持久化...")
+		slog.InfoContext(ctx, "确保第二次更新的状态已持久化...",
+			slog.String("event", "DynamicShardPlanUpdate"))
 		setup.FakeTime.VirtualTimeForward(ctx, 500) // 前进500ms，确保持久化完成
 		errors2storage := verifyAllShardsInStorage(t, setup, expectedStates2)
 		assert.Empty(t, errors2storage, "第二次更新后分片状态持久化验证失败: %v", errors2storage)
 
 		// 输出最终状态以供参考
 		setup.safeAccessServiceState(func(ss *ServiceState) {
-			klogging.Info(ctx).With("shardCount", len(ss.AllShards)).Log("DynamicShardPlanUpdate", "最终状态")
+			slog.InfoContext(ctx, "最终状态",
+				slog.String("event", "DynamicShardPlanUpdate"),
+				slog.Any("shardCount", len(ss.AllShards)))
 			for shardId, shard := range ss.AllShards {
-				klogging.Info(ctx).With("shardId", shardId).With("lameDuck", shard.LameDuck).Log("DynamicShardPlanUpdate", "分片状态")
+				slog.InfoContext(ctx, "分片状态",
+					slog.String("event", "DynamicShardPlanUpdate"),
+					slog.Any("shardId", shardId),
+					slog.Any("lameDuck", shard.LameDuck))
 			}
 		})
 
 		// 停止ServiceState
-		klogging.Info(ctx).Log("DynamicShardPlanUpdate", "测试完成，ServiceState已停止")
+		slog.InfoContext(ctx, "测试完成，ServiceState已停止",
+			slog.String("event", "DynamicShardPlanUpdate"))
 	})
 }
 
@@ -151,7 +175,6 @@ func TestServiceState_DynamicShardPlanUpdate(t *testing.T) {
 // - 存储系统中包含与内存状态一致的完整分片信息
 func TestServiceState_ShadowStateWrite(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 	t.Logf("设置测试环境...")
 
 	// 配置测试环境
@@ -276,7 +299,6 @@ func TestServiceState_ShadowStateWrite(t *testing.T) {
 // TestServiceState_PreexistingShardState 测试预先存在的分片状态如何被加载和更新
 func TestServiceState_PreexistingShardState(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -415,7 +437,6 @@ func TestServiceState_PreexistingShardState(t *testing.T) {
 
 func TestShardBasic_ConsistencyCheck(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -497,7 +518,6 @@ func TestShardBasic_ConsistencyCheck(t *testing.T) {
 // **期望结果**：系统应该根据分片计划自动修复冲突，将`shard-2`的状态从lameDuck调整为非lameDuck。
 func TestShardBasic_ConflictResolution(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -634,7 +654,6 @@ func TestShardBasic_ConflictResolution(t *testing.T) {
 
 func TestShardBasic_DynamicPlanUpdate(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)

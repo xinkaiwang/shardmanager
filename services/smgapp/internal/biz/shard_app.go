@@ -2,13 +2,13 @@ package biz
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougar"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 /********************************** MyCougarApp **********************************/
@@ -27,7 +27,9 @@ func NewMyCougarApp() *MyCougarApp {
 
 // AddShard implements cougarapp.CougarApp interface
 func (app *MyCougarApp) AddShard(ctx context.Context, shardInfo *cougar.ShardInfo, chDone chan struct{}) cougar.AppShard {
-	klogging.Info(ctx).With("shardId", shardInfo.ShardId).Log("MyCougarApp", "AddShard")
+	slog.InfoContext(ctx, "adding shard",
+		slog.String("event", "MyCougarApp.AddShard"),
+		slog.String("shardId", string(shardInfo.ShardId)))
 	shard := NewAppShard(ctx, shardInfo)
 	app.Mu.Lock()
 	defer app.Mu.Unlock()
@@ -37,7 +39,9 @@ func (app *MyCougarApp) AddShard(ctx context.Context, shardInfo *cougar.ShardInf
 }
 
 func (app *MyCougarApp) DropShard(ctx context.Context, shardId data.ShardId, chDone chan struct{}) {
-	klogging.Info(ctx).With("shardId", shardId).Log("MyCougarApp", "DropShard")
+	slog.InfoContext(ctx, "dropping shard",
+		slog.String("event", "MyCougarApp.DropShard"),
+		slog.String("shardId", string(shardId)))
 	app.Mu.Lock()
 	defer app.Mu.Unlock()
 	shard, ok := app.Shards[shardId]
@@ -84,18 +88,25 @@ func NewAppShard(ctx context.Context, shardInfo *cougar.ShardInfo) *MyAppShard {
 }
 
 func (shard *MyAppShard) Stop() {
-	klogging.Info(context.Background()).With("shardId", shard.shardInfo.ShardId).Log("MyAppShard", "Stopping")
+	slog.InfoContext(context.Background(), "stopping shard",
+		slog.String("event", "MyAppShard.Stop"),
+		slog.String("shardId", string(shard.shardInfo.ShardId)))
 	shard.qpm.Stop()
 }
 
 func (shard *MyAppShard) UpdateShard(ctx context.Context, shardInfo *cougar.ShardInfo) {
-	klogging.Info(ctx).With("shardId", shardInfo.ShardId).Log("MyAppShard", "UpdateShard")
+	slog.InfoContext(ctx, "updating shard",
+		slog.String("event", "MyAppShard.UpdateShard"),
+		slog.String("shardId", string(shardInfo.ShardId)))
 	shard.shardInfo = shardInfo
 }
 
 func (shard *MyAppShard) GetShardStats(ctx context.Context) cougarjson.ShardStats {
 	qpm := shard.qpm.GetQpm()
-	klogging.Info(ctx).With("shardId", shard.shardInfo.ShardId).With("currentQpm", qpm).Log("MyAppShard", "GetShardQpm")
+	slog.InfoContext(ctx, "getting shard qpm",
+		slog.String("event", "MyAppShard.GetShardQpm"),
+		slog.String("shardId", string(shard.shardInfo.ShardId)),
+		slog.Int64("currentQpm", qpm))
 	return cougarjson.ShardStats{
 		Qpm:   qpm,
 		MemMb: 0,

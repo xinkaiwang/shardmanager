@@ -2,13 +2,13 @@ package unicorn
 
 import (
 	"context"
+	"log/slog"
 	"sync/atomic"
 
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/etcdprov"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 )
 
@@ -42,9 +42,14 @@ func NewUnicorn(ctx context.Context, etcdEndpoints []string, treeBuilder Routing
 	go uc.runloop.Run(ctx)
 	uc.batchMgr = NewBatchManager(uc.runloop, 100, "BatchDigist", uc.digistRoutingEvents)
 	// Initialize the current tree
-	klogging.Info(ctx).With("etcdEndpoints", etcdEndpoints).Log("NewUnicorn", "LoadAllByPrefix first load...")
+	slog.InfoContext(ctx, "load all by prefix first load",
+		slog.String("event", "NewUnicorn.LoadStart"),
+		slog.Any("etcdEndpoints", etcdEndpoints))
 	list, rev := uc.etcdClient.LoadAllByPrefix(ctx, routingTablePathPrefix)
-	klogging.Info(ctx).With("etcdEndpoints", etcdEndpoints).With("count", len(list)).Log("NewUnicorn", "LoadAllByPrefix done")
+	slog.InfoContext(ctx, "load all by prefix done",
+		slog.String("event", "NewUnicorn.LoadDone"),
+		slog.Any("etcdEndpoints", etcdEndpoints),
+		slog.Int("count", len(list)))
 	for _, item := range list {
 		entry := unicornjson.WorkerEntryJsonFromJson(item.Value)
 		workerId := data.WorkerId(entry.WorkerId)
@@ -53,7 +58,9 @@ func NewUnicorn(ctx context.Context, etcdEndpoints []string, treeBuilder Routing
 	// digest the routing table
 	uc.digistRoutingEvents(ctx, uc)
 	uc.watcher = NewUnicornWatcher(ctx, uc, routingTablePathPrefix, rev)
-	klogging.Info(ctx).With("etcdEndpoints", etcdEndpoints).Log("NewUnicorn", "finished")
+	slog.InfoContext(ctx, "new unicorn finished",
+		slog.String("event", "NewUnicorn.Finished"),
+		slog.Any("etcdEndpoints", etcdEndpoints))
 	return uc
 }
 

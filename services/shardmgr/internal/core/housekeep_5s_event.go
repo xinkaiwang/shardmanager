@@ -2,11 +2,12 @@ package core
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -39,7 +40,9 @@ func (te *Housekeep5sEvent) Process(ctx context.Context, ss *ServiceState) {
 		}, "none")
 	})
 	if ke != nil {
-		klogging.Error(ctx).With("error", ke).Log("Housekeep5sEvent", "checkWorkerTombStone failed")
+		slog.ErrorContext(ctx, "checkWorkerTombStone failed",
+			slog.String("event", "Housekeep5sEvent"),
+			slog.Any("error", ke))
 	}
 	kcommon.ScheduleRun(5*1000, func() { // 5s
 		ss.PostEvent(NewHousekeep5sEvent())
@@ -60,13 +63,20 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 		for _, assignId := range workerState.Assignments {
 			assignment, ok := ss.AllAssignments[assignId]
 			if !ok {
-				klogging.Fatal(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "assignment not found")
+				slog.ErrorContext(ctx, "assignment not found",
+					slog.String("event", "checkWorkerTombStone"),
+					slog.Any("workerFullId", workerFullId),
+					slog.Any("assignId", assignId))
+				os.Exit(1)
 			}
 			if assignment.TargetState == cougarjson.CAS_Dropped && assignment.CurrentConfirmedState == cougarjson.CAS_Dropped {
 				passiveMove := NewPasMoveRemoveAssignment(assignId, assignment.ShardId, assignment.ReplicaIdx, workerFullId)
 				passiveMove.ApplyToSs(ctx, ss)
 				// passiveMoves = append(passiveMoves, passiveMove) // assignments in snapshot should have been removed already, don't need to do it again
-				klogging.Info(ctx).With("workerFullId", workerFullId).With("assignId", assignId).Log("checkWorkerTombStone", "delete assignment")
+				slog.InfoContext(ctx, "delete assignment",
+					slog.String("event", "checkWorkerTombStone"),
+					slog.Any("workerFullId", workerFullId),
+					slog.Any("assignId", assignId))
 			}
 		}
 		// check worker tombstone
@@ -90,7 +100,9 @@ func (ss *ServiceState) checkWorkerTombStone(ctx context.Context) {
 			ss.routingProvider.StoreRoutingEntry(ctx, workerFullId, nil)
 			passiveMove := costfunc.NewPasMoveWorkerSnapAddRemove(workerFullId, nil, "hardDeleteWorker")
 			passiveMoves = append(passiveMoves, passiveMove)
-			klogging.Info(ctx).With("workerFullId", workerFullId).Log("checkWorkerTombStone", "delete workerState")
+			slog.InfoContext(ctx, "delete workerState",
+				slog.String("event", "checkWorkerTombStone"),
+				slog.Any("workerFullId", workerFullId))
 			continue
 		}
 	}
@@ -143,7 +155,9 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			// shard is tombstone, delete it
 			delete(ss.AllShards, shard.ShardId)
 			ss.storeProvider.StoreShardState(shard.ShardId, nil)
-			klogging.Info(ctx).With("shardId", shard.ShardId).Log("hardDeleteShardState", "delete shardState")
+			slog.InfoContext(ctx, "delete shardState",
+				slog.String("event", "hardDeleteShardState"),
+				slog.Any("shardId", shard.ShardId))
 			// delete from snapshot
 			passiveMove := costfunc.NewPasMoveShardStateAddRemove(shard.ShardId, nil, "hardDeleteShard")
 			ss.ModifySnapshot(ctx, passiveMove.Apply, "hardDeleteShard")
@@ -153,7 +167,10 @@ func (ss *ServiceState) checkShardTombStone(ctx context.Context) {
 			shard.LastUpdateReason = dirtyFlag.String()
 			ss.storeProvider.StoreShardState(shard.ShardId, shard.ToJson())
 
-			klogging.Info(ctx).With("shardId", shard.ShardId).With("updateReason", shard.LastUpdateReason).Log("checkShardTombStone", "update shardState")
+			slog.InfoContext(ctx, "update shardState",
+				slog.String("event", "checkShardTombStone"),
+				slog.Any("shardId", shard.ShardId),
+				slog.Any("updateReason", shard.LastUpdateReason))
 		}
 	}
 }

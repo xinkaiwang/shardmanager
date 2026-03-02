@@ -3,12 +3,12 @@ package krunloop
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 )
 
@@ -106,12 +106,14 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 	for !stop {
 		select {
 		case <-rl.ctx.Done():
-			klogging.Info(ctx).Log("RunLoopCtxCanceled", "run loop stopped")
+			slog.InfoContext(ctx, "run loop stopped",
+				slog.String("event", "RunLoopCtxCanceled"))
 			stop = true
 			continue
 		case event, ok := <-rl.queue.GetOutputChan():
 			if !ok {
-				klogging.Info(ctx).Log("EventQueueClosed", "event queue closed")
+				slog.InfoContext(ctx, "event queue closed",
+					slog.String("event", "EventQueueClosed"))
 				stop = true
 				continue
 			}
@@ -125,8 +127,9 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			RunLoopQueueTimeMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(waitTimeMs)
 			// 使用原子操作存储当前事件名
 			rl.currentEventName.Store(eveName)
-			ctx2 := klogging.EmbedTraceId(ctx, "rl_"+rl.GetNextEpochId())
-			event.Process(ctx2, rl.resource)
+			// Note: EmbedTraceId removed - OpenTelemetry handles trace IDs automatically
+			// epochId is now used only for runloop-internal event sequencing
+			event.Process(ctx, rl.resource)
 			rl.currentEventName.Store("")
 			elapsedMs := kcommon.GetMonoTimeMs() - start
 			RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
@@ -158,7 +161,8 @@ func (rl *RunLoop[T]) StopAndWaitForExit() {
 		// 正常退出
 	case <-time.After(1000 * time.Millisecond): // 增加超时时间，确保有足够时间退出
 		// 超时，可能 Run 方法尚未完全启动或已异常退出
-		klogging.Warning(context.Background()).Log("RunLoopStopTimeout", "RunLoop.StopAndWaitForExit 超时")
+		slog.WarnContext(context.Background(), "RunLoop.StopAndWaitForExit 超时",
+			slog.String("event", "RunLoopStopTimeout"))
 	}
 }
 

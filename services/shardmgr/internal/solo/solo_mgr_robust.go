@@ -5,8 +5,9 @@ import (
 	"sync/atomic"
 
 	cougarEtcd "github.com/xinkaiwang/shardmanager/libs/cougar/etcdprov"
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
 )
@@ -61,7 +62,7 @@ func (solo *SoloManagerRobust) onSessionLost(ctx context.Context) {
 		}()
 	})
 	if ke != nil {
-		klogging.Error(ctx).With("error", ke).Log("SoloManager", "failed to recover session")
+		slog.ErrorContext(ctx, "failed to recover session", slog.String("event", "SoloManager"), slog.Any("error", ke))
 		close(solo.ChLockLost)
 	}
 }
@@ -80,7 +81,7 @@ func NewSessionWrapper(ctx context.Context, parent *SoloManagerRobust, reason st
 		chClosed: make(chan struct{}, 1),
 	}
 	wrapper.session = parent.etcdprov.CreateEtcdSession(ctx)
-	klogging.Info(ctx).With("sessionId", parent.sessionId).Log("NewSessionWrapper", "session created")
+	slog.InfoContext(ctx, "session created", slog.String("event", "NewSessionWrapper"), slog.String("sessionId", parent.sessionId))
 	node := smgjson.NewGlobalLock(parent.podName, parent.sessionId, wrapper.session.GetLeaseId(), parent.ServerStartTimeMs, common.GetVersion())
 	node.LastUpdateTimeMs = kcommon.GetWallTimeMs()
 	node.LastUpdateResason = reason

@@ -2,12 +2,12 @@ package cougar
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 const (
@@ -30,7 +30,9 @@ func NewShardQpm(ctx context.Context, shardId data.ShardId) *ShardQpm { // shard
 	kcommon.ScheduleRun(QpmIntervalSec*1000, func() {
 		sq.Checkin(ctx)
 	})
-	klogging.Info(ctx).With("shardId", shardId).Log("ShardQpm", "NewShardQpm")
+	slog.InfoContext(ctx, "new shard qpm",
+		slog.String("event", "ShardQpm.New"),
+		slog.Any("shardId", shardId))
 	return sq
 }
 
@@ -40,7 +42,9 @@ func (sq *ShardQpm) Inc(n int64) {
 
 func (sq *ShardQpm) Checkin(ctx context.Context) {
 	if sq.stop {
-		klogging.Info(ctx).With("shardId", sq.shardId).Log("ShardQpm", "Checkin stopped")
+		slog.InfoContext(ctx, "checkin stopped",
+			slog.String("event", "ShardQpm.CheckinStopped"),
+			slog.Any("shardId", sq.shardId))
 		return
 	}
 	sq.checkin(ctx)
@@ -58,7 +62,11 @@ func (sq *ShardQpm) checkin(ctx context.Context) {
 	}
 	current := sq.currentCounter.Swap(0)
 	sq.blockChain = append(sq.blockChain, current)
-	klogging.Info(ctx).With("current", current).With("blockChain", sq.blockChain).With("shardId", sq.shardId).Log("ShardQpm", "checkin")
+	slog.InfoContext(ctx, "checkin",
+		slog.String("event", "ShardQpm.Checkin"),
+		slog.Int64("current", current),
+		slog.Any("blockChain", sq.blockChain),
+		slog.Any("shardId", sq.shardId))
 }
 
 // return avg qpm in last 60 seconds

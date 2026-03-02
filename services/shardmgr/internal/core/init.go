@@ -2,11 +2,12 @@ package core
 
 import (
 	"context"
+	"log/slog"
+	"os"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
@@ -17,7 +18,8 @@ import (
 )
 
 func (ss *ServiceState) Init(ctx context.Context) {
-	klogging.Info(ctx).Log("ServiceStateInit", "start")
+	slog.InfoContext(ctx, "start",
+		slog.String("event", "ServiceStateInit"))
 	// step 1: load ServiceInfo
 	// ss.ServiceInfo = ss.LoadServiceInfo(ctx)     // from /smg/config/service_info.json
 	var currentServiceConfigRevision etcdprov.EtcdRevision
@@ -40,12 +42,15 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.PrintAllShards(ctx)
 	ss.PrintAllWorkers(ctx)
 	ss.PrintAllAssignments(ctx)
-	klogging.Info(ctx).Log("ServiceStateInit", "load all shard and worker state done")
+	slog.InfoContext(ctx, "load all shard and worker state done",
+		slog.String("event", "ServiceStateInit"))
 
 	// step 3b: remove non-referenced pilot nodes
 	for workerFullId := range pilotNodes {
 		if _, ok := ss.AllWorkers[workerFullId]; !ok {
-			klogging.Warning(ctx).With("workerFullId", workerFullId).Log("ServiceStateInit", "pilot node not found in worker state, remove it")
+			slog.WarnContext(ctx, "pilot node not found in worker state, remove it",
+				slog.String("event", "ServiceStateInit"),
+				slog.Any("workerFullId", workerFullId))
 			ss.pilotProvider.StorePilotNode(ctx, workerFullId, nil) // remove pilot node
 			delete(pilotNodes, workerFullId)
 		}
@@ -62,7 +67,8 @@ func (ss *ServiceState) Init(ctx context.Context) {
 
 	// step 5: current snapshot and future snapshot
 	ss.ReCreateSnapshot(ctx, "ServiceState.Init")
-	klogging.Info(ctx).Log("ServiceStateInit", "create snapshot done")
+	slog.InfoContext(ctx, "create snapshot done",
+		slog.String("event", "ServiceStateInit"))
 
 	// step 6: load current worker eph (this need to be after first create snapshot, first digest needs to update snapshot)
 	currentWorkerEph, currentWorkerEphRevision := ss.LoadCurrentWorkerEph(ctx)
@@ -71,7 +77,8 @@ func (ss *ServiceState) Init(ctx context.Context) {
 	ss.firstDigestStagingWorkerEph(ctx)
 
 	// step 8: start listening to shard plan changes/worker eph changes/service config changes
-	klogging.Info(ctx).Log("ServiceStateInit", "start watchers")
+	slog.InfoContext(ctx, "start watchers",
+		slog.String("event", "ServiceStateInit"))
 	ss.ShardPlanWatcher = NewShardPlanWatcher(ctx, ss, currentShardPlanRevision+1) // +1 to skip the current revision
 	ss.WorkerEphWatcher = NewWorkerEphWatcher(ctx, ss, currentWorkerEphRevision+1)
 	ss.ServiceConfigWatcher = NewServiceConfigWatcher(ctx, ss, currentServiceConfigRevision+1)
@@ -93,7 +100,8 @@ func (ss *ServiceState) Init(ctx context.Context) {
 
 	// step 10: start
 	// Note: The runloop is now initialized in AssembleSsXxxx
-	klogging.Info(ctx).Log("ServiceStateInit", "done")
+	slog.InfoContext(ctx, "done",
+		slog.String("event", "ServiceStateInit"))
 }
 
 func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
@@ -114,12 +122,21 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 	for assignId, assignment := range ss.AllAssignments {
 		shardState, ok := ss.AllShards[assignment.ShardId]
 		if !ok {
-			klogging.Fatal(ctx).With("assignmentId", assignId).With("shardId", assignment.ShardId).Log("LoadAllShardState", "shard not found")
+			slog.ErrorContext(ctx, "shard not found",
+				slog.String("event", "LoadAllShardState"),
+				slog.Any("assignmentId", assignId),
+				slog.Any("shardId", assignment.ShardId))
+			os.Exit(1)
 			continue
 		}
 		replicaState, ok := shardState.Replicas[assignment.ReplicaIdx]
 		if !ok {
-			klogging.Fatal(ctx).With("assignmentId", assignId).With("shardId", assignment.ShardId).With("replicaIdx", assignment.ReplicaIdx).Log("LoadAllShardState", "replica not found")
+			slog.ErrorContext(ctx, "replica not found",
+				slog.String("event", "LoadAllShardState"),
+				slog.Any("assignmentId", assignId),
+				slog.Any("shardId", assignment.ShardId),
+				slog.Any("replicaIdx", assignment.ReplicaIdx))
+			os.Exit(1)
 			continue
 		}
 		replicaState.Assignments[assignId] = common.Unit{}
@@ -130,7 +147,10 @@ func (ss *ServiceState) LoadAllShardState(ctx context.Context) {
 			if len(replicaState.Assignments) == 0 && !replicaState.LameDuck {
 				// replicaState.LameDuck = true // mark as lame duck
 				delete(shardState.Replicas, replicaIdx) // remove replica
-				klogging.Info(ctx).With("shardId", shardState.ShardId).With("replicaIdx", replicaIdx).Log("LoadAllShardState", "delete empty replica")
+				slog.InfoContext(ctx, "delete empty replica",
+					slog.String("event", "LoadAllShardState"),
+					slog.Any("shardId", shardState.ShardId),
+					slog.Any("replicaIdx", replicaIdx))
 			}
 		}
 	}
@@ -169,7 +189,10 @@ func (ss *ServiceState) LoadAllPilotNode(ctx context.Context) map[data.WorkerFul
 	for _, item := range list {
 		pilotNodeJson := cougarjson.ParsePilotNodeJson(item.Value)
 		if pilotNodeJson == nil {
-			klogging.Fatal(ctx).With("item", item).Log("LoadAllPilotNode", "pilot node json parse failed")
+			slog.ErrorContext(ctx, "pilot node json parse failed",
+				slog.String("event", "LoadAllPilotNode"),
+				slog.Any("item", item))
+			os.Exit(1)
 			continue
 		}
 		workerFullId := data.WorkerFullIdParseFromString(item.Key[len(pathPrefix):])
@@ -185,8 +208,7 @@ func (ss *ServiceState) LoadAllMoves(ctx context.Context) {
 	for _, item := range list {
 		moveStateJson := smgjson.MoveStateJsonParse(item.Value)
 		moveState := MoveStateFromJson(moveStateJson)
-		ctx2 := klogging.EmbedTraceId(ctx, "am_"+string(moveState.ProposalId))
-		minion := NewActionMinion(ctx2, ss, moveState)
+		minion := NewActionMinion(ctx, ss, moveState)
 		ss.AllMoves[moveState.ProposalId] = minion
 	}
 }
@@ -209,9 +231,17 @@ func (ss *ServiceState) ReCreateSnapshot(ctx context.Context, reason string) {
 	snapshotFuture.Freeze()
 	if ss.SolverGroup != nil {
 		ss.SolverGroup.OnSnapshot(ctx, snapshotFuture, reason)
-		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString(ctx)).With("time", kcommon.GetWallTimeMs()).With("reason", reason).Log("ReCreateSnapshot", "SolverGroup.OnSnapshot")
+		slog.InfoContext(ctx, "SolverGroup.OnSnapshot",
+			slog.String("event", "ReCreateSnapshot"),
+			slog.Any("snapshot", snapshotFuture.ToShortString(ctx)),
+			slog.Any("time", kcommon.GetWallTimeMs()),
+			slog.Any("reason", reason))
 	} else {
-		klogging.Info(ctx).With("snapshot", snapshotFuture.ToShortString(ctx)).With("time", kcommon.GetWallTimeMs()).With("reason", reason).Log("ReCreateSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		slog.InfoContext(ctx, "SolverGroup is nil, skip OnSnapshot",
+			slog.String("event", "ReCreateSnapshot"),
+			slog.Any("snapshot", snapshotFuture.ToShortString(ctx)),
+			slog.Any("time", kcommon.GetWallTimeMs()),
+			slog.Any("reason", reason))
 	}
 	ss.SetSnapshotFuture(ctx, snapshotFuture, "ReCreateSnapshot")
 }
@@ -280,7 +310,10 @@ func (workerState *WorkerState) shouldWorkerIncludeInSnapshot() bool {
 	case data.WS_Deleted, data.WS_Unknown, data.WS_Offline_dead:
 		return false
 	default:
-		klogging.Fatal(context.Background()).With("workerState", workerState).Log("shouldWorkerIncludeInSnapshot", "unknown worker state")
+		slog.ErrorContext(context.Background(), "unknown worker state",
+			slog.String("event", "shouldWorkerIncludeInSnapshot"),
+			slog.Any("workerState", workerState))
+		os.Exit(1)
 	}
 	return false
 }

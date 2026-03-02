@@ -2,19 +2,18 @@ package core
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 )
 
 func TestAssembleWorkerLifeCycle3(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -23,17 +22,21 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		sc.AssignSolverConfig.SolverEnabled = true
 		sc.UnassignSolverConfig.SolverEnabled = true
 	}))
-	klogging.Info(ctx).Log("测试环境已配置", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "测试环境已配置"))
 
 	fn := func() {
 		// Step 1: 创建 ServiceState
-		klogging.Info(ctx).Log("Step1", "创建 ServiceState")
+		slog.InfoContext(ctx, "创建 ServiceState",
+			slog.String("event", "Step1"))
 		ss := AssembleSsAll(ctx, "TestAssembleAssignSolver")
 		setup.ServiceState = ss
-		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
+		slog.InfoContext(ctx, ss.Name,
+			slog.String("event", "ServiceState已创建"))
 
 		// Step 2: 创建 worker-1 eph
-		klogging.Info(ctx).Log("Step2", "创建 worker-1 eph")
+		slog.InfoContext(ctx, "创建 worker-1 eph",
+			slog.String("event", "Step2"))
 		workerFullId, _ := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 		{
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
@@ -46,7 +49,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// Step 3: 创建 shardPlan and set into etcd
-		klogging.Info(ctx).Log("Step3", "创建 shardPlan")
+		slog.InfoContext(ctx, "创建 shardPlan",
+			slog.String("event", "Step3"))
 		setup.SetShardPlan(ctx, []string{"shard_1"})
 
 		{
@@ -63,7 +67,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 			}, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
 			// step4: simulate eph node update
-			klogging.Info(ctx).Log("Step4", "simulate eph node update")
+			slog.InfoContext(ctx, "simulate eph node update",
+				slog.String("event", "Step4"))
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 				assign := cougarjson.NewAssignmentJson(pilotAssign.ShardId, pilotAssign.ReplicaIdx, pilotAssign.AssignmentId, cougarjson.CAS_Ready)
 				wej.Assignments = append(wej.Assignments, assign)
@@ -74,7 +79,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// Step 5:
-		klogging.Info(ctx).Log("Step5", "设置 replica count=2")
+		slog.InfoContext(ctx, "设置 replica count=2",
+			slog.String("event", "Step5"))
 		setup.UpdateServiceConfig(config.WithShardConfig(func(sc *config.ShardConfig) {
 			sc.MinReplicaCount = 2
 			sc.MaxReplicaCount = 2
@@ -91,7 +97,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// Step 6: 创建 worker-2 eph
-		klogging.Info(ctx).Log("Step6", "创建 worker-2 eph")
+		slog.InfoContext(ctx, "创建 worker-2 eph",
+			slog.String("event", "Step6"))
 		workerFullId2, _ := setup.CreateAndSetWorkerEph(t, "worker-2", "session-2", "localhost:8080")
 		{
 			var pilot2Assign *cougarjson.PilotAssignmentJson
@@ -107,7 +114,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 			}, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
 			// step7: simulate eph node update
-			klogging.Info(ctx).Log("Step7", "simulate eph node update")
+			slog.InfoContext(ctx, "simulate eph node update",
+				slog.String("event", "Step7"))
 			setup.UpdateEphNode(workerFullId2, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 				assign := cougarjson.NewAssignmentJson(pilot2Assign.ShardId, pilot2Assign.ReplicaIdx, pilot2Assign.AssignmentId, cougarjson.CAS_Ready)
 				wej.Assignments = append(wej.Assignments, assign)
@@ -118,7 +126,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// Step 8:
-		klogging.Info(ctx).Log("Step8", "HardScore=0")
+		slog.InfoContext(ctx, "HardScore=0",
+			slog.String("event", "Step8"))
 		{
 			waitSucc, elapsedMs := setup.WaitUntilSnapshotCurrent(t, func(snap *costfunc.Snapshot) (bool, string) {
 				if snap == nil {
@@ -134,7 +143,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// step 9: worker-1 request shutdown
-		klogging.Info(ctx).Log("Step9", "request shutdown worker-1")
+		slog.InfoContext(ctx, "request shutdown worker-1",
+			slog.String("event", "Step9"))
 		{
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 				wej.ReqShutDown = 1
@@ -145,7 +155,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// Step 10: hardScore=1
-		klogging.Info(ctx).Log("Step10", "HardScore=1")
+		slog.InfoContext(ctx, "HardScore=1",
+			slog.String("event", "Step10"))
 		{
 			waitSucc, elapsedMs := setup.WaitUntilSnapshotCurrent(t, func(snap *costfunc.Snapshot) (bool, string) {
 				if snap == nil {
@@ -161,18 +172,21 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// step 11: wait for long time
-		klogging.Info(ctx).Log("Step11", "wait for long time")
+		slog.InfoContext(ctx, "wait for long time",
+			slog.String("event", "Step11"))
 		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
 
 		// step 12: 1 replica
-		klogging.Info(ctx).Log("Step12", "设置 replica count=1")
+		slog.InfoContext(ctx, "设置 replica count=1",
+			slog.String("event", "Step12"))
 		setup.UpdateServiceConfig(config.WithShardConfig(func(sc *config.ShardConfig) {
 			sc.MinReplicaCount = 1
 			sc.MaxReplicaCount = 1
 		}))
 
 		// step 13: worker-1 should be unassigned (since it is shutdown requesting, so solver should favor worker-1 compare to worker-2)
-		klogging.Info(ctx).Log("Step13", "worker-1 should be unassigned")
+		slog.InfoContext(ctx, "worker-1 should be unassigned",
+			slog.String("event", "Step13"))
 		{
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
 				if pnj == nil {
@@ -185,7 +199,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 			}, 30*1000, 1000)
 			assert.Equal(t, true, waitSucc, "应该能在超时前 pilotNode update, 耗时=%dms", elapsedMs)
 			// step14: simulate eph node update
-			klogging.Info(ctx).Log("Step14", "simulate eph node update")
+			slog.InfoContext(ctx, "simulate eph node update",
+				slog.String("event", "Step14"))
 			setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 				wej.Assignments = nil
 				wej.LastUpdateAtMs = kcommon.GetWallTimeMs()
@@ -195,11 +210,13 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// step 15: wait for long time
-		klogging.Info(ctx).Log("Step15", "wait for long time")
+		slog.InfoContext(ctx, "wait for long time",
+			slog.String("event", "Step15"))
 		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
 
 		// step 16: worker1 should get shutdown permit
-		klogging.Info(ctx).Log("Step16", "worker-1 should get shutdown permit")
+		slog.InfoContext(ctx, "worker-1 should get shutdown permit",
+			slog.String("event", "Step16"))
 		{
 			waitSucc, elapsedMs := setup.WaitUntilPilotNode(t, workerFullId, func(pnj *cougarjson.PilotNodeJson) (bool, string) {
 				if pnj == nil {
@@ -214,7 +231,8 @@ func TestAssembleWorkerLifeCycle3(t *testing.T) {
 		}
 
 		// step 17: wait for long time
-		klogging.Info(ctx).Log("Step17", "wait for long time")
+		slog.InfoContext(ctx, "wait for long time",
+			slog.String("event", "Step17"))
 		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
 
 		// force print log

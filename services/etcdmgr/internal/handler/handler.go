@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -9,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/etcdmgr/api"
 	"github.com/xinkaiwang/shardmanager/services/etcdmgr/internal/biz"
@@ -59,19 +59,26 @@ func (h *Handler) SPAHandler(staticPath string, fileSystem http.Handler) http.Ha
 		_, err := os.Stat(filePath)
 		if os.IsNotExist(err) {
 			// File does not exist, serve index.html for SPA routing.
-			klogging.Debug(r.Context()).With("path", filePath).Log("SPAHandler", "File not found, serving index.html")
+			slog.DebugContext(r.Context(), "File not found, serving index.html",
+				slog.String("event", "SPAHandler"),
+				slog.String("path", filePath))
 			http.ServeFile(w, r, path.Join(staticPath, "index.html"))
 			return
 		}
 		if err != nil {
 			// Other error (e.g., permission denied)
-			klogging.Error(r.Context()).WithError(err).With("path", filePath).Log("SPAHandler", "Error checking file existence")
+			slog.ErrorContext(r.Context(), "Error checking file existence",
+				slog.String("event", "SPAHandler"),
+				slog.Any("error", err),
+				slog.String("path", filePath))
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
 		// File exists, serve it using the provided fileSystem handler.
-		klogging.Debug(r.Context()).With("path", filePath).Log("SPAHandler", "Serving static file")
+		slog.DebugContext(r.Context(), "Serving static file",
+			slog.String("event", "SPAHandler"),
+			slog.String("path", filePath))
 		fileSystem.ServeHTTP(w, r)
 	})
 }
@@ -88,7 +95,7 @@ func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).Log("StatusRequest", "received status request")
+	slog.DebugContext(r.Context(), "received status request", slog.String("event", "StatusRequest"))
 
 	// 处理请求
 	var resp api.StatusResponse
@@ -97,10 +104,10 @@ func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		With("status", resp.Status).
-		With("version", resp.Version).
-		Log("StatusResponse", "sending status response")
+	slog.InfoContext(r.Context(), "sending status response",
+		slog.String("event", "StatusResponse"),
+		slog.String("status", resp.Status),
+		slog.String("version", resp.Version))
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -122,7 +129,7 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).Log("PingRequest", "received ping request")
+	slog.DebugContext(r.Context(), "received ping request", slog.String("event", "PingRequest"))
 
 	// 处理请求
 	var resp api.PingResponse
@@ -131,10 +138,10 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		With("status", resp.Status).
-		With("version", resp.Version).
-		Log("PingResponse", "sending ping response")
+	slog.InfoContext(r.Context(), "sending ping response",
+		slog.String("event", "PingResponse"),
+		slog.String("status", resp.Status),
+		slog.String("version", resp.Version))
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -188,11 +195,11 @@ func (h *Handler) ListKeysHandler(w http.ResponseWriter, r *http.Request) {
 	nextToken := r.URL.Query().Get("nextToken")
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).
-		With("prefix", prefix).
-		With("limit", limit).
-		With("hasNextToken", nextToken != "").
-		Log("ListKeysRequest", "received list keys request")
+	slog.DebugContext(r.Context(), "received list keys request",
+		slog.String("event", "ListKeysRequest"),
+		slog.String("prefix", prefix),
+		slog.Int("limit", limit),
+		slog.Bool("hasNextToken", nextToken != ""))
 
 	// 处理请求
 	var resp *api.EtcdKeysResponse
@@ -205,11 +212,11 @@ func (h *Handler) ListKeysHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		With("prefix", prefix).
-		With("count", len(resp.Keys)).
-		With("hasMore", resp.NextToken != "").
-		Log("ListKeysResponse", "sending list keys response")
+	slog.InfoContext(r.Context(), "sending list keys response",
+		slog.String("event", "ListKeysResponse"),
+		slog.String("prefix", prefix),
+		slog.Int("count", len(resp.Keys)),
+		slog.Bool("hasMore", resp.NextToken != ""))
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -237,9 +244,9 @@ func (h *Handler) GetKeyHandler(w http.ResponseWriter, r *http.Request) {
 			WithErrorCode(kerror.EC_INVALID_PARAMETER))
 	}
 
-	klogging.Verbose(r.Context()).
-		With("key", key).
-		Log("GetKeyRequest", "received get key request")
+	slog.DebugContext(r.Context(), "received get key request",
+		slog.String("event", "GetKeyRequest"),
+		slog.String("key", key))
 
 	var resp *api.EtcdKeyResponse
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.GetKey", func() {
@@ -250,10 +257,10 @@ func (h *Handler) GetKeyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}, "")
 
-	klogging.Info(r.Context()).
-		With("key", key).
-		With("found", resp != nil).
-		Log("GetKeyResponse", "sending get key response")
+	slog.InfoContext(r.Context(), "sending get key response",
+		slog.String("event", "GetKeyResponse"),
+		slog.String("key", key),
+		slog.Bool("found", resp != nil))
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		panic(kerror.Create("EncodingError", "failed to encode response").
@@ -287,9 +294,9 @@ func (h *Handler) SetKeyHandler(w http.ResponseWriter, r *http.Request) {
 			With("error", err.Error()))
 	}
 
-	klogging.Verbose(r.Context()).
-		With("key", key).
-		Log("SetKeyRequest", "received set key request")
+	slog.DebugContext(r.Context(), "received set key request",
+		slog.String("event", "SetKeyRequest"),
+		slog.String("key", key))
 
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.PutKey", func() {
 		if err := h.app.PutKey(r.Context(), key, req.Value); err != nil {
@@ -297,9 +304,9 @@ func (h *Handler) SetKeyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}, "")
 
-	klogging.Info(r.Context()).
-		With("key", key).
-		Log("SetKeyResponse", "key updated successfully")
+	slog.InfoContext(r.Context(), "key updated successfully",
+		slog.String("event", "SetKeyResponse"),
+		slog.String("key", key))
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -322,9 +329,9 @@ func (h *Handler) DeleteKeyHandler(w http.ResponseWriter, r *http.Request) {
 			WithErrorCode(kerror.EC_INVALID_PARAMETER))
 	}
 
-	klogging.Verbose(r.Context()).
-		With("key", key).
-		Log("DeleteKeyRequest", "received delete key request")
+	slog.DebugContext(r.Context(), "received delete key request",
+		slog.String("event", "DeleteKeyRequest"),
+		slog.String("key", key))
 
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.DeleteKey", func() {
 		if err := h.app.DeleteKey(r.Context(), key); err != nil {
@@ -332,9 +339,9 @@ func (h *Handler) DeleteKeyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}, "")
 
-	klogging.Info(r.Context()).
-		With("key", key).
-		Log("DeleteKeyResponse", "key deleted successfully")
+	slog.InfoContext(r.Context(), "key deleted successfully",
+		slog.String("event", "DeleteKeyResponse"),
+		slog.String("key", key))
 
 	w.WriteHeader(http.StatusOK)
 }

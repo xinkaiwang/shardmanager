@@ -3,7 +3,9 @@ package costfunc
 import (
 	"context"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"log/slog"
+	"os"
+
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -153,7 +155,8 @@ func (move *SimpleMove) GetActions(cfg config.ShardConfig) []*Action {
 		})
 		return list
 	} else {
-		klogging.Fatal(context.Background()).With("policy", cfg.MovePolicy).Log("UnknownMovePolicy", "")
+		slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownMovePolicy"), slog.Any("policy", cfg.MovePolicy))
+		os.Exit(1)
 		return list
 	}
 }

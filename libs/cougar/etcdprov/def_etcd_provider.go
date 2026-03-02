@@ -2,6 +2,7 @@ package etcdprov
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -28,9 +28,10 @@ func NewDefEtcdProvider(ctx context.Context) *DefEtcdProvider {
 	endpoints := getEndpointsFromEnv()
 	dialTimeoutMs := getDialTimeoutMsFromEnv()
 
-	klogging.Info(ctx).With("endpoints", strings.Join(endpoints, ",")).
-		With("dialTimeoutMs", dialTimeoutMs).
-		Log("DefEtcdProvider", "Creating etcd provider")
+	slog.InfoContext(ctx, "creating etcd provider",
+		slog.String("event", "DefEtcdProvider.Create"),
+		slog.String("endpoints", strings.Join(endpoints, ",")),
+		slog.Int("dialTimeoutMs", dialTimeoutMs))
 	// 创建 etcd 客户端
 	// Note: clientv3.New doesn't take a context for the initial dial itself,
 	// but DialTimeout controls the connection attempt duration.
@@ -46,8 +47,9 @@ func NewDefEtcdProvider(ctx context.Context) *DefEtcdProvider {
 		// Panic if connection fails
 		panic(ke)
 	}
-	klogging.Info(ctx).With("endpoints", strings.Join(endpoints, ",")).
-		Log("DefEtcdProvider", "Etcd client created successfully")
+	slog.InfoContext(ctx, "etcd client created successfully",
+		slog.String("event", "DefEtcdProvider.ClientCreated"),
+		slog.String("endpoints", strings.Join(endpoints, ",")))
 	// 创建 etcd 客户端成功，返回 DefEtcdProvider 实例
 	return &DefEtcdProvider{
 		etcdEndpoints: endpoints,
@@ -63,7 +65,9 @@ func (p *DefEtcdProvider) CreateEtcdSession(ctx context.Context) EtcdSession {
 // DefEtcdSession implements EtcdSession
 // Panics if lease cannot be granted within etcdTimeoutMs.
 func NewDefEtcdSession(parent *DefEtcdProvider, ctx context.Context) *DefEtcdSession { // ctx here is mainly for logging in this func
-	klogging.Info(ctx).With("etcdLeaseTimeoutMs", etcdLeaseTimeoutMs).Log("DefEtcdSession", "Creating new etcd session")
+	slog.InfoContext(ctx, "creating new etcd session",
+		slog.String("event", "DefEtcdSession.Create"),
+		slog.Int("etcdLeaseTimeoutMs", etcdLeaseTimeoutMs))
 
 	// Create a context with timeout specifically for the Grant operation
 	grantCtx, cancel := context.WithTimeout(ctx, time.Duration(etcdTimeoutMs)*time.Millisecond)
@@ -80,7 +84,10 @@ func NewDefEtcdSession(parent *DefEtcdProvider, ctx context.Context) *DefEtcdSes
 		// Panic if lease grant fails (or times out)
 		panic(ke)
 	}
-	klogging.Info(ctx).With("leaseId", lease.ID).With("elapsedMs", elapsedMs).Log("DefEtcdSession", "Lease granted successfully")
+	slog.InfoContext(ctx, "lease granted successfully",
+		slog.String("event", "DefEtcdSession.LeaseGranted"),
+		slog.Int64("leaseId", int64(lease.ID)),
+		slog.Int64("elapsedMs", elapsedMs))
 	sessionId := strconv.FormatInt(int64(lease.ID), 10)
 	// Create a context for keepalive that can be cancelled independently
 	keepAliveCtx, keepAliveCancel := context.WithCancel(context.Background())
@@ -122,13 +129,17 @@ func (session *DefEtcdSession) WaitForSessionClose() string {
 }
 
 func (session *DefEtcdSession) keepalive(ctx context.Context) {
-	klogging.Info(ctx).With("sessionId", session.sessionId).Log("EtcdSession", "keepalive starting")
+	slog.InfoContext(ctx, "keepalive starting",
+		slog.String("event", "EtcdSession.KeepaliveStart"),
+		slog.String("sessionId", session.sessionId))
 	// 保持租约的续约
 	keepAliveCh, err := session.parent.client.KeepAlive(ctx, session.lease)
 	if err != nil {
-		klogging.Error(ctx).WithError(kerror.Wrap(err, "EtcdKeepAliveError", "KeepAlive failed initially", false)).
-			With("sessionId", session.sessionId).
-			Log("EtcdSession", "keepalive initial error")
+		ke := kerror.Wrap(err, "EtcdKeepAliveError", "KeepAlive failed initially", false)
+		slog.ErrorContext(ctx, "keepalive initial error",
+			slog.String("event", "EtcdSession.KeepaliveInitError"),
+			slog.String("sessionId", session.sessionId),
+			slog.Any("error", ke))
 		// Set state to disconnected because keepalive could not start
 		session.setState(ESS_Disconnected, "keepalive initial error: "+err.Error())
 		return // Exit goroutine
@@ -142,14 +153,18 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 	for !stop {
 		select {
 		case <-ctx.Done():
-			klogging.Info(ctx).With("sessionId", session.sessionId).Log("EtcdSession", "keepalive context cancelled")
+			slog.InfoContext(ctx, "keepalive context cancelled",
+				slog.String("event", "EtcdSession.KeepaliveCancelled"),
+				slog.String("sessionId", session.sessionId))
 			stop = true
 			reason = "keepaliveContextCancelled"
 			session.setState(ESS_Disconnected, "keepalive context cancelled")
 			continue
 		case ka, ok := <-keepAliveCh:
 			if !ok { // Check if channel is closed
-				klogging.Info(ctx).With("sessionId", session.sessionId).Log("EtcdSession", "keepalive channel closed")
+				slog.InfoContext(ctx, "keepalive channel closed",
+					slog.String("event", "EtcdSession.KeepaliveChannelClosed"),
+					slog.String("sessionId", session.sessionId))
 				stop = true
 				reason = "LeaseLost"
 				// keepalive channel closed, means the lease is expired or revoked
@@ -157,7 +172,11 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 				continue
 			}
 			// Log successful keepalive at Debug level to avoid flooding
-			klogging.Verbose(ctx).With("lease", ka.ID).With("sessionId", session.sessionId).With("ttl", ka.TTL).Log("EtcdSession", "keepalive success")
+			slog.DebugContext(ctx, "keepalive success",
+				slog.String("event", "EtcdSession.KeepaliveSuccess"),
+				slog.Int64("lease", int64(ka.ID)),
+				slog.String("sessionId", session.sessionId),
+				slog.Int64("ttl", ka.TTL))
 			// Ensure state is connected after a successful keepalive (might have been reconnecting)
 			session.mu.RLock()
 			currentState := session.state
@@ -167,7 +186,9 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 			}
 		}
 	}
-	klogging.Info(ctx).With("sessionId", session.sessionId).Log("EtcdSession", "keepalive loop exited")
+	slog.InfoContext(ctx, "keepalive loop exited",
+		slog.String("event", "EtcdSession.KeepaliveExit"),
+		slog.String("sessionId", session.sessionId))
 
 	// Attempt to revoke the lease upon exiting keepalive loop, ignore errors
 	revokeCtx, cancel := context.WithTimeout(context.Background(), time.Duration(etcdTimeoutMs)*time.Millisecond)
@@ -178,7 +199,9 @@ func (session *DefEtcdSession) keepalive(ctx context.Context) {
 	session.closeOnce.Do(func() {
 		session.closeReason = reason
 		close(session.chClosed)
-		klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Closed channel signaled by keepalive exit")
+		slog.InfoContext(context.Background(), "closed channel signaled by keepalive exit",
+			slog.String("event", "EtcdSession.ClosedByKeepalive"),
+			slog.String("sessionId", session.sessionId))
 	})
 }
 
@@ -192,12 +215,12 @@ func (session *DefEtcdSession) setState(state EtcdSessionState, message string) 
 
 	oldState := session.state
 	session.state = state
-	klogging.Info(context.Background()).
-		With("sessionId", session.sessionId).
-		With("oldState", oldState).
-		With("newState", state).
-		With("message", message).
-		Log("EtcdSessionStateChange", "Session state changed")
+	slog.InfoContext(context.Background(), "session state changed",
+		slog.String("event", "EtcdSessionStateChange"),
+		slog.String("sessionId", session.sessionId),
+		slog.Any("oldState", oldState),
+		slog.Any("newState", state),
+		slog.String("message", message))
 
 	if session.listener != nil {
 		// Call listener in a separate goroutine to avoid blocking the state change
@@ -245,7 +268,12 @@ func (session *DefEtcdSession) PutNode(key string, value string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(etcdTimeoutMs)*time.Millisecond)
 	defer cancel()
 
-	klogging.Debug(ctx).With("key", key).With("value", value).With("lease", session.lease).With("sessionId", session.sessionId).Log("PutNode", "写入节点")
+	slog.DebugContext(ctx, "写入节点",
+		slog.String("event", "PutNode"),
+		slog.String("key", key),
+		slog.String("value", value),
+		slog.Int64("lease", int64(session.lease)),
+		slog.String("sessionId", session.sessionId))
 
 	// 尝试两种情况：
 	// 1. 键不存在
@@ -289,18 +317,24 @@ func (session *DefEtcdSession) SetStateListener(listener EtcdStateListener) {
 	defer session.mu.Unlock()
 	if session.listener != nil && listener != nil {
 		// Allow replacing the listener, but log a warning
-		klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Replacing existing state listener")
+		slog.InfoContext(context.Background(), "replacing existing state listener",
+			slog.String("event", "EtcdSession.ReplaceListener"),
+			slog.String("sessionId", session.sessionId))
 	}
 	session.listener = listener
 }
 
 // Close implements EtcdSession.
 func (session *DefEtcdSession) Close(ctx context.Context) {
-	klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Closing session explicitly")
+	slog.InfoContext(context.Background(), "closing session explicitly",
+		slog.String("event", "EtcdSession.Close"),
+		slog.String("sessionId", session.sessionId))
 
 	// Use sync.Once to ensure cleanup happens only once
 	session.closeOnce.Do(func() {
-		klogging.Info(context.Background()).With("sessionId", session.sessionId).Log("EtcdSession", "Running Close actions")
+		slog.InfoContext(context.Background(), "running close actions",
+			slog.String("event", "EtcdSession.CloseActions"),
+			slog.String("sessionId", session.sessionId))
 		// Cancel the keepalive context first
 		if session.keepAliveCancel != nil {
 			session.keepAliveCancel()
@@ -311,16 +345,16 @@ func (session *DefEtcdSession) Close(ctx context.Context) {
 		defer cancel()
 		_, err := session.parent.client.Revoke(ctx, session.lease)
 		if err != nil {
-			klogging.Info(ctx).
-				WithError(err).
-				With("sessionId", session.sessionId).
-				With("lease", session.lease).
-				Log("EtcdSession", "Failed to revoke lease")
+			slog.InfoContext(ctx, "failed to revoke lease",
+				slog.String("event", "EtcdSession.RevokeFailed"),
+				slog.Any("error", err),
+				slog.String("sessionId", session.sessionId),
+				slog.Int64("lease", int64(session.lease)))
 		} else {
-			klogging.Info(ctx).
-				With("sessionId", session.sessionId).
-				With("lease", session.lease).
-				Log("EtcdSession", "Lease revoked successfully")
+			slog.InfoContext(ctx, "lease revoked successfully",
+				slog.String("event", "EtcdSession.RevokeSuccess"),
+				slog.String("sessionId", session.sessionId),
+				slog.Int64("lease", int64(session.lease)))
 		}
 
 		// Signal watchers to close by closing the channel
@@ -348,7 +382,11 @@ func (session *DefEtcdSession) WatchByPrefix(ctx context.Context, pathPrefix str
 			if err == nil && resp.Header != nil {
 				watchStartRev = resp.Header.Revision
 			} else {
-				klogging.Info(watchCtx).WithError(err).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatch", "Failed to get current revision for watch, starting from 0")
+				slog.InfoContext(watchCtx, "failed to get current revision for watch, starting from 0",
+					slog.String("event", "EtcdWatch.GetRevisionFailed"),
+					slog.Any("error", err),
+					slog.String("prefix", pathPrefix),
+					slog.String("sessionId", session.sessionId))
 				watchStartRev = 0 // Start from beginning if get fails
 			}
 		}
@@ -359,18 +397,28 @@ func (session *DefEtcdSession) WatchByPrefix(ctx context.Context, pathPrefix str
 		for !stop {
 			select {
 			case <-ctx.Done():
-				klogging.Info(watchCtx).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatch", "Watch context cancelled")
+				slog.InfoContext(watchCtx, "watch context cancelled",
+					slog.String("event", "EtcdWatch.Cancelled"),
+					slog.String("prefix", pathPrefix),
+					slog.String("sessionId", session.sessionId))
 				stop = true
 				stopReason = "watch context cancelled"
 				continue
 			case <-session.chClosed:
-				klogging.Info(watchCtx).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatch", "Session closed, exiting watch loop")
+				slog.InfoContext(watchCtx, "session closed, exiting watch loop",
+					slog.String("event", "EtcdWatch.SessionClosed"),
+					slog.String("prefix", pathPrefix),
+					slog.String("sessionId", session.sessionId))
 				stop = true
 				stopReason = "session closed"
 				continue
 			case wr := <-rch:
 				if wr.Err() != nil {
-					klogging.Error(watchCtx).WithError(wr.Err()).With("prefix", pathPrefix).With("sessionId", session.sessionId).Log("EtcdWatchError", "Watch channel received an error")
+					slog.ErrorContext(watchCtx, "watch channel received an error",
+						slog.String("event", "EtcdWatchError"),
+						slog.Any("error", wr.Err()),
+						slog.String("prefix", pathPrefix),
+						slog.String("sessionId", session.sessionId))
 					// Optionally, notify listener or attempt to restart watch based on error type
 					stop = true // Exit the loop on watch error
 					stopReason = "watch error"
@@ -393,7 +441,11 @@ func (session *DefEtcdSession) WatchByPrefix(ctx context.Context, pathPrefix str
 				}
 			}
 		}
-		klogging.Info(watchCtx).With("prefix", pathPrefix).With("sessionId", session.sessionId).With("stopReason", stopReason).Log("EtcdWatch", "Watch loop exited")
+		slog.InfoContext(watchCtx, "watch loop exited",
+			slog.String("event", "EtcdWatch.Exit"),
+			slog.String("prefix", pathPrefix),
+			slog.String("sessionId", session.sessionId),
+			slog.String("stopReason", stopReason))
 	}()
 	return ch
 }

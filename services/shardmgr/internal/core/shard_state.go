@@ -2,10 +2,10 @@ package core
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
@@ -117,11 +117,17 @@ func (ss *ServiceState) FlushShardState(ctx context.Context, updated []data.Shar
 	// klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).Log("FlushShardState", "开始刷新分片状态")
 
 	for _, shardId := range updated {
-		klogging.Info(ctx).With("shardId", shardId).With("time", kcommon.GetWallTimeMs()).Log("FlushShardState", "更新分片")
+		slog.InfoContext(ctx, "更新分片",
+			slog.String("event", "FlushShardState"),
+			slog.Any("shardId", shardId),
+			slog.Any("time", kcommon.GetWallTimeMs()))
 		ss.storeProvider.StoreShardState(shardId, ss.AllShards[shardId].ToJson())
 	}
 	for _, shardId := range inserted {
-		klogging.Info(ctx).With("shardId", shardId).With("time", kcommon.GetWallTimeMs()).Log("FlushShardState", "插入分片")
+		slog.InfoContext(ctx, "插入分片",
+			slog.String("event", "FlushShardState"),
+			slog.Any("shardId", shardId),
+			slog.Any("time", kcommon.GetWallTimeMs()))
 		ss.storeProvider.StoreShardState(shardId, ss.AllShards[shardId].ToJson())
 	}
 	for _, shardId := range deleted {

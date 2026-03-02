@@ -3,10 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/api"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/biz"
@@ -48,8 +48,8 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).
-		Log("PingRequest", "received ping request")
+	slog.DebugContext(r.Context(), "received ping request",
+		slog.String("event", "PingRequest"))
 
 	// 处理请求
 	var resp string
@@ -58,10 +58,10 @@ func (h *Handler) PingHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		With("status", 200).
-		With("version", resp).
-		Log("PingResponse", "sending ping response")
+	slog.InfoContext(r.Context(), "sending ping response",
+		slog.String("event", "PingResponse"),
+		slog.Int("status", 200),
+		slog.String("version", resp))
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -83,8 +83,8 @@ func (h *Handler) GetStateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).
-		Log("GetStatusRequest", "received get status request")
+	slog.DebugContext(r.Context(), "received get status request",
+		slog.String("event", "GetStatusRequest"))
 
 	// 处理请求
 	var resp *api.GetStateResponse
@@ -93,9 +93,9 @@ func (h *Handler) GetStateHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		With("worker_count", len(resp.Workers)).
-		Log("GetStatusResponse", "sending get status response")
+	slog.InfoContext(r.Context(), "sending get status response",
+		slog.String("event", "GetStatusResponse"),
+		slog.Int("worker_count", len(resp.Workers)))
 
 	// 返回响应
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -158,8 +158,8 @@ func (h *Handler) GetShardPlanHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).
-		Log("GetShardPlanRequest", "received get shard plan request")
+	slog.DebugContext(r.Context(), "received get shard plan request",
+		slog.String("event", "GetShardPlanRequest"))
 
 	// 处理请求
 	var shardPlan string
@@ -168,9 +168,9 @@ func (h *Handler) GetShardPlanHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		With("length", len(shardPlan)).
-		Log("GetShardPlanResponse", "sending get shard plan response")
+	slog.InfoContext(r.Context(), "sending get shard plan response",
+		slog.String("event", "GetShardPlanResponse"),
+		slog.Int("length", len(shardPlan)))
 
 	// 返回纯文本响应
 	w.Write([]byte(shardPlan))
@@ -199,9 +199,9 @@ func (h *Handler) SetShardPlanHandler(w http.ResponseWriter, r *http.Request) {
 	shardPlan := string(body)
 
 	// 记录请求信息
-	klogging.Info(r.Context()).
-		With("length", len(shardPlan)).
-		Log("SetShardPlanRequest", "received set shard plan request")
+	slog.InfoContext(r.Context(), "received set shard plan request",
+		slog.String("event", "SetShardPlanRequest"),
+		slog.Int("length", len(shardPlan)))
 
 	// 处理请求
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.SetShardPlan", func() {
@@ -209,8 +209,8 @@ func (h *Handler) SetShardPlanHandler(w http.ResponseWriter, r *http.Request) {
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		Log("SetShardPlanResponse", "shard plan updated successfully")
+	slog.InfoContext(r.Context(), "shard plan updated successfully",
+		slog.String("event", "SetShardPlanResponse"))
 
 	// 返回成功响应
 	w.Write([]byte("OK\n"))
@@ -228,8 +228,8 @@ func (h *Handler) GetServiceConfigHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// 记录请求信息
-	klogging.Verbose(r.Context()).
-		Log("GetServiceConfigRequest", "received get service config request")
+	slog.DebugContext(r.Context(), "received get service config request",
+		slog.String("event", "GetServiceConfigRequest"))
 
 	// 处理请求
 	var configJson *smgjson.ServiceConfigJson
@@ -238,8 +238,8 @@ func (h *Handler) GetServiceConfigHandler(w http.ResponseWriter, r *http.Request
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		Log("GetServiceConfigResponse", "sending get service config response")
+	slog.InfoContext(r.Context(), "sending get service config response",
+		slog.String("event", "GetServiceConfigResponse"))
 
 	// 返回 JSON 响应
 	data, err := json.Marshal(configJson)
@@ -281,9 +281,9 @@ func (h *Handler) SetServiceConfigHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// 记录请求信息
-	klogging.Info(r.Context()).
-		With("config", string(body)).
-		Log("SetServiceConfigRequest", "received set service config request")
+	slog.InfoContext(r.Context(), "received set service config request",
+		slog.String("event", "SetServiceConfigRequest"),
+		slog.String("config", string(body)))
 
 	// 处理请求
 	kmetrics.InstrumentSummaryRunVoid(r.Context(), "biz.SetServiceConfig", func() {
@@ -291,8 +291,8 @@ func (h *Handler) SetServiceConfigHandler(w http.ResponseWriter, r *http.Request
 	}, "")
 
 	// 记录响应信息
-	klogging.Info(r.Context()).
-		Log("SetServiceConfigResponse", "service config updated successfully")
+	slog.InfoContext(r.Context(), "service config updated successfully",
+		slog.String("event", "SetServiceConfigResponse"))
 
 	// 返回成功响应
 	response := map[string]interface{}{

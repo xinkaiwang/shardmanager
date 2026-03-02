@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // ErrKeyNotFound 表示键不存在
@@ -61,7 +62,7 @@ func RunWithEtcdProvider(provider EtcdProvider, fn func()) {
 	oldProvider := currentEtcdProvider
 
 	// 仅记录关键信息，并简化日志内容
-	klogging.Info(ctx).Log("event", "RunWithEtcdProvider")
+	slog.InfoContext(ctx, "RunWithEtcdProvider", slog.String("event", "RunWithEtcdProvider"))
 
 	currentEtcdProvider = provider
 	defer func() {

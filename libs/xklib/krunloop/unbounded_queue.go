@@ -2,10 +2,9 @@ package krunloop
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"sync/atomic"
-
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // UnboundedQueue implements an unbounded queue for events of type IEvent[T]
@@ -119,5 +118,6 @@ func (q *UnboundedQueue[T]) StopAndWaitForExit() {
 	// Stop the processing thread and wait for it to exit
 	q.Stop()
 	<-q.stopped // Wait for the run thread to exit
-	klogging.Info(context.Background()).Log("UnboundedQueue", "stopped")
+	slog.InfoContext(context.Background(), "unbounded queue stopped",
+		slog.String("event", "UnboundedQueue.Stopped"))
 }

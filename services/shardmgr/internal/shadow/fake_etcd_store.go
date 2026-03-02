@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"log/slog"
 )
 
 // FakeEtcdStore implements EtcdStore interface for testing
@@ -28,7 +28,7 @@ func (store *FakeEtcdStore) GetByKey(key string) string {
 }
 
 func (store *FakeEtcdStore) Shutdown(ctx context.Context) {
-	klogging.Info(context.Background()).Log("FakeEtcdStore.Shutdown", "关闭FakeEtcdStore")
+	slog.InfoContext(context.Background(), "关闭FakeEtcdStore", slog.String("event", "FakeEtcdStore.Shutdown"))
 }
 
 // Put implements EtcdStore.Put
@@ -40,18 +40,10 @@ func (store *FakeEtcdStore) Put(ctx context.Context, key string, value string, n
 	store.putCalled++
 
 	if value == "" {
-		klogging.Info(ctx).
-			With("key", key).
-			With("name", name).
-			Log("FakeEtcdStorePut", "删除键值")
+		slog.InfoContext(ctx, "删除键值", slog.String("event", "FakeEtcdStorePut"), slog.String("key", key), slog.String("name", name))
 		delete(store.data, key)
 	} else {
-		klogging.Info(ctx).
-			With("key", key).
-			With("valueLength", len(value)).
-			With("name", name).
-			With("value", value).
-			Log("FakeEtcdStorePut", "写入数据")
+		slog.InfoContext(ctx, "写入数据", slog.String("event", "FakeEtcdStorePut"), slog.String("key", key), slog.Int("valueLength", len(value)), slog.String("name", name), slog.String("value", value))
 		store.data[key] = value
 	}
 }
@@ -104,8 +96,8 @@ func startsWithPrefix(s, prefix string) bool {
 func (store *FakeEtcdStore) PrintAll(ctx context.Context) {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	klogging.Info(ctx).Log("FakeEtcdStore.PrintAll", "打印所有键值对")
+	slog.InfoContext(ctx, "打印所有键值对", slog.String("event", "FakeEtcdStore.PrintAll"))
 	for k, v := range store.data {
-		klogging.Info(ctx).With("key", k).With("value", v).Log("FakeEtcdStore.PrintAll", "存储的键值")
+		slog.InfoContext(ctx, "存储的键值", slog.String("event", "FakeEtcdStore.PrintAll"), slog.String("key", k), slog.String("value", v))
 	}
 }

@@ -3,8 +3,10 @@ package solver
 import (
 	"context"
 
+	"log/slog"
+	"os"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 )
 
@@ -82,7 +84,8 @@ func (td *AgentThread) Run(ctx context.Context) {
 		td.run(ctx)
 	})
 	if err != nil {
-		klogging.Fatal(ctx).With("err", err).Log("AgentThreadRun", "exit with panic")
+		slog.ErrorContext(ctx, "exit with panic", slog.String("event", "AgentThreadRun"), slog.Any("err", err))
+		os.Exit(1)
 	}
 	close(td.stopped)
 }

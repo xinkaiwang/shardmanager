@@ -2,9 +2,10 @@ package kcommon
 
 import (
 	"context"
+	"log/slog"
+	"os"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 func TryCatchRun(ctx context.Context, fn func()) (ret *kerror.Kerror) {
@@ -17,7 +18,10 @@ func TryCatchRun(ctx context.Context, fn func()) (ret *kerror.Kerror) {
 				ret = kerror.Wrap(err, "UnknownError", "", true)
 			} else {
 				// we should never throw a non-error panic; this will crash this server
-				klogging.Fatal(ctx).WithPanic(r).Log("NonErrorPanic", "")
+				slog.ErrorContext(ctx, "Non-error panic - exiting",
+					slog.String("event", "NonErrorPanic"),
+					slog.Any("panic", r))
+				os.Exit(1)
 			}
 		}
 	}()

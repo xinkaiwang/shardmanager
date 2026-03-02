@@ -3,8 +3,9 @@ package solver
 import (
 	"context"
 
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -106,7 +107,7 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 			bestMove = move
 		})
 		if ke != nil {
-			klogging.Warning(ctx).WithError(ke).Log("SoftSolverTryCatch", "error in soft solver loop, ignore this iteration")
+			slog.WarnContext(ctx, "error in soft solver loop, ignore this iteration", slog.String("event", "SoftSolverTryCatch"), slog.Any("error", ke))
 			continue
 		}
 	}
@@ -124,7 +125,7 @@ func (ss *SoftSolver) FindProposal(ctx context.Context, snapshot *costfunc.Snaps
 	proposal.Signature = bestMove.GetSignature()
 	proposal.OnClose = func(ctx2 context.Context, reason common.EnqueueResult) {
 		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
-		klogging.Debug(ctx2).With("reason", reason).With("elapsedMs", elapsedMs).With("proposalId", proposal.ProposalId).With("solver", "soft").Log("ProposalClosed", "")
+		slog.DebugContext(ctx2, "", slog.String("event", "ProposalClosed"), slog.Any("reason", reason), slog.Int64("elapsedMs", elapsedMs), slog.Any("proposalId", proposal.ProposalId), slog.String("solver", "soft"))
 	}
 	return proposal
 }

@@ -3,12 +3,12 @@ package cougar
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/etcdprov"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 )
 
@@ -146,20 +146,37 @@ func (c *CougarImpl) watchPilotNode(ctx context.Context, ch <-chan etcdprov.Etcd
 			return
 		case eve, ok := <-ch:
 			if !ok {
-				klogging.Warning(ctx).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).Log("WatchPilotNodeExit", "watch pilot node exit")
+				slog.WarnContext(ctx, "watch pilot node exit",
+					slog.String("event", "WatchPilotNodeExit"),
+					slog.Any("worker_id", c.workerInfo.WorkerId),
+					slog.Any("session_id", c.workerInfo.SessionId))
 				stop = true
 				continue
 			}
 			if eve.Value == "" {
 				// delete
 				// this should not happen, pilot node should always exist unless we asking for shutdown
-				klogging.Warning(ctx).With("pilot_path", c.pilotPath()).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).Log("PilotNodeFeleted", "pilot node deleted")
+				slog.WarnContext(ctx, "pilot node deleted",
+					slog.String("event", "PilotNodeDeleted"),
+					slog.String("pilot_path", c.pilotPath()),
+					slog.Any("worker_id", c.workerInfo.WorkerId),
+					slog.Any("session_id", c.workerInfo.SessionId))
 				continue
 			}
-			klogging.Info(ctx).With("pilot_path", c.pilotPath()).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).With("pilot", eve.Value).With("rev", eve.ModRevision).Log("PilotNodeUpdated", "pilot node updated")
+			slog.InfoContext(ctx, "pilot node updated",
+				slog.String("event", "PilotNodeUpdated"),
+				slog.String("pilot_path", c.pilotPath()),
+				slog.Any("worker_id", c.workerInfo.WorkerId),
+				slog.Any("session_id", c.workerInfo.SessionId),
+				slog.String("pilot", eve.Value),
+				slog.Any("rev", eve.ModRevision))
 			newPilotNode := cougarjson.ParsePilotNodeJson(eve.Value)
 			if newPilotNode == nil {
-				klogging.Warning(ctx).With("pilot_path", c.pilotPath()).With("worker_id", c.workerInfo.WorkerId).With("session_id", c.workerInfo.SessionId).Log("PilotNodeInvalid", "pilot node is not valid")
+				slog.WarnContext(ctx, "pilot node is not valid",
+					slog.String("event", "PilotNodeInvalid"),
+					slog.String("pilot_path", c.pilotPath()),
+					slog.Any("worker_id", c.workerInfo.WorkerId),
+					slog.Any("session_id", c.workerInfo.SessionId))
 				continue
 			}
 			c.runLoop.PostEvent(NewPilotNodeUpdateEvent(newPilotNode))
@@ -314,7 +331,10 @@ func (eve *PilotNodeUpdateEvent) Process(ctx context.Context, impl *CougarImpl) 
 	}
 	// shutdown permit?
 	if eve.newPilotNode.ShutdownPermited == 1 && !impl.cougarState.IsShutdownPermited() {
-		klogging.Info(ctx).With("worker_id", impl.workerInfo.WorkerId).With("session_id", impl.workerInfo.SessionId).Log("ShutdownPermited", "shutdown permited")
+		slog.InfoContext(ctx, "shutdown permited",
+			slog.String("event", "ShutdownPermited"),
+			slog.Any("worker_id", impl.workerInfo.WorkerId),
+			slog.Any("session_id", impl.workerInfo.SessionId))
 		close(impl.cougarState.ShutdownPermited)
 	}
 }

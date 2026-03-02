@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"log/slog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -131,8 +133,12 @@ func (mcp *mockConfigProvider) GetUnassignSolverConfig() *config.BaseSolverConfi
 // - SolverGroup 能否正确收集 Solver 生成的提案
 func TestSolverGroup_Basic(t *testing.T) {
 	ctx := context.Background()
-	logger := klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text")
-	klogging.SetDefaultLogger(logger)
+	klogging.InitOpenTelemetry()
+	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.ParseLevel("debug"),
+		Format: "text",
+	})
+	slog.SetDefault(slog.New(slogHandler))
 
 	// 创建 FakeTimeProvider 实例，用于控制时间流逝
 	fakeTime := kcommon.NewFakeTimeProvider(1234500000000)
@@ -223,8 +229,12 @@ func TestSolverGroup_Basic(t *testing.T) {
 
 func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 	ctx := context.Background()
-	logger := klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text")
-	klogging.SetDefaultLogger(logger)
+	klogging.InitOpenTelemetry()
+	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.ParseLevel("debug"),
+		Format: "text",
+	})
+	slog.SetDefault(slog.New(slogHandler))
 
 	// 创建 FakeTimeProvider 实例，用于控制时间流逝
 	fakeTime := kcommon.NewFakeTimeProvider(1234500000000)
@@ -336,8 +346,12 @@ func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 // 这个测试的目的是验证 SolverGroup 能够根据配置自动扩展线程处理能力，当 QPM 提高时，系统能够相应地生成更多的提案，说明线程扩展功能正常工作。这是优化系统性能和确保处理能力能够与负载需求相匹配的重要测试。
 func TestSolverGroup_ThreadScaling(t *testing.T) {
 	ctx := context.Background()
-	logger := klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text")
-	klogging.SetDefaultLogger(logger)
+	klogging.InitOpenTelemetry()
+	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.ParseLevel("debug"),
+		Format: "text",
+	})
+	slog.SetDefault(slog.New(slogHandler))
 
 	// 创建 FakeTimeProvider 实例，用于控制时间流逝
 	fakeTime := kcommon.NewFakeTimeProvider(1234500000000)

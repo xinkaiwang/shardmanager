@@ -33,7 +33,6 @@ func (app *App) GetVersion() string {
 }
 
 func (app *App) Ping(ctx context.Context) api.PingResponse {
-	// klogging.Info(ctx).Log("Hello", "ping")
 	return api.PingResponse{
 		Status:    "ok",
 		Timestamp: time.Now().Format(time.RFC3339),

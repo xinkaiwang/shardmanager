@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"log/slog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
@@ -13,10 +15,15 @@ import (
 func TestCostfunc_2replica(t *testing.T) {
 	ctx := context.Background()
 	cfg := createDefaultCostConfig()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
+	klogging.InitOpenTelemetry()
+	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.ParseLevel("debug"),
+		Format: "simple",
+	})
+	slog.SetDefault(slog.New(slogHandler))
 
 	// step 1: Empty snapshot, cost should be 0
-	klogging.Info(ctx).Log("Step1", "创建空的快照")
+	slog.InfoContext(ctx, "创建空的快照", slog.String("event", "Step1"))
 	snap1 := NewSnapshot(ctx, cfg)
 	{
 		cost1 := snap1.GetCost(ctx)
@@ -24,7 +31,7 @@ func TestCostfunc_2replica(t *testing.T) {
 	}
 
 	// step 2: Add 1 shards (with 2 replicas), hard cost should be > 0
-	klogging.Info(ctx).Log("Step2", "添加一个shard")
+	slog.InfoContext(ctx, "添加一个shard", slog.String("event", "Step2"))
 	snap2 := snap1.Clone()
 	shardId1 := data.ShardId("shard_1")
 	{
@@ -36,7 +43,7 @@ func TestCostfunc_2replica(t *testing.T) {
 	}
 
 	// step 3: Add 2 workers, hard cost should be > 0
-	klogging.Info(ctx).Log("Step3", "添加两个worker")
+	slog.InfoContext(ctx, "添加两个worker", slog.String("event", "Step3"))
 	snap3 := snap2.Clone()
 	workerFullId1 := data.WorkerFullIdParseFromString("worker-1:session-1")
 	workerFullId2 := data.WorkerFullIdParseFromString("worker-2:session-2")
@@ -48,7 +55,7 @@ func TestCostfunc_2replica(t *testing.T) {
 	}
 
 	// step 4: Assign 1 replica to worker1, hard cost should be > 0
-	klogging.Info(ctx).Log("Step4", "分配一个副本到worker1")
+	slog.InfoContext(ctx, "分配一个副本到worker1", slog.String("event", "Step4"))
 	snap4 := snap3.Clone()
 	{
 		move1 := NewAssignMove(data.NewReplicaFullId(shardId1, 0), "assign1", workerFullId1)
@@ -60,7 +67,7 @@ func TestCostfunc_2replica(t *testing.T) {
 	}
 
 	// step 5: Assign 1 replica to worker2, hard cost should be = 0
-	klogging.Info(ctx).Log("Step5", "分配另一个副本到worker2")
+	slog.InfoContext(ctx, "分配另一个副本到worker2", slog.String("event", "Step5"))
 	snap5 := snap4.Clone()
 	{
 		move1 := NewAssignMove(data.NewReplicaFullId(shardId1, 1), "assign2", workerFullId2)
@@ -72,7 +79,7 @@ func TestCostfunc_2replica(t *testing.T) {
 	}
 
 	// step 6: Assign replica 1 to worker1, should be illegal
-	klogging.Info(ctx).Log("Step6", "尝试将副本1分配给worker1，应该是非法操作")
+	slog.InfoContext(ctx, "尝试将副本1分配给worker1，应该是非法操作", slog.String("event", "Step6"))
 	snap6 := snap4.Clone()
 	{
 		move1 := NewAssignMove(data.NewReplicaFullId(shardId1, 1), "assign2", workerFullId1)
