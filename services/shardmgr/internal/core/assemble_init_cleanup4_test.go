@@ -1,13 +1,13 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -15,7 +15,6 @@ import (
 
 func TestAssembleWorkerInitCleanup4(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -24,11 +23,13 @@ func TestAssembleWorkerInitCleanup4(t *testing.T) {
 		sc.AssignSolverConfig.SolverEnabled = true
 		sc.UnassignSolverConfig.SolverEnabled = false
 	}))
-	klogging.Info(ctx).Log("测试环境已配置", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "测试环境已配置"))
 
 	fn := func() {
 		// Step 1: prepare shardPlan and set into etcd
-		klogging.Info(ctx).Log("Step1", "创建 shardPlan")
+		slog.InfoContext(ctx, "创建 shardPlan",
+			slog.String("event", "Step1"))
 		worker1FullId := data.WorkerFullIdParseFromString("smgapp-6d9cfc6cdd-b9whq:6X30CVPL")
 		worker2FullId := data.WorkerFullIdParseFromString("smgapp-6d9cfc6cdd-t7mqx:KV57TEHC")
 		{
@@ -74,10 +75,12 @@ func TestAssembleWorkerInitCleanup4(t *testing.T) {
 		}
 
 		// Step 2: 创建 ServiceState
-		klogging.Info(ctx).Log("Step2", "创建 ServiceState")
+		slog.InfoContext(ctx, "创建 ServiceState",
+			slog.String("event", "Step2"))
 		ss := AssembleSsAll(ctx, "TestAssembleAssignSolver")
 		setup.ServiceState = ss
-		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
+		slog.InfoContext(ctx, ss.Name,
+			slog.String("event", "ServiceState已创建"))
 
 		// Step 3: will not cleanup, since unable to find new home for those shards
 		setup.FakeTime.VirtualTimeForward(ctx, 60*1000)

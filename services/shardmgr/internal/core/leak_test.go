@@ -1,19 +1,18 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"runtime"
 	"runtime/pprof"
 	"strings"
 	"testing"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 )
 
 func _TestLeak_basic(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
 	// 记录测试开始时的 goroutine 数量
 	beforeGoroutines := runtime.NumGoroutine()
@@ -26,20 +25,24 @@ func _TestLeak_basic(t *testing.T) {
 		sc.AssignSolverConfig.SolverEnabled = true
 		sc.UnassignSolverConfig.SolverEnabled = true
 	}))
-	klogging.Info(ctx).Log("测试环境已配置", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "测试环境已配置"))
 
 	fn := func() {
 		// Step 1: 创建 shardPlan and set into etcd
 		// 添加2个分片 (shard_1/2)
-		klogging.Info(ctx).Log("Step1", "创建 shardPlan")
+		slog.InfoContext(ctx, "创建 shardPlan",
+			slog.String("event", "Step1"))
 		firstShardPlan := []string{"shard_1"}
 		setup.SetShardPlan(ctx, firstShardPlan)
 
 		// Step 2: 创建 ServiceState
-		klogging.Info(ctx).Log("Step2", "创建 ServiceState")
+		slog.InfoContext(ctx, "创建 ServiceState",
+			slog.String("event", "Step2"))
 		ss := AssembleSsAll(ctx, "TestAssembleAssignSolver")
 		setup.ServiceState = ss
-		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
+		slog.InfoContext(ctx, ss.Name,
+			slog.String("event", "ServiceState已创建"))
 
 		// // Step 3: 创建 worker-1 eph
 		// klogging.Info(ctx).Log("Step3", "创建 worker-1 eph")

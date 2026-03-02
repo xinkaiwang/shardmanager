@@ -1,10 +1,11 @@
 package core
 
 import (
+	"os"
+	"log/slog"
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 )
@@ -34,7 +35,9 @@ func (te *Housekeep30sEvent) Process(ctx context.Context, ss *ServiceState) {
 		ss.checkOrphanHats(ctx)
 	})
 	if ke != nil {
-		klogging.Error(ctx).With("error", ke).Log("Housekeep30sEvent", "snapshotConverge failed")
+		slog.ErrorContext(ctx, "snapshotConverge failed",
+			slog.String("event", "Housekeep30sEvent"),
+			slog.Any("error", ke))
 	}
 	kcommon.ScheduleRun(30*1000, func() { // 30s
 		ss.PostEvent(NewHousekeep30sEvent())
@@ -60,23 +63,46 @@ func (ss *ServiceState) annualCheck(ctx context.Context) {
 		newStr := newSnapshotCurrent.ToJsonString()
 		if !inFlightMove {
 			ss.CreateSnapshotFromCurrentState(ctx) // redo for debug
-			klogging.Fatal(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).Log("annualCheck", "found diffs")
+			slog.ErrorContext(ctx, "found diffs",
+				slog.String("event", "annualCheck"),
+				slog.Any("diffs", diffs),
+				slog.Any("current", oldStr),
+				slog.Any("newCurrent", newStr))
+			os.Exit(1)
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("current", oldStr).With("newCurrent", newStr).With("inflight", len(ss.AllMoves)).Log("annualCheck", "found diffs")
+			slog.WarnContext(ctx, "found diffs",
+				slog.String("event", "annualCheck"),
+				slog.Any("diffs", diffs),
+				slog.Any("current", oldStr),
+				slog.Any("newCurrent", newStr),
+				slog.Any("inflight", len(ss.AllMoves)))
 		}
 	}
 	diffs = compareSnapshot(ctx, ss.GetSnapshotFutureForAny(ctx), newSnapshotFuture)
 	if len(diffs) > 0 {
 		if !inFlightMove {
-			klogging.Fatal(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).Log("annualCheck", "found diffs")
+			slog.ErrorContext(ctx, "found diffs",
+				slog.String("event", "annualCheck"),
+				slog.Any("diffs", diffs),
+				slog.Any("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()),
+				slog.Any("newFuture", newSnapshotFuture.ToJsonString()))
+			os.Exit(1)
 		} else {
-			klogging.Warning(ctx).With("diffs", diffs).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).With("newFuture", newSnapshotFuture.ToJsonString()).With("inflight", len(ss.AllMoves)).Log("annualCheck", "found diffs")
+			slog.WarnContext(ctx, "found diffs",
+				slog.String("event", "annualCheck"),
+				slog.Any("diffs", diffs),
+				slog.Any("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()),
+				slog.Any("newFuture", newSnapshotFuture.ToJsonString()),
+				slog.Any("inflight", len(ss.AllMoves)))
 		}
 	}
 	ss.SnapshotCurrent = newSnapshotCurrent
 	newSnapshotFuture.Freeze()
 	ss.SetSnapshotFuture(ctx, newSnapshotFuture, "annualCheck")
-	klogging.Info(ctx).With("current", newSnapshotCurrent.ToShortString(ctx)).With("future", newSnapshotFuture.ToShortString(ctx)).Log("annualCheck", "done")
+	slog.InfoContext(ctx, "done",
+		slog.String("event", "annualCheck"),
+		slog.Any("current", newSnapshotCurrent.ToShortString(ctx)),
+		slog.Any("future", newSnapshotFuture.ToShortString(ctx)))
 }
 
 func (ss *ServiceState) hourlyCheck(ctx context.Context) {
@@ -85,8 +111,12 @@ func (ss *ServiceState) hourlyCheck(ctx context.Context) {
 		return
 	}
 	ss.LastHourlyCheckMs = now
-	klogging.Info(ctx).With("current", ss.GetSnapshotCurrentForAny().ToJsonString()).Log("hourlyCheck", "dumping current snapshot")
-	klogging.Info(ctx).With("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()).Log("hourlyCheck", "dumping future snapshot")
+	slog.InfoContext(ctx, "dumping current snapshot",
+		slog.String("event", "hourlyCheck"),
+		slog.Any("current", ss.GetSnapshotCurrentForAny().ToJsonString()))
+	slog.InfoContext(ctx, "dumping future snapshot",
+		slog.String("event", "hourlyCheck"),
+		slog.Any("future", ss.GetSnapshotFutureForAny(ctx).ToJsonString()))
 }
 
 // return list of differences
@@ -107,8 +137,12 @@ func (ss *ServiceState) broadcastSnapshot(ctx context.Context, reason string) {
 			ss.SolverGroup.OnSnapshot(ctx, snapshot, reason)
 		}, reason)
 
-		klogging.Info(ctx).With("snapshot", snapshot.ToShortString(ctx)).Log("broadcastSnapshot", "SolverGroup.OnSnapshot")
+		slog.InfoContext(ctx, "SolverGroup.OnSnapshot",
+			slog.String("event", "broadcastSnapshot"),
+			slog.Any("snapshot", snapshot.ToShortString(ctx)))
 	} else {
-		klogging.Info(ctx).With("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString(ctx)).Log("broadcastSnapshot", "SolverGroup is nil, skip OnSnapshot")
+		slog.InfoContext(ctx, "SolverGroup is nil, skip OnSnapshot",
+			slog.String("event", "broadcastSnapshot"),
+			slog.Any("snapshot", ss.GetSnapshotFutureForAny(ctx).ToShortString(ctx)))
 	}
 }

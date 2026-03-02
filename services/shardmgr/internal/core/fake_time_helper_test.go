@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"strconv"
@@ -30,7 +31,8 @@ func resetGlobalState(_ *testing.T) {
 func (setup *FakeTimeTestSetup) Cleanup() {
 	// 关闭ServiceState及其相关资源
 	if setup.ServiceState != nil {
-		klogging.Info(context.Background()).Log("TestCleanup", "关闭ServiceState和相关资源")
+		slog.InfoContext(context.Background(), "关闭ServiceState和相关资源",
+			slog.String("event", "TestCleanup"))
 
 		// 停止ServiceState
 		setup.ServiceState.StopAndWaitForExit(context.Background())
@@ -41,7 +43,8 @@ func (setup *FakeTimeTestSetup) Cleanup() {
 	etcdprov.ResetEtcdProvider()
 	klogging.TimeProvider = nil
 
-	klogging.Info(context.Background()).Log("TestCleanup", "清理完成")
+	slog.InfoContext(context.Background(), "清理完成",
+		slog.String("event", "TestCleanup"))
 }
 
 /******************************* SnapshotListener *******************************/
@@ -352,7 +355,13 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 		if success {
 			elapsed := kcommon.GetMonoTimeMs() - startTime
 			// t.Logf("条件满足，耗时 %v", elapsed)
-			klogging.Debug(context.TODO()).With("尝试", i+1).With("最大尝试次数", maxWaitMs/intervalMs).With("已耗时", elapsed).With("最后状态", debugInfo).With("time", kcommon.GetWallTimeMs()).Log("WaitUntil", "条件满足")
+			slog.DebugContext(context.TODO(), "条件满足",
+				slog.String("event", "WaitUntil"),
+				slog.Any("尝试", i+1),
+				slog.Any("最大尝试次数", maxWaitMs/intervalMs),
+				slog.Any("已耗时", elapsed),
+				slog.Any("最后状态", debugInfo),
+				slog.Any("time", kcommon.GetWallTimeMs()))
 			elapsedMs := kcommon.GetMonoTimeMs() - startMs
 			return true, elapsedMs
 		}
@@ -360,14 +369,26 @@ func WaitUntil(t *testing.T, condition func() (bool, string), maxWaitMs int, int
 		elapsed := int(kcommon.GetMonoTimeMs() - startTime)
 		if elapsed >= maxDuration {
 			// t.Logf("等待条件满足超时，已尝试 %d 次，耗时 %v，最后状态: %s", i+1, elapsed, debugInfo)
-			klogging.Debug(context.TODO()).With("尝试", i+1).With("最大尝试次数", maxWaitMs/intervalMs).With("已耗时", elapsed).With("最后状态", debugInfo).With("time", kcommon.GetWallTimeMs()).Log("WaitUntil", "等待条件满足超时")
+			slog.DebugContext(context.TODO(), "等待条件满足超时",
+				slog.String("event", "WaitUntil"),
+				slog.Any("尝试", i+1),
+				slog.Any("最大尝试次数", maxWaitMs/intervalMs),
+				slog.Any("已耗时", elapsed),
+				slog.Any("最后状态", debugInfo),
+				slog.Any("time", kcommon.GetWallTimeMs()))
 			elapsedMs := kcommon.GetMonoTimeMs() - startMs
 			return false, elapsedMs
 		}
 
 		// t.Logf("等待条件满足中 (尝试 %d/%d)，已耗时 %v，当前状态: %s",
 		// 	i+1, maxWaitMs/intervalMs, elapsed, debugInfo)
-		klogging.Debug(context.TODO()).With("尝试", i+1).With("最大尝试次数", maxWaitMs/intervalMs).With("已耗时", elapsed).With("当前状态", debugInfo).With("time", kcommon.GetWallTimeMs()).Log("WaitUntil", "等待条件满足中")
+		slog.DebugContext(context.TODO(), "等待条件满足中",
+			slog.String("event", "WaitUntil"),
+			slog.Any("尝试", i+1),
+			slog.Any("最大尝试次数", maxWaitMs/intervalMs),
+			slog.Any("已耗时", elapsed),
+			slog.Any("当前状态", debugInfo),
+			slog.Any("time", kcommon.GetWallTimeMs()))
 		kcommon.SleepMs(context.Background(), intervalDuration)
 	}
 	elapsedMs := kcommon.GetMonoTimeMs() - startMs
@@ -506,9 +527,15 @@ func (setup *FakeTimeTestSetup) verifyAllShardState(t *testing.T, expectedStates
 	// 创建事件来安全访问 ServiceState
 	setup.safeAccessServiceState(func(ss *ServiceState) {
 		// 首先输出当前所有分片状态，方便调试
-		klogging.Info(ctx).With("totalShards", len(ss.AllShards)).With("expectedShards", len(expectedStates)).Log("VerifyShardState", "当前分片状态")
+		slog.InfoContext(ctx, "当前分片状态",
+			slog.String("event", "VerifyShardState"),
+			slog.Any("totalShards", len(ss.AllShards)),
+			slog.Any("expectedShards", len(expectedStates)))
 		for shardId, shard := range ss.AllShards {
-			klogging.Info(ctx).With("shardId", shardId).With("lameDuck", shard.LameDuck).Log("VerifyShardState", "分片状态")
+			slog.InfoContext(ctx, "分片状态",
+				slog.String("event", "VerifyShardState"),
+				slog.Any("shardId", shardId),
+				slog.Any("lameDuck", shard.LameDuck))
 		}
 
 		// 验证每个期望的分片
@@ -527,7 +554,10 @@ func (setup *FakeTimeTestSetup) verifyAllShardState(t *testing.T, expectedStates
 				continue // 继续检查其他分片
 			}
 
-			klogging.Info(ctx).With("shardId", shardId).With("lameDuck", shard.LameDuck).Log("VerifyShardState", "分片状态验证通过")
+			slog.InfoContext(ctx, "分片状态验证通过",
+				slog.String("event", "VerifyShardState"),
+				slog.Any("shardId", shardId),
+				slog.Any("lameDuck", shard.LameDuck))
 		}
 	})
 

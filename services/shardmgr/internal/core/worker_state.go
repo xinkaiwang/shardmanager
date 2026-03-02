@@ -1,6 +1,8 @@
 package core
 
 import (
+	"os"
+	"log/slog"
 	"context"
 	"encoding/json"
 	"strings"
@@ -9,7 +11,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -106,7 +107,13 @@ func NewWorkerStateFromJson(ctx context.Context, ss *ServiceState, workerStateJs
 
 func (ws *WorkerState) AddAssignment(ctx context.Context, assignmentId data.AssignmentId, shardId data.ShardId) {
 	if oldAssignId, ok := ws.Assignments[shardId]; ok {
-		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("shardId", shardId).With("oldAssignId", oldAssignId).With("assignId", assignmentId).Log("AddAssignment", "shard already exists in worker state")
+		slog.ErrorContext(ctx, "shard already exists in worker state",
+			slog.String("event", "AddAssignment"),
+			slog.Any("workerId", ws.WorkerId),
+			slog.Any("shardId", shardId),
+			slog.Any("oldAssignId", oldAssignId),
+			slog.Any("assignId", assignmentId))
+		os.Exit(1)
 	}
 	ws.Assignments[shardId] = assignmentId
 }
@@ -115,7 +122,12 @@ func (ws *WorkerState) RemoveAssignment(ctx context.Context, shardId data.ShardI
 }
 
 func (ws *WorkerState) Journal(ctx context.Context, reason string) {
-	klogging.Info(ctx).With("workerId", ws.GetWorkerFullId().String()).With("workerState", ws.ToFullString()).With("state", ws.State).With("reason", reason).Log("WorkerJournal", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "WorkerJournal"),
+		slog.Any("workerId", ws.GetWorkerFullId().String()),
+		slog.Any("workerState", ws.ToFullString()),
+		slog.Any("state", ws.State),
+		slog.Any("reason", reason))
 }
 
 func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, updateReason string) *smgjson.WorkerStateJson {
@@ -134,8 +146,10 @@ func (ws *WorkerState) ToWorkerStateJson(ctx context.Context, ss *ServiceState, 
 	for _, assignmentId := range ws.Assignments {
 		assignState, ok := ss.AllAssignments[assignmentId]
 		if !ok {
-			klogging.Fatal(ctx).With("assignmentId", assignmentId).
-				Log("ToWorkerStateJson", "assignment not found")
+			slog.ErrorContext(ctx, "assignment not found",
+				slog.String("event", "ToWorkerStateJson"),
+				slog.Any("assignmentId", assignmentId))
+			os.Exit(1)
 			continue
 		}
 		assignJson := smgjson.NewAssignmentStateJson(assignState.ShardId, assignState.ReplicaIdx)
@@ -241,10 +255,11 @@ func (ss *ServiceState) digestStagingWorkerEph(ctx context.Context) {
 		workerEph := ss.EphWorkerStaging[workerFullId.WorkerId][workerFullId.SessionId]
 		workerState := ss.AllWorkers[workerFullId]
 
-		klogging.Info(ctx).With("workerFullId", workerFullId.String()).
-			With("hasEph", workerEph != nil).
-			With("hasState", workerState != nil).
-			Log("digestStagingWorkerEph", "处理worker")
+		slog.InfoContext(ctx, "处理worker",
+			slog.String("event", "digestStagingWorkerEph"),
+			slog.Any("workerFullId", workerFullId.String()),
+			slog.Any("hasEph", workerEph != nil),
+			slog.Any("hasState", workerState != nil))
 
 		if workerState == nil {
 			if workerEph == nil {
@@ -275,11 +290,21 @@ func (ws *WorkerState) signalAll(ctx context.Context, reason string) {
 	currentBox.NotifyReason = reason
 	currentBox.NofityId = kcommon.RandomString(ctx, 8)
 	close(currentBox.NotifyCh)
-	klogging.Info(ctx).With("workerId", ws.WorkerId).With("boxId", currentBox.BoxId).With("reason", reason).With("notifyId", currentBox.NofityId).Log("signalAll", "worker state changed")
+	slog.InfoContext(ctx, "worker state changed",
+		slog.String("event", "signalAll"),
+		slog.Any("workerId", ws.WorkerId),
+		slog.Any("boxId", currentBox.BoxId),
+		slog.Any("reason", reason),
+		slog.Any("notifyId", currentBox.NofityId))
 }
 
 func (ws *WorkerState) setWorkerState(ctx context.Context, newState data.WorkerStateEnum, reason string) {
-	klogging.Info(ctx).With("workerId", ws.GetWorkerFullId().String()).With("oldState", ws.State).With("newState", newState).With("reason", reason).Log("setWorkerState", "worker state changed")
+	slog.InfoContext(ctx, "worker state changed",
+		slog.String("event", "setWorkerState"),
+		slog.Any("workerId", ws.GetWorkerFullId().String()),
+		slog.Any("oldState", ws.State),
+		slog.Any("newState", newState),
+		slog.Any("reason", reason))
 	if newState == data.WS_Online_shutdown_permit || newState == data.WS_Offline_draining_complete { // this worker draining complete, don't need a hat anymore
 		ws.parent.hatReturn(ctx, ws.GetWorkerFullId())
 	}
@@ -317,10 +342,12 @@ func (ws *WorkerState) onEphNodeLost(ctx context.Context, ss *ServiceState) *Dir
 	case data.WS_Offline_dead:
 		// nothing to do
 	}
-	klogging.Info(ctx).With("workerId", ws.GetWorkerFullId().String()).With("sessionId", ws.SessionId).
-		With("dirty", dirty.String()).
-		With("state", ws.State).
-		Log("onEphNodeLostDone", "worker eph lost")
+	slog.InfoContext(ctx, "worker eph lost",
+		slog.String("event", "onEphNodeLostDone"),
+		slog.Any("workerId", ws.GetWorkerFullId().String()),
+		slog.Any("sessionId", ws.SessionId),
+		slog.Any("dirty", dirty.String()),
+		slog.Any("state", ws.State))
 	if dirty.IsDirty() {
 		reason := dirty.String()
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, reason)
@@ -352,12 +379,16 @@ func (ws *WorkerState) onEphNodeUpdate(ctx context.Context, ss *ServiceState, wo
 		fallthrough
 	case data.WS_Offline_dead:
 		// this should never happen
-		klogging.Fatal(ctx).With("workerId", ws.WorkerId).With("currentState", ws.State).
-			Log("onEphNodeUpdate", "worker eph already lost")
+		slog.ErrorContext(ctx, "worker eph already lost",
+			slog.String("event", "onEphNodeUpdate"),
+			slog.Any("workerId", ws.WorkerId),
+			slog.Any("currentState", ws.State))
+		os.Exit(1)
 	}
-	klogging.Info(ctx).With("workerId", ws.WorkerId).
-		With("dirty", dirtyFlag.String()).
-		Log("onEphNodeUpdateDone", "workerEph updated finished")
+	slog.InfoContext(ctx, "workerEph updated finished",
+		slog.String("event", "onEphNodeUpdateDone"),
+		slog.Any("workerId", ws.WorkerId),
+		slog.Any("dirty", dirtyFlag.String()))
 	if dirtyFlag.IsDirty() {
 		reason := dirtyFlag.String()
 		ss.FlushWorkerState(ctx, ws.GetWorkerFullId(), ws, FS_Most, reason)
@@ -381,9 +412,11 @@ func (ws *WorkerState) CollectCurrentAssignments(ss *ServiceState) map[data.Assi
 	for _, assignmentId := range ws.Assignments {
 		assignState, ok := ss.AllAssignments[assignmentId]
 		if !ok {
-			klogging.Fatal(context.Background()).With("workerId", ws.WorkerId).
-				With("assignmentId", assignmentId).
-				Log("collectCurrentAssignments", "assignment not found")
+			slog.ErrorContext(context.Background(), "assignment not found",
+				slog.String("event", "collectCurrentAssignments"),
+				slog.Any("workerId", ws.WorkerId),
+				slog.Any("assignmentId", assignmentId))
+			os.Exit(1)
 			continue
 		}
 		dict[assignmentId] = assignState
@@ -537,11 +570,12 @@ func (ws *WorkerState) checkWorkerOnTimeout(ctx context.Context, ss *ServiceStat
 		needsDelete = true
 	}
 	if dirty.IsDirty() {
-		klogging.Info(ctx).With("workerId", ws.WorkerId).
-			With("dirty", dirty.String()).
-			With("currentState", currentState).
-			With("newState", ws.State).
-			Log("checkWorkerOnTimeout", "worker 定时任务完成")
+		slog.InfoContext(ctx, "worker 定时任务完成",
+			slog.String("event", "checkWorkerOnTimeout"),
+			slog.Any("workerId", ws.WorkerId),
+			slog.Any("dirty", dirty.String()),
+			slog.Any("currentState", currentState),
+			slog.Any("newState", ws.State))
 	}
 	if !dirty.IsDirty() {
 		return
@@ -621,11 +655,12 @@ func (ws *WorkerState) ToPilotNode(ctx context.Context, ss *ServiceState, update
 	for _, assignmentId := range ws.Assignments {
 		assign := ss.AllAssignments[assignmentId]
 		if assign == nil {
-			klogging.Fatal(ctx).
-				With("workerId", ws.WorkerId).
-				With("sessionId", ws.SessionId).
-				With("assignmentId", assignmentId).
-				Log("ToPilotNode", "assignment not found")
+			slog.ErrorContext(ctx, "assignment not found",
+				slog.String("event", "ToPilotNode"),
+				slog.Any("workerId", ws.WorkerId),
+				slog.Any("sessionId", ws.SessionId),
+				slog.Any("assignmentId", assignmentId))
+			os.Exit(1)
 			continue
 		}
 		if !assign.ShouldInPilot {
@@ -661,11 +696,12 @@ func (ws *WorkerState) ToRoutingEntry(ctx context.Context, ss *ServiceState, upd
 	for _, assignmentId := range ws.Assignments {
 		assign := ss.AllAssignments[assignmentId]
 		if assign == nil {
-			klogging.Fatal(ctx).
-				With("workerId", ws.WorkerId).
-				With("sessionId", ws.SessionId).
-				With("assignmentId", assignmentId).
-				Log("ToRoutingEntry", "assignment not found")
+			slog.ErrorContext(ctx, "assignment not found",
+				slog.String("event", "ToRoutingEntry"),
+				slog.Any("workerId", ws.WorkerId),
+				slog.Any("sessionId", ws.SessionId),
+				slog.Any("assignmentId", assignmentId))
+			os.Exit(1)
 			continue
 		}
 		if !assign.ShouldInRoutingTable {

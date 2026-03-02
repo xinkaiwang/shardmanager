@@ -1,12 +1,13 @@
 package core
 
 import (
+	"os"
+	"log/slog"
 	"context"
 	"encoding/json"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
@@ -208,17 +209,27 @@ func (ss *ServiceState) PrintAllShards(ctx context.Context) {
 			ke := kerror.Wrap(err, "json.Marshal", "failed to marshal shard", false).With("shardId", shard.ShardId)
 			panic(ke)
 		}
-		klogging.Info(ctx).With("shardId", shard.ShardId).With("data", string(data)).Log("PrintAllShards", "shard")
+		slog.InfoContext(ctx, "shard",
+			slog.String("event", "PrintAllShards"),
+			slog.Any("shardId", shard.ShardId),
+			slog.Any("data", string(data)))
 	}
 }
 func (ss *ServiceState) PrintAllWorkers(ctx context.Context) {
 	for id, workerState := range ss.AllWorkers {
-		klogging.Info(ctx).With("workerId", id).With("sessionId", workerState.SessionId).With("data", workerState.ToFullString()).Log("PrintAllWorkers", "worker")
+		slog.InfoContext(ctx, "worker",
+			slog.String("event", "PrintAllWorkers"),
+			slog.Any("workerId", id),
+			slog.Any("sessionId", workerState.SessionId),
+			slog.Any("data", workerState.ToFullString()))
 	}
 }
 func (ss *ServiceState) PrintAllAssignments(ctx context.Context) {
 	for _, assignment := range ss.AllAssignments {
-		klogging.Info(ctx).With("assignmentId", assignment.AssignmentId).With("assign", assignment.String()).Log("PrintAllAssignments", "assignment")
+		slog.InfoContext(ctx, "assignment",
+			slog.String("event", "PrintAllAssignments"),
+			slog.Any("assignmentId", assignment.AssignmentId),
+			slog.Any("assign", assignment.String()))
 	}
 }
 
@@ -241,11 +252,6 @@ func (ss *ServiceState) ModifySnapshotCurrent(ctx context.Context, fn func(*cost
 		ss.SnapshotCurrent = ss.SnapshotCurrent.Clone()
 	}
 	fn(ss.SnapshotCurrent)
-	if klogging.IsVerboseEnabled() {
-		klogging.Info(ctx).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("reason", reason).With("newSnapshot", ss.SnapshotCurrent.ToJsonString()).Log("ModifySnapshotCurrent", "")
-	} else {
-		klogging.Info(ctx).With("snapshotId", ss.SnapshotCurrent.SnapshotId).With("reason", reason).Log("ModifySnapshotCurrent", "")
-	}
 }
 
 func (ss *ServiceState) GetSnapshotCurrentForAny() *costfunc.Snapshot {
@@ -257,11 +263,6 @@ func (ss *ServiceState) ModifySnapshotFuture(ctx context.Context, fn func(*costf
 		ss.SnapshotFuture = ss.SnapshotFuture.Clone()
 	}
 	fn(ss.SnapshotFuture)
-	if klogging.IsVerboseEnabled() {
-		klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("reason", reason).With("newSnapshot", ss.SnapshotFuture.ToJsonString()).Log("ModifySnapshotFuture", "")
-	} else {
-		klogging.Info(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).With("reason", reason).Log("ModifySnapshotFuture", "")
-	}
 }
 
 func (ss *ServiceState) SetSnapshotCurrent(ctx context.Context, newSnapshot *costfunc.Snapshot, reason string) {
@@ -270,11 +271,19 @@ func (ss *ServiceState) SetSnapshotCurrent(ctx context.Context, newSnapshot *cos
 		oldId = string(ss.SnapshotCurrent.SnapshotId)
 	}
 	if !newSnapshot.Frozen {
-		klogging.Fatal(ctx).With("snapshot", newSnapshot.ToJsonString()).With("reason", reason).Log("SetSnapshotCurrent", "snapshot is not frozen")
+		slog.ErrorContext(ctx, "snapshot is not frozen",
+			slog.String("event", "SetSnapshotCurrent"),
+			slog.Any("snapshot", newSnapshot.ToJsonString()),
+			slog.Any("reason", reason))
+		os.Exit(1)
 	}
 	newId := string(newSnapshot.SnapshotId)
 	ss.SnapshotCurrent = newSnapshot
-	klogging.Debug(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).WithVerbose("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotCurrent", "")
+	slog.DebugContext(ctx, "",
+		slog.String("event", "SetSnapshotCurrent"),
+		slog.Any("oldId", oldId),
+		slog.Any("newId", newId),
+		slog.Any("reason", reason))
 }
 
 func (ss *ServiceState) SetSnapshotFuture(ctx context.Context, newSnapshot *costfunc.Snapshot, reason string) {
@@ -283,30 +292,28 @@ func (ss *ServiceState) SetSnapshotFuture(ctx context.Context, newSnapshot *cost
 		oldId = string(ss.SnapshotFuture.SnapshotId)
 	}
 	if !newSnapshot.Frozen {
-		klogging.Fatal(ctx).With("snapshot", newSnapshot.ToJsonString()).With("reason", reason).Log("SetSnapshotFuture", "snapshot is not frozen")
+		slog.ErrorContext(ctx, "snapshot is not frozen",
+			slog.String("event", "SetSnapshotFuture"),
+			slog.Any("snapshot", newSnapshot.ToJsonString()),
+			slog.Any("reason", reason))
+		os.Exit(1)
 	}
 	newId := string(newSnapshot.SnapshotId)
 	ss.SnapshotFuture = newSnapshot
-	klogging.Debug(ctx).With("oldId", oldId).With("newId", newId).With("reason", reason).WithVerbose("snapshot", newSnapshot.ToJsonString()).Log("SetSnapshotFuture", "")
+	slog.DebugContext(ctx, "",
+		slog.String("event", "SetSnapshotFuture"),
+		slog.Any("oldId", oldId),
+		slog.Any("newId", newId),
+		slog.Any("reason", reason))
 }
 
 func (ss *ServiceState) GetSnapshotFutureForClone(ctx context.Context) *costfunc.Snapshot {
 	if !ss.SnapshotFuture.Frozen {
 		ss.SnapshotFuture.Freeze()
 	}
-	if klogging.IsVerboseEnabled() {
-		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForClone", "")
-	} else {
-		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).Log("GetSnapshotFutureForClone", "")
-	}
 	return ss.SnapshotFuture
 }
 
 func (ss *ServiceState) GetSnapshotFutureForAny(ctx context.Context) *costfunc.Snapshot {
-	if klogging.IsVerboseEnabled() {
-		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).WithVerbose("snapshot", ss.SnapshotFuture.ToJsonString()).Log("GetSnapshotFutureForAny", "")
-	} else {
-		klogging.Debug(ctx).With("snapshotId", ss.SnapshotFuture.SnapshotId).Log("GetSnapshotFutureForAny", "")
-	}
 	return ss.SnapshotFuture
 }

@@ -1,24 +1,24 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 )
 
 func TestWorkerShutdownRequestFull(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
 	setup.SetupBasicConfig(ctx)
-	klogging.Info(ctx).Log("TestWorkerShutdownRequestFull", "测试环境已配置")
+	slog.InfoContext(ctx, "测试环境已配置",
+		slog.String("event", "TestWorkerShutdownRequestFull"))
 
 	fn := func() {
 		// Step 0: 创建 ServiceState
@@ -26,7 +26,8 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 		setup.ServiceState = ss
 
 		// Step 1: 创建 worker-1 eph
-		klogging.Info(ctx).Log("TestWorkerShutdownRequestFull", "创建 worker-1 eph")
+		slog.InfoContext(ctx, "创建 worker-1 eph",
+			slog.String("event", "TestWorkerShutdownRequestFull"))
 		workerFullId := data.NewWorkerFullId("worker-1", "session-1", data.ST_MEMORY)
 		setup.UpdateEphNode(workerFullId, func(*cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 			return cougarjson.NewWorkerEphJson(string(workerFullId.WorkerId), "session-1", 1234567890, 100)
@@ -41,7 +42,8 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 		}
 
 		// Step 2: 更新worker eph节点，设置ReqShutDown=1
-		klogging.Info(ctx).Log("TestWorkerShutdownRequestFull", "更新worker eph节点，设置ReqShutDown=1")
+		slog.InfoContext(ctx, "更新worker eph节点，设置ReqShutDown=1",
+			slog.String("event", "TestWorkerShutdownRequestFull"))
 		setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 			wej.ReqShutDown = 1
 			wej.LastUpdateAtMs = 1234567891
@@ -79,7 +81,8 @@ func TestWorkerShutdownRequestFull(t *testing.T) {
 		}
 
 		// Step 3: 更新worker eph节点
-		klogging.Info(ctx).Log("TestWorkerShutdownRequestFull", "删除worker eph节点")
+		slog.InfoContext(ctx, "删除worker eph节点",
+			slog.String("event", "TestWorkerShutdownRequestFull"))
 		setup.UpdateEphNode(workerFullId, func(wej *cougarjson.WorkerEphJson) *cougarjson.WorkerEphJson {
 			return nil // 删除worker eph节点
 		})

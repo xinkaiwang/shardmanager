@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"testing"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -16,7 +16,6 @@ import (
 
 func TestAssembleWorkerInitCleanup2(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "simple"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -25,11 +24,13 @@ func TestAssembleWorkerInitCleanup2(t *testing.T) {
 		sc.AssignSolverConfig.SolverEnabled = true
 		sc.UnassignSolverConfig.SolverEnabled = true
 	}))
-	klogging.Info(ctx).Log("测试环境已配置", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "测试环境已配置"))
 
 	fn := func() {
 		// Step 1: prepare shardPlan and set into etcd
-		klogging.Info(ctx).Log("Step1", "创建 shardPlan")
+		slog.InfoContext(ctx, "创建 shardPlan",
+			slog.String("event", "Step1"))
 		worker2FullId := data.WorkerFullIdParseFromString("worker-2:OK19G93V")
 		{
 			setup.SetShardPlan(ctx, []string{"shard_00_40", "shard_40_80", "shard_80_c0", "shard_c0_00"})
@@ -57,10 +58,12 @@ func TestAssembleWorkerInitCleanup2(t *testing.T) {
 		}
 
 		// Step 2: 创建 ServiceState
-		klogging.Info(ctx).Log("Step2", "创建 ServiceState")
+		slog.InfoContext(ctx, "创建 ServiceState",
+			slog.String("event", "Step2"))
 		ss := AssembleSsAll(ctx, "TestAssembleAssignSolver")
 		setup.ServiceState = ss
-		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
+		slog.InfoContext(ctx, ss.Name,
+			slog.String("event", "ServiceState已创建"))
 
 		// Step 3: will not cleanup, since unable to find new home for those shards
 		setup.FakeTime.VirtualTimeForward(ctx, 30*1000)
@@ -73,7 +76,8 @@ func TestAssembleWorkerInitCleanup2(t *testing.T) {
 		}
 
 		// Step 4: add another worker (worker-3)
-		klogging.Info(ctx).Log("Step4", "添加 worker-3")
+		slog.InfoContext(ctx, "添加 worker-3",
+			slog.String("event", "Step4"))
 		workerFullId3, _ := setup.CreateAndSetWorkerEph(t, "worker-3", "session-3", "localhost:8083")
 
 		{
@@ -103,7 +107,8 @@ func TestAssembleWorkerInitCleanup2(t *testing.T) {
 		}
 
 		// Step 5: since worker eph does not exist, all those worker pilot/routing/worker state should be cleaned up
-		klogging.Info(ctx).Log("Step5", "wait for cleaned up")
+		slog.InfoContext(ctx, "wait for cleaned up",
+			slog.String("event", "Step5"))
 		{
 			waitSucc, elapsedMs := setup.WaitUntilWorkerState(t, worker2FullId, func(ws *WorkerState) (bool, string) {
 				if ws == nil {

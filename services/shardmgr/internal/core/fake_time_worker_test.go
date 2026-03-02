@@ -1,13 +1,13 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/smgjson"
@@ -23,7 +23,6 @@ import (
 // 这个测试使用 FakeTimeProvider 来精确控制时间流逝，避免真实等待
 func TestWorkerGracePeriodExpiration(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -39,7 +38,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		ss := AssembleSsWithShadowState(ctx, "TestWorkerGracePeriodExpiration")
 		setup.ServiceState = ss
 		// step 1: 创建 ServiceState
-		klogging.Info(ctx).Log("Step1", "创建 ServiceState")
+		slog.InfoContext(ctx, "创建 ServiceState",
+			slog.String("event", "Step1"))
 
 		{
 			// 验证 ServiceState 中的优雅期配置
@@ -51,7 +51,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		}
 
 		// Step 2: 创建 worker-1 eph
-		klogging.Info(ctx).Log("Step2", "创建 worker-1 eph")
+		slog.InfoContext(ctx, "创建 worker-1 eph",
+			slog.String("event", "Step2"))
 		workerFullId, ephPath := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 		workerStatePath := ss.PathManager.FmtWorkerStatePath(workerFullId)
 
@@ -66,7 +67,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		}
 
 		// Step 3: 确认worker初始状态
-		klogging.Info(ctx).Log("Step3", "确认worker初始状态")
+		slog.InfoContext(ctx, "确认worker初始状态",
+			slog.String("event", "Step3"))
 		workerState, _ := setup.getWorkerStateAndPath(t, workerFullId)
 		t.Logf("worker初始状态验证完成: State=%v", workerState.State)
 		assert.Equal(t, data.WS_Online_healthy, workerState.State, "初始状态应为健康在线")
@@ -77,7 +79,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		t.Logf("已删除worker eph节点，等待状态同步")
 
 		// Step 4: 等待worker状态变为离线优雅期状态
-		klogging.Info(ctx).Log("Step4", "等待worker状态变为offline_graceful_period状态")
+		slog.InfoContext(ctx, "等待worker状态变为offline_graceful_period状态",
+			slog.String("event", "Step4"))
 		// t.Logf("等待worker状态从online_healthy变为offline_graceful_period")
 
 		// 推进0.5秒
@@ -90,7 +93,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		}
 
 		// Step5: 推进15秒，确保状态变化 (OfflineGracePeriodSec 为 10 秒)
-		klogging.Info(ctx).Log("Step5", "推进15秒")
+		slog.InfoContext(ctx, "推进15秒",
+			slog.String("event", "Step5"))
 		fakeTime.VirtualTimeForward(ctx, 15*1000)
 
 		{
@@ -104,7 +108,8 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 		}
 
 		// Step6: 推进25秒，确保状态变化 (DeleteGracePeriodSec 为 20 秒)
-		klogging.Info(ctx).Log("Step6", "推进25秒")
+		slog.InfoContext(ctx, "推进25秒",
+			slog.String("event", "Step6"))
 		fakeTime.VirtualTimeForward(ctx, 25*1000)
 
 		{
@@ -135,7 +140,6 @@ func TestWorkerGracePeriodExpiration(t *testing.T) {
 
 func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -223,7 +227,6 @@ func TestWorkerGracePeriodExpiration_waitUntil(t *testing.T) {
 // TestWorkerShutdownRequest 测试通过worker eph节点请求关闭的流程
 func TestWorkerShutdownRequest(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)
@@ -329,7 +332,6 @@ func ftUpdateWorkerEphWithShutdownRequest(t *testing.T, ss *ServiceState, setup 
 // TestServiceState_WorkerEphToState 测试ServiceState能否正确从worker eph创建worker state
 func TestServiceState_WorkerEphToState(t *testing.T) {
 	ctx := context.Background()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "text"))
 
 	// 配置测试环境
 	setup := NewFakeTimeTestSetup(t)

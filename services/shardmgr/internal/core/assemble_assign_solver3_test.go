@@ -1,12 +1,12 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -25,7 +25,8 @@ func TestAssembleAssignSolver3(t *testing.T) {
 		sc.MinReplicaCount = 2
 		sc.MaxReplicaCount = 2
 	}))
-	klogging.Info(ctx).Log("测试环境已配置", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "测试环境已配置"))
 
 	fn := func() {
 		// Step 1: 创建 shardPlan and set into etcd
@@ -36,7 +37,8 @@ func TestAssembleAssignSolver3(t *testing.T) {
 		// Step 2: 创建 ServiceState
 		ss := AssembleSsAll(ctx, "TestAssembleAssignSolver")
 		setup.ServiceState = ss
-		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
+		slog.InfoContext(ctx, ss.Name,
+			slog.String("event", "ServiceState已创建"))
 
 		{
 			// 等待快照更新

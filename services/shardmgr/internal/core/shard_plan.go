@@ -1,10 +1,10 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
@@ -66,7 +66,13 @@ func (ss *ServiceState) digestStagingShardPlan(ctx context.Context) bool {
 	}
 	// log
 	dirty := len(updated) + len(inserted) + len(deleted)
-	klogging.Info(ctx).With("updated", updated).With("inserted", inserted).With("deleted", deleted).With("unchanged", unchanged).With("dirty", dirty).Log("syncShardPlan", "done")
+	slog.InfoContext(ctx, "done",
+		slog.String("event", "syncShardPlan"),
+		slog.Any("updated", updated),
+		slog.Any("inserted", inserted),
+		slog.Any("deleted", deleted),
+		slog.Any("unchanged", unchanged),
+		slog.Any("dirty", dirty))
 	if dirty != 0 {
 		ss.FlushShardState(ctx, updated, inserted, deleted)
 		// ss.ReCreateSnapshot(ctx, "digestStagingShardPlan")
@@ -86,44 +92,51 @@ type ShardPlanWatcher struct {
 
 func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShardPlanRevision etcdprov.EtcdRevision) *ShardPlanWatcher {
 	path := parent.PathManager.GetShardPlanPath()
-	ctx2, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
 	sp := &ShardPlanWatcher{
 		parent:  parent,
-		ch:      etcdprov.GetCurrentEtcdProvider(ctx2).WatchByPrefix(ctx, path, currentShardPlanRevision),
+		ch:      etcdprov.GetCurrentEtcdProvider(ctx).WatchByPrefix(ctx, path, currentShardPlanRevision),
 		path:    path,
 		cancel:  cancel,
 		stop:    make(chan struct{}),
 		stopped: make(chan struct{}),
 	}
-	sp.InitMetrics(ctx2)                         // 初始化指标
-	go sp.run(klogging.EmbedTraceId(ctx, "spw")) // spw = ShardPlanWatcher
+	sp.InitMetrics(ctx)                         // 初始化指标
+	go sp.run(ctx) // spw = ShardPlanWatcher
 	return sp
 }
 
 func (sp *ShardPlanWatcher) run(ctx context.Context) {
-	klogging.Info(ctx).With("path", sp.path).Log("ShardPlanWatcher", "start watching")
+	slog.InfoContext(ctx, "start watching",
+		slog.String("event", "ShardPlanWatcher"),
+		slog.Any("path", sp.path))
 	stop := false
 	for !stop {
 		select {
 		case <-ctx.Done():
-			klogging.Info(ctx).Log("ShardPlanWatcher", "CtxDone.Exit")
+			slog.InfoContext(ctx, "CtxDone.Exit",
+				slog.String("event", "ShardPlanWatcher"))
 			stop = true
 		case item, ok := <-sp.ch:
 			if !ok {
-				klogging.Info(ctx).Log("ShardPlanWatcher", "ch closed")
+				slog.InfoContext(ctx, "ch closed",
+					slog.String("event", "ShardPlanWatcher"))
 				return
 			}
-			traceId := kcommon.NewTraceId(ctx, "spw_", 8)
-			ctx2 := klogging.EmbedTraceId(ctx, traceId)
-			klogging.Info(ctx2).With("path", item.Key).With("len", len(item.Value)).With("revision", item.ModRevision).Log("ShardPlanWatcher", "watcher event")
-			shardPlanUpdateMetrics.GetTimeSequence(ctx2).Add(int64(len(item.Value)))
+			slog.InfoContext(ctx, "watcher event",
+				slog.String("event", "ShardPlanWatcher"),
+				slog.Any("path", item.Key),
+				slog.Any("len", len(item.Value)),
+				slog.Any("revision", item.ModRevision))
+			shardPlanUpdateMetrics.GetTimeSequence(ctx).Add(int64(len(item.Value)))
 			shardPlan := smgjson.ParseShardPlan(item.Value)
 			krunloop.VisitResource(sp.parent, func(ss *ServiceState) {
 				ss.stagingShardPlan = shardPlan
-				ss.syncShardsBatchManager.TrySchedule(ctx2, "ShardPlanWatcher")
+				ss.syncShardsBatchManager.TrySchedule(ctx, "ShardPlanWatcher")
 			})
 		case <-sp.stop:
-			klogging.Info(ctx).Log("ShardPlanWatcher", "stop signal received")
+			slog.InfoContext(ctx, "stop signal received",
+				slog.String("event", "ShardPlanWatcher"))
 			stop = true
 		}
 	}
@@ -141,7 +154,8 @@ func (sp *ShardPlanWatcher) Stop() {
 func (sp *ShardPlanWatcher) StopAndWaitForExit() {
 	sp.Stop()
 	<-sp.stopped // 等待 run thread exit
-	klogging.Info(context.Background()).Log("ShardPlanWatcher", "stopped")
+	slog.InfoContext(context.Background(), "stopped",
+		slog.String("event", "ShardPlanWatcher"))
 }
 
 func (sp *ShardPlanWatcher) InitMetrics(ctx context.Context) {
@@ -166,12 +180,20 @@ func (sp *ShardPlanWatcher) GetCurrentShardPlan(ctx context.Context) string {
 	// read from etcd
 	shardPlanItem := etcdprov.GetCurrentEtcdProvider(ctx).Get(ctx, sp.path)
 	shardPlan := shardPlanItem.Value
-	klogging.Info(ctx).With("path", sp.path).With("len", len(shardPlan)).With("shardPlan", common.StrSizeLimit(shardPlan, 1000)).Log("ShardPlanWatcher", "GetCurrentShardPlan")
+	slog.InfoContext(ctx, "GetCurrentShardPlan",
+		slog.String("event", "ShardPlanWatcher"),
+		slog.Any("path", sp.path),
+		slog.Any("len", len(shardPlan)),
+		slog.Any("shardPlan", common.StrSizeLimit(shardPlan, 1000)))
 	return shardPlan
 }
 
 func (sp *ShardPlanWatcher) WriteShardPlan(ctx context.Context, shardPlan string) {
 	// write to etcd
 	etcdprov.GetCurrentEtcdProvider(ctx).Set(ctx, sp.path, shardPlan)
-	klogging.Info(ctx).With("path", sp.path).With("len", len(shardPlan)).With("shardPlan", common.StrSizeLimit(shardPlan, 1000)).Log("ShardPlanWatcher", "WriteShardPlan")
+	slog.InfoContext(ctx, "WriteShardPlan",
+		slog.String("event", "ShardPlanWatcher"),
+		slog.Any("path", sp.path),
+		slog.Any("len", len(shardPlan)),
+		slog.Any("shardPlan", common.StrSizeLimit(shardPlan, 1000)))
 }

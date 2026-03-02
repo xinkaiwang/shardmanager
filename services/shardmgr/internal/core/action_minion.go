@@ -1,12 +1,12 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -35,10 +35,19 @@ func (am *ActionMinion) Run(ctx context.Context, ss *ServiceState) {
 	elapseMs := kcommon.GetWallTimeMs() - startMs
 	if ke != nil {
 		costfunc.ProposalFailMetrics.GetTimeSequence(ctx, am.moveState.SolverType).Add(1)
-		klogging.Error(ctx).WithError(ke).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion.Run", "Error")
+		slog.ErrorContext(ctx, "Error",
+			slog.String("event", "ActionMinion.Run"),
+			slog.Any("error", ke),
+			slog.Any("signature", am.moveState.Signature),
+			slog.Any("proposalId", am.moveState.ProposalId),
+			slog.Any("elapsedMs", elapseMs))
 	} else {
 		costfunc.ProposalSuccMetrics.GetTimeSequence(ctx, am.moveState.SolverType).Add(1)
-		klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("elapsedMs", elapseMs).Log("ActionMinion.Run", "done")
+		slog.InfoContext(ctx, "done",
+			slog.String("event", "ActionMinion.Run"),
+			slog.Any("signature", am.moveState.Signature),
+			slog.Any("proposalId", am.moveState.ProposalId),
+			slog.Any("elapsedMs", elapseMs))
 	}
 	ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, nil)
 	ss.VisitServiceState(ctx, func(ss *ServiceState) {
@@ -47,10 +56,17 @@ func (am *ActionMinion) Run(ctx context.Context, ss *ServiceState) {
 }
 
 func (am *ActionMinion) run(ctx context.Context) {
-	klogging.Info(ctx).With("signature", am.moveState.Signature).With("proposalId", am.moveState.ProposalId).With("actionCount", len(am.moveState.Actions)).Log("ActionMinion", "Started")
+	slog.InfoContext(ctx, "Started",
+		slog.String("event", "ActionMinion"),
+		slog.Any("signature", am.moveState.Signature),
+		slog.Any("proposalId", am.moveState.ProposalId),
+		slog.Any("actionCount", len(am.moveState.Actions)))
 	for am.moveState.CurrentAction < len(am.moveState.Actions) {
 		action := am.moveState.Actions[am.moveState.CurrentAction]
-		klogging.Info(ctx).With("action", action).With("proposalId", am.moveState.ProposalId).Log("ActionMinion", "RunAction")
+		slog.InfoContext(ctx, "RunAction",
+			slog.String("event", "ActionMinion"),
+			slog.Any("action", action),
+			slog.Any("proposalId", am.moveState.ProposalId))
 		switch action.ActionType {
 		case smgjson.AT_RemoveFromRoutingAndSleep:
 			am.actionRemoveFromRouting(ctx, am.moveState.CurrentAction)
@@ -134,7 +150,13 @@ func (am *ActionMinion) actionAddToRouting(ctx context.Context, stepIdx int) {
 		action.ActionStage = smgjson.AS_Completed
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("addToRouting"))
 	}
-	klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).With("stage", action.ActionStage).Log("actionAddToRouting", "add to routing table")
+	slog.InfoContext(ctx, "add to routing table",
+		slog.String("event", "actionAddToRouting"),
+		slog.Any("proposalId", am.moveState.ProposalId),
+		slog.Any("worker", action.To),
+		slog.Any("wallTime", kcommon.GetWallTimeMs()),
+		slog.Any("status", status),
+		slog.Any("stage", action.ActionStage))
 	if status == AS_Failed {
 		panic(ke)
 	}
@@ -211,7 +233,13 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			// wait on signal box
 			signalBox = workerState.SignalBox
 			status = AS_Wait
-			klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).With("assignmentId", action.DestAssignmentId).Log("actionAddShard", "add shard to worker")
+			slog.InfoContext(ctx, "add shard to worker",
+				slog.String("event", "actionAddShard"),
+				slog.Any("proposalId", am.moveState.ProposalId),
+				slog.Any("worker", action.To),
+				slog.Any("wallTime", kcommon.GetWallTimeMs()),
+				slog.Any("status", status),
+				slog.Any("assignmentId", action.DestAssignmentId))
 		}, "actionAddShard")
 		if status == AS_Failed {
 			panic(ke)
@@ -220,7 +248,12 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 		am.ss.actionProvider.StoreActionNode(ctx, am.moveState.ProposalId, am.moveState.ToMoveStateJson("addShard"))
 	}
 	// step 2: wail until this assignment is ready (based on feedback from ephemeral node)
-	klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("status", status).Log("actionAddShard", "wait for assignment to be ready")
+	slog.InfoContext(ctx, "wait for assignment to be ready",
+		slog.String("event", "actionAddShard"),
+		slog.Any("proposalId", am.moveState.ProposalId),
+		slog.Any("worker", action.To),
+		slog.Any("wallTime", kcommon.GetWallTimeMs()),
+		slog.Any("status", status))
 	var ke *kerror.Kerror
 	for status == AS_Wait {
 		loopId := kcommon.RandomString(ctx, 8)
@@ -230,7 +263,14 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 				status = AS_Failed
 				panic(kerror.Create("ContextCanceled", "context canceled"))
 			case <-signalBox.NotifyCh:
-				klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).With("notifyId", signalBox.NofityId).With("loopId", loopId).Log("actionAddShard", "wake up")
+				slog.InfoContext(ctx, "wake up",
+					slog.String("event", "actionAddShard"),
+					slog.Any("proposalId", am.moveState.ProposalId),
+					slog.Any("worker", action.To),
+					slog.Any("wallTime", kcommon.GetWallTimeMs()),
+					slog.Any("notifyReason", signalBox.NotifyReason),
+					slog.Any("notifyId", signalBox.NofityId),
+					slog.Any("loopId", loopId))
 			}
 		}
 		var reason string
@@ -271,7 +311,15 @@ func (am *ActionMinion) actionAddShard(ctx context.Context, stepIdx int) {
 			reason = "assignment not in ready state"
 		}, "actionAddShardWait")
 
-		klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.To).With("wallTime", kcommon.GetWallTimeMs()).With("loopId", loopId).With("reason", reason).With("status", status).WithError(ke).Log("actionAddShard", "loop end")
+		slog.InfoContext(ctx, "loop end",
+			slog.String("event", "actionAddShard"),
+			slog.Any("error", ke),
+			slog.Any("proposalId", am.moveState.ProposalId),
+			slog.Any("worker", action.To),
+			slog.Any("wallTime", kcommon.GetWallTimeMs()),
+			slog.Any("loopId", loopId),
+			slog.Any("reason", reason),
+			slog.Any("status", status))
 	}
 	if status == AS_Failed {
 		panic(ke)
@@ -357,7 +405,13 @@ func (am *ActionMinion) actionDropShard(ctx context.Context, stepIdx int) {
 			case <-ctx.Done():
 				panic(kerror.Create("ContextCanceled", "context canceled"))
 			case <-signalBox.NotifyCh:
-				klogging.Info(ctx).With("proposalId", am.moveState.ProposalId).With("worker", action.From).With("wallTime", kcommon.GetWallTimeMs()).With("notifyReason", signalBox.NotifyReason).With("notifyId", signalBox.NofityId).Log("actionDropShard", "wake up")
+				slog.InfoContext(ctx, "wake up",
+					slog.String("event", "actionDropShard"),
+					slog.Any("proposalId", am.moveState.ProposalId),
+					slog.Any("worker", action.From),
+					slog.Any("wallTime", kcommon.GetWallTimeMs()),
+					slog.Any("notifyReason", signalBox.NotifyReason),
+					slog.Any("notifyId", signalBox.NofityId))
 			}
 		}
 		am.ss.PostActionAndWait(func(ss *ServiceState) {

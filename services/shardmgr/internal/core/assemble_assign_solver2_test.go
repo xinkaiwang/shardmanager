@@ -1,12 +1,12 @@
 package core
 
 import (
+	"log/slog"
 	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/cougar/cougarjson"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -22,20 +22,24 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 		sc.AssignSolverConfig.SolverEnabled = false
 		sc.UnassignSolverConfig.SolverEnabled = false
 	}))
-	klogging.Info(ctx).Log("测试环境已配置", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "测试环境已配置"))
 
 	fn := func() {
 		// Step 1: 创建 shardPlan and set into etcd
 		// 添加2个分片
-		klogging.Info(ctx).Log("Step1", "创建 shardPlan")
+		slog.InfoContext(ctx, "创建 shardPlan",
+			slog.String("event", "Step1"))
 		firstShardPlan := []string{"shard_1", "shard_2"}
 		setup.SetShardPlan(ctx, firstShardPlan)
 
 		// Step 2: 创建 ServiceState
-		klogging.Info(ctx).Log("Step2", "创建 ServiceState")
+		slog.InfoContext(ctx, "创建 ServiceState",
+			slog.String("event", "Step2"))
 		ss := AssembleSsAll(ctx, "TestAssembleAssignSolver")
 		setup.ServiceState = ss
-		klogging.Info(ctx).Log("ServiceState已创建", ss.Name)
+		slog.InfoContext(ctx, ss.Name,
+			slog.String("event", "ServiceState已创建"))
 
 		{
 			// 等待快照更新
@@ -51,7 +55,8 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 			assert.True(t, waitSucc, "应该能在超时前创建快照, 耗时=%dms", elapsedMs)
 		}
 		// Step 3: 创建 worker-1 eph
-		klogging.Info(ctx).Log("Step3", "创建 worker-1 eph")
+		slog.InfoContext(ctx, "创建 worker-1 eph",
+			slog.String("event", "Step3"))
 		workerFullId, _ := setup.CreateAndSetWorkerEph(t, "worker-1", "session-1", "localhost:8080")
 
 		{
@@ -61,7 +66,8 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 		}
 
 		// Step 4: Enable AssignSolver
-		klogging.Info(ctx).Log("Step4", "Enable AssignSolver")
+		slog.InfoContext(ctx, "Enable AssignSolver",
+			slog.String("event", "Step4"))
 		setup.UpdateServiceConfig(config.WithSolverConfig(func(sc *config.SolverConfig) {
 			sc.AssignSolverConfig.SolverEnabled = true
 		}))
@@ -105,7 +111,8 @@ func TestAssembleAssignSolver_2_shards(t *testing.T) {
 		}
 
 		// step5: simulate pilot node update
-		klogging.Info(ctx).Log("Step5", "simulate pilot node update")
+		slog.InfoContext(ctx, "simulate pilot node update",
+			slog.String("event", "Step5"))
 		var pilotAssign1 *cougarjson.PilotAssignmentJson
 		var pilotAssign2 *cougarjson.PilotAssignmentJson
 		{
