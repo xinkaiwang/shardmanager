@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -48,18 +49,24 @@ func main() {
 		logFormat = "json" // 默认 JSON 格式
 	}
 
-	// 创建并配置 LogrusLogger
-	logrusLogger := klogging.NewLogrusLogger(ctx)
-	logrusLogger.SetConfig(ctx, logLevel, logFormat)
-	klogging.SetDefaultLogger(logrusLogger)
-	klogging.Info(ctx).With("logLevel", logLevel).With("logFormat", logFormat).Log("LogLevelSet", "")
+	// Initialize OpenTelemetry
+	klogging.InitOpenTelemetry()
+
+	// Create slog handler
+	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.ParseLevel(logLevel),
+		Format: logFormat,
+	})
+	logger := slog.New(slogHandler)
+	slog.SetDefault(logger)
+	slog.InfoContext(ctx, "LogLevelSet", slog.String("logLevel", logLevel), slog.String("logFormat", logFormat))
 
 	// 设置版本信息
 	biz.SetVersion(Version)
 	ksysmetrics.SetVersion(Version) // 设置系统指标的版本号
 
 	// 记录启动信息
-	klogging.Info(ctx).With("version", Version).With("commit", GitCommit).With("buildTime", BuildTime).Log("ServerStarting", "Starting hellosvc")
+	slog.InfoContext(ctx, "Starting hellosvc", slog.String("event", "ServerStarting"), slog.String("version", Version), slog.String("commit", GitCommit), slog.String("buildTime", BuildTime))
 
 	// 创建 Prometheus 导出器
 	pe, err := prometheus.NewExporter(prometheus.Options{
@@ -106,10 +113,7 @@ func main() {
 	}
 
 	// 记录端口配置
-	klogging.Info(ctx).
-		With("api_port", apiPort).
-		With("metrics_port", metricsPort).
-		Log("ServerConfig", "Server ports configuration")
+	slog.InfoContext(ctx, "Server ports configuration", slog.String("event", "ServerConfig"), slog.Int("api_port", apiPort), slog.Int("metrics_port", metricsPort))
 
 	// 优雅关闭
 	go func() {
@@ -117,30 +121,30 @@ func main() {
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
 
-		klogging.Info(ctx).Log("ServerShutdown", "Shutting down servers...")
+		slog.InfoContext(ctx, "Shutting down servers...", slog.String("event", "ServerShutdown"))
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
 		if err := mainServer.Shutdown(ctx); err != nil {
-			klogging.Error(ctx).With("error", err).Log("MainServerShutdownError", "Main server shutdown error")
+			slog.ErrorContext(ctx, "Main server shutdown error", slog.String("event", "MainServerShutdownError"), slog.Any("error", err))
 		}
 		if err := metricsServer.Shutdown(ctx); err != nil {
-			klogging.Error(ctx).With("error", err).Log("MetricsServerShutdownError", "Metrics server shutdown error")
+			slog.ErrorContext(ctx, "Metrics server shutdown error", slog.String("event", "MetricsServerShutdownError"), slog.Any("error", err))
 		}
 	}()
 
 	// 启动 metrics 服务器
 	go func() {
-		klogging.Info(ctx).With("addr", metricsServer.Addr).Log("MetricsServerStarting", "Metrics server starting")
+		slog.InfoContext(ctx, "Metrics server starting", slog.String("event", "MetricsServerStarting"), slog.String("addr", metricsServer.Addr))
 		if err := metricsServer.ListenAndServe(); err != http.ErrServerClosed {
-			klogging.Error(ctx).With("error", err).Log("MetricsServerError", "Metrics server error")
+			slog.ErrorContext(ctx, "Metrics server error", slog.String("event", "MetricsServerError"), slog.Any("error", err))
 		}
 	}()
 
 	// 启动主服务器
-	klogging.Info(ctx).With("addr", mainServer.Addr).Log("MainServerStarting", "Main server starting")
+	slog.InfoContext(ctx, "Main server starting", slog.String("event", "MainServerStarting"), slog.String("addr", mainServer.Addr))
 	if err := mainServer.ListenAndServe(); err != http.ErrServerClosed {
-		klogging.Error(ctx).With("error", err).Log("MainServerError", "Main server error")
+		slog.ErrorContext(ctx, "Main server error", slog.String("event", "MainServerError"), slog.Any("error", err))
 	}
-	klogging.Info(ctx).Log("ServerShutdown", "Servers stopped")
+	slog.InfoContext(ctx, "Servers stopped", slog.String("event", "ServerShutdown"))
 }

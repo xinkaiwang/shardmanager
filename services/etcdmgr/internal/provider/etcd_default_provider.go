@@ -3,12 +3,12 @@ package provider
 import (
 	"context"
 	"encoding/base64"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -141,12 +141,12 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, prefix string, limit i
 		opts = append(opts, clientv3.WithLimit(int64(limit+1)))
 	}
 
-	klogging.Info(ctx).
-		With("prefix", prefix).
-		With("limit", limit).
-		With("hasNextToken", nextToken != "").
-		With("useNextToken", useNextToken).
-		Log("ListKeysRequest", "listing keys from etcd")
+	slog.InfoContext(ctx, "listing keys from etcd",
+		slog.String("event", "ListKeysRequest"),
+		slog.String("prefix", prefix),
+		slog.Int("limit", limit),
+		slog.Bool("hasNextToken", nextToken != ""),
+		slog.Bool("useNextToken", useNextToken))
 
 	// 查询etcd
 	resp, err := pvd.client.Get(ctx, startKey, opts...)
@@ -214,11 +214,11 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, prefix string, limit i
 		})
 	}
 
-	klogging.Info(ctx).
-		With("prefix", prefix).
-		With("count", len(items)).
-		With("hasMore", next != "").
-		Log("ListKeysResponse", "got keys from etcd")
+	slog.InfoContext(ctx, "got keys from etcd",
+		slog.String("event", "ListKeysResponse"),
+		slog.String("prefix", prefix),
+		slog.Int("count", len(items)),
+		slog.Bool("hasMore", next != ""))
 
 	return items, next
 }
@@ -231,7 +231,10 @@ func (pvd *etcdDefaultProvider) List(ctx context.Context, prefix string, limit i
 // 错误处理：
 // - 如果发生网络错误或其他 etcd 错误，将返回 EtcdPutError
 func (pvd *etcdDefaultProvider) Set(ctx context.Context, key, value string) {
-	klogging.Info(ctx).With("key", key).With("valueLength", len(value)).Log("etcdDefaultProvider", "setting key in etcd")
+	slog.InfoContext(ctx, "setting key in etcd",
+		slog.String("event", "etcdDefaultProvider"),
+		slog.String("key", key),
+		slog.Int("valueLength", len(value)))
 	_, err := pvd.client.Put(ctx, key, value)
 	if err != nil {
 		panic(kerror.Create("EtcdPutError", "failed to set key in etcd").

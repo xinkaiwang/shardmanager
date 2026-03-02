@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/shadow"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/solver"
 )

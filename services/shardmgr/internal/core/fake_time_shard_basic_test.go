@@ -1,9 +1,9 @@
 package core
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 

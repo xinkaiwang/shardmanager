@@ -3,12 +3,12 @@ package ksysmetrics
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"syscall"
 	"time"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"go.opencensus.io/metric"
 	"go.opencensus.io/metric/metricdata"
 )
@@ -53,7 +53,8 @@ var (
 
 func GetCurrentRegistry() *metric.Registry {
 	if registry == nil {
-		klogging.Error(context.Background()).Log("MetricsRegistryNotInitialized", "The metrics registry is not initialized")
+		slog.ErrorContext(context.Background(), "The metrics registry is not initialized",
+			slog.String("event", "MetricsRegistryNotInitialized"))
 		return nil
 	}
 	return registry
@@ -185,7 +186,9 @@ func collectMetrics(ctx context.Context, pid int) {
 		currentUserCPU = userCPU.Seconds()
 		currentSystemCPU = sysCPU.Seconds()
 	} else {
-		klogging.Error(ctx).With("error", err).Log("CPUMetricsError", "Failed to collect CPU metrics")
+		slog.ErrorContext(ctx, "Failed to collect CPU metrics",
+			slog.String("event", "CPUMetricsError"),
+			slog.Any("error", err))
 	}
 
 	// 收集内存使用情况
@@ -203,7 +206,9 @@ func collectMetrics(ctx context.Context, pid int) {
 	if fds, err := getFDCount(pid); err == nil {
 		currentFDs = int64(fds)
 	} else {
-		klogging.Error(ctx).With("error", err).Log("FDMetricsError", "Failed to collect FD metrics")
+		slog.ErrorContext(ctx, "Failed to collect FD metrics",
+			slog.String("event", "FDMetricsError"),
+			slog.Any("error", err))
 	}
 
 	// 收集 GC 统计信息

@@ -3,9 +3,11 @@ package costfunc
 import (
 	"context"
 
+	"log/slog"
+	"os"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -119,7 +121,8 @@ func (action *Action) ApplyToSnapshot(snapshot *Snapshot, mode ApplyMode) *Snaps
 	case smgjson.AT_RemoveFromRoutingAndSleep, smgjson.AT_AddToRouting: // nothing to do
 		break
 	default:
-		klogging.Fatal(context.Background()).With("actionType", action.ActionType).Log("UnknownActionType", "")
+		slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownActionType"), slog.Any("actionType", action.ActionType))
+		os.Exit(1)
 	}
 	return snapshot
 }
@@ -133,7 +136,8 @@ func (action *Action) applyAddShard(snapshot *Snapshot, mode ApplyMode) {
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+			slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownApplyMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	shardState, ok := snapshot.AllShards.Get(action.ShardId)
@@ -144,7 +148,8 @@ func (action *Action) applyAddShard(snapshot *Snapshot, mode ApplyMode) {
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+			slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownApplyMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	replicaState, ok := shardState.Replicas[action.DestReplicaIdx]
@@ -181,7 +186,8 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+			slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownApplyMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	assignmentId, ok := workerState.Assignments[action.ShardId]
@@ -192,7 +198,8 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+			slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownApplyMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	if assignmentId != action.SrcAssignmentId {
@@ -202,7 +209,8 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+			slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownApplyMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	shardState, ok := snapshot.AllShards.Get(action.ShardId)
@@ -213,7 +221,8 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+			slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownApplyMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	replicaState, ok := shardState.Replicas[action.SrcReplicaIdx]
@@ -224,7 +233,8 @@ func (action *Action) applyDropShard(snapshot *Snapshot, mode ApplyMode) {
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("UnknownApplyMode", "")
+			slog.ErrorContext(context.Background(), "", slog.String("event", "UnknownApplyMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	// when reach here, the srcWorker/assignment/shard/replica confirmed exist

@@ -9,7 +9,7 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
+	"log/slog"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -100,10 +100,10 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 	revision := resp.Header.Revision
 
 	// 记录开始加载的版本号
-	klogging.Debug(ctx).
-		With("pathPrefix", pathPrefix).
-		With("revision", revision).
-		Log("LoadAllByPrefix", "starting load at revision")
+	slog.DebugContext(ctx, "starting load at revision",
+		slog.String("event", "LoadAllByPrefix"),
+		slog.String("pathPrefix", pathPrefix),
+		slog.Int64("revision", int64(revision)))
 
 	var key string = pathPrefix
 	for {
@@ -140,12 +140,12 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 		}
 
 		// 记录本次加载的数量
-		klogging.Debug(ctx).
-			With("pathPrefix", pathPrefix).
-			With("pageCount", len(resp.Kvs)).
-			With("totalCount", len(items)+len(resp.Kvs)).
-			With("revision", revision).
-			Log("LoadAllByPrefix", "loaded page of keys from etcd")
+		slog.DebugContext(ctx, "loaded page of keys from etcd",
+		slog.String("event", "LoadAllByPrefix"),
+		slog.String("pathPrefix", pathPrefix),
+		slog.Int("pageCount", len(resp.Kvs)),
+		slog.Int("totalCount", len(items)+len(resp.Kvs)),
+		slog.Int64("revision", int64(revision)))
 
 		// 如果没有更多数据，退出循环
 		if len(resp.Kvs) == 0 {
@@ -176,10 +176,10 @@ func (pvd *etcdDefaultProvider) LoadAllByPrefix(ctx context.Context, pathPrefix 
 	}
 
 	for _, kv := range items {
-		klogging.Info(ctx).
-			With("key", kv.Key).
-			With("value", kv.Value).
-			Log("LoadAllByPrefix", "found key")
+		slog.InfoContext(ctx, "found key",
+		slog.String("event", "LoadAllByPrefix"),
+		slog.String("key", kv.Key),
+		slog.String("value", kv.Value))
 	}
 	return items, EtcdRevision(revision)
 }
@@ -197,10 +197,10 @@ func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix st
 		for {
 			// 检查上下文是否已取消
 			if ctx.Err() != nil {
-				klogging.Info(ctx).
-					With("pathPrefix", pathPrefix).
-					With("revision", currentRev).
-					Log("WatchByPrefix", "context cancelled, stopping watch")
+				slog.InfoContext(ctx, "context cancelled, stopping watch",
+		slog.String("event", "WatchByPrefix"),
+		slog.String("pathPrefix", pathPrefix),
+		slog.Int64("revision", int64(currentRev)))
 				return
 			}
 
@@ -211,10 +211,10 @@ func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix st
 			}
 
 			// 开始监听
-			klogging.Info(ctx).
-				With("pathPrefix", pathPrefix).
-				With("revision", currentRev).
-				Log("WatchByPrefix", "starting watch")
+			slog.InfoContext(ctx, "starting watch",
+		slog.String("event", "WatchByPrefix"),
+		slog.String("pathPrefix", pathPrefix),
+		slog.Int64("revision", int64(currentRev)))
 
 			watchChan := pvd.client.Watch(ctx, pathPrefix, opts...)
 
@@ -222,21 +222,21 @@ func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix st
 			for wresp := range watchChan {
 				// 检查是否有错误
 				if wresp.Err() != nil {
-					klogging.Error(ctx).
-						With("pathPrefix", pathPrefix).
-						With("revision", currentRev).
-						With("error", wresp.Err()).
-						Log("WatchByPrefix", "watch error occurred")
+					slog.ErrorContext(ctx, "watch error occurred",
+						slog.String("event", "WatchByPrefix.Error"),
+						slog.String("pathPrefix", pathPrefix),
+						slog.Any("revision", currentRev),
+						slog.Any("error", wresp.Err()))
 					break // 跳出内层循环，重新建立 watch
 				}
 
 				// 检查是否是压缩版本错误
 				if wresp.CompactRevision > 0 {
-					klogging.Warning(ctx).
-						With("pathPrefix", pathPrefix).
-						With("requestedRevision", currentRev).
-						With("compactRevision", wresp.CompactRevision).
-						Log("WatchByPrefix", "requested revision has been compacted")
+					slog.WarnContext(ctx, "requested revision has been compacted",
+						slog.String("event", "WatchByPrefix.Compacted"),
+						slog.String("pathPrefix", pathPrefix),
+						slog.Any("requestedRevision", currentRev),
+						slog.Int64("compactRevision", wresp.CompactRevision))
 					// 从压缩版本开始重新监听
 					currentRev = EtcdRevision(wresp.CompactRevision)
 					break // 跳出内层循环，使用新的 revision 重新建立 watch
@@ -257,16 +257,16 @@ func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix st
 					switch event.Type {
 					case clientv3.EventTypePut:
 						item.Value = string(event.Kv.Value)
-						klogging.Debug(ctx).
-							With("key", item.Key).
-							With("revision", item.ModRevision).
-							Log("WatchByPrefix", "key updated")
+						slog.DebugContext(ctx, "key updated",
+							slog.String("event", "WatchByPrefix.Updated"),
+							slog.String("key", item.Key),
+							slog.Any("revision", item.ModRevision))
 					case clientv3.EventTypeDelete:
 						item.Value = ""
-						klogging.Debug(ctx).
-							With("key", item.Key).
-							With("revision", item.ModRevision).
-							Log("WatchByPrefix", "key deleted")
+						slog.DebugContext(ctx, "key deleted",
+							slog.String("event", "WatchByPrefix.Deleted"),
+							slog.String("key", item.Key),
+							slog.Any("revision", item.ModRevision))
 					}
 
 					// 发送事件，如果上下文已取消则退出
@@ -284,10 +284,10 @@ func (pvd *etcdDefaultProvider) WatchByPrefix(ctx context.Context, pathPrefix st
 			}
 
 			// 记录重连尝试
-			klogging.Warning(ctx).
-				With("pathPrefix", pathPrefix).
-				With("revision", currentRev).
-				Log("WatchByPrefix", "watch channel closed, retrying")
+			slog.WarnContext(ctx, "watch channel closed, retrying",
+				slog.String("event", "WatchByPrefix.Retry"),
+				slog.String("pathPrefix", pathPrefix),
+				slog.Any("revision", currentRev))
 
 			// 添加短暂延迟避免立即重试
 			select {

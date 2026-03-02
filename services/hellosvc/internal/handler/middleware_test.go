@@ -3,16 +3,17 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 func TestErrorHandlingMiddleware(t *testing.T) {
-	klogging.SetDefaultLogger(klogging.NewNullLogger())
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	tests := []struct {
 		name          string
 		handler       http.HandlerFunc
@@ -115,7 +116,7 @@ func TestErrorHandlingMiddleware_ContentType(t *testing.T) {
 
 // 测试错误码转换
 func TestErrorHandlingMiddleware_ErrorCodeMapping(t *testing.T) {
-	klogging.SetDefaultLogger(klogging.NewNullLogger())
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	tests := []struct {
 		name         string
 		errorCode    kerror.ErrorCode

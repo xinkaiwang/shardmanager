@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
@@ -27,10 +28,21 @@ import (
 
 func main() {
 	ctx := context.TODO()
-	klogging.SetDefaultLogger(klogging.NewLogrusLogger(ctx).SetConfig(ctx, "debug", "json"))
+	
+	// Initialize OpenTelemetry for trace propagation
+	klogging.InitOpenTelemetry()
+	
+	// Create and configure slog handler
+	handler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.LevelDebug,
+		Format: "json",
+	})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	
 	fmt.Println("hello")
 	// testKerror()
-	// testKlogging()
+	// testSlog()
 	testLoggingCtx(ctx)
 }
 
@@ -41,28 +53,27 @@ func testKerror() {
 	fmt.Printf("%d, %s\n", httpCode, msg)
 }
 
-func testKlogging() {
-	klogging.Info(context.Background()).With("key", 1028).Log("serverSend", "")
+func testSlog() {
+	slog.InfoContext(context.Background(), "server send",
+		slog.String("event", "serverSend"),
+		slog.Int("key", 1028))
 }
 
 func testTimer(ctx context.Context) {
 	kcommon.TryCatchRun(ctx, func() {})
-	// klogging.Info(context.Background()).With("key", 1028).Log("serverSend", "")
 }
 
 func testLoggingCtx(ctx context.Context) {
 	// log with context
-	klogging.Info(ctx).With("key", 1028).Log("serverSend", "")
-	// attach traceId to ctx
-	traceId2 := kcommon.RandomString(ctx, 8)
-	traceId3 := kcommon.RandomString(ctx, 8)
-	{
-		ctx2 := klogging.EmbedTraceId(ctx, traceId2)
-		klogging.Info(ctx2).With("key", 1028).Log("serverSend", "")
-	}
-	{
-		ctx3 := klogging.EmbedTraceId(ctx, traceId3)
-		klogging.Info(ctx3).With("key", 1028).Log("serverSend", "")
-	}
-	klogging.Info(ctx).With("key", 1028).Log("serverSend", "")
+	slog.InfoContext(ctx, "server send",
+		slog.String("event", "serverSend"),
+		slog.Int("key", 1028))
+	
+	// Note: OpenTelemetry handles trace IDs automatically
+	// No need to manually embed trace IDs like before
+	// Trace context is automatically propagated through ctx
+	
+	slog.InfoContext(ctx, "server send with auto trace",
+		slog.String("event", "serverSend"),
+		slog.Int("key", 1028))
 }

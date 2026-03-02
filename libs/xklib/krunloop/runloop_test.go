@@ -2,12 +2,12 @@ package krunloop
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // Create a test resource type
@@ -30,7 +30,8 @@ func (te *RunLoopTestEvent) GetName() string {
 }
 
 func (te *RunLoopTestEvent) Process(ctx context.Context, _ *TestRunLoopResource) {
-	klogging.Info(ctx).Log("TestEvent", te.Message)
+	slog.InfoContext(ctx, te.Message,
+		slog.String("event", "TestEvent"))
 	select {
 	case te.executed <- true:
 	default:
@@ -211,7 +212,8 @@ func (de DummyEvent) GetName() string {
 }
 
 func (de DummyEvent) Process(ctx context.Context, _ *TestRunLoopResource) {
-	klogging.Info(ctx).Log("DummyEvent", de.Msg)
+	slog.InfoContext(ctx, de.Msg,
+		slog.String("event", "DummyEvent"))
 }
 
 // Test concurrent event processing

@@ -7,9 +7,11 @@ import (
 	"sort"
 	"strconv"
 
+	"log/slog"
+	"os"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/config"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -124,7 +126,8 @@ func ShardSnapParseFromJson(jsonData map[string]interface{}) *ShardSnap {
 func (ss *ShardSnap) String() string {
 	jsonStr, err := json.Marshal(ss.ToJson())
 	if err != nil {
-		klogging.Fatal(context.Background()).WithError(err).Log("ShardSnap:ToJson", "error")
+		slog.ErrorContext(context.Background(), "error", slog.String("event", "ShardSnap:ToJson"), slog.Any("error", err))
+		os.Exit(1)
 	}
 	return string(jsonStr)
 }
@@ -543,7 +546,8 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	workerSnap, ok := snap.AllWorkers.Get(workerFullId)
@@ -554,7 +558,8 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	// dest worker should be in good state
@@ -563,10 +568,11 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 			ke := kerror.Create("WorkerNotInGoodState", "worker not in good state").With("workerFullId", workerFullId).With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId)
 			panic(ke)
 		} else if mode == AM_Relaxed {
-			klogging.Warning(context.Background()).With("workerFullId", workerFullId).With("shardId", shardId).With("replicaIdx", replicaIdx).With("assignmentId", assignmentId).Log("WorkerNotInGoodState", "this should never happen")
+			slog.WarnContext(context.Background(), "this should never happen", slog.String("event", "WorkerNotInGoodState"), slog.Any("workerFullId", workerFullId), slog.Any("shardId", shardId), slog.Any("replicaIdx", replicaIdx), slog.Any("assignmentId", assignmentId))
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	if oldAssignId, ok := workerSnap.Assignments[shardId]; ok {
@@ -574,10 +580,11 @@ func (snap *Snapshot) Assign(shardId data.ShardId, replicaIdx data.ReplicaIdx, a
 			ke := kerror.Create("WorkerAlreadyHasShard", "worker already has shard").With("workerFullId", workerFullId).With("shardId", shardId).With("newReplica", replicaIdx).With("oldAssigId", oldAssignId).With("newAssigId", assignmentId)
 			panic(ke)
 		} else if mode == AM_Relaxed {
-			klogging.Warning(context.Background()).With("workerFullId", workerFullId).With("shardId", shardId).With("newReplica", replicaIdx).With("oldAssigId", oldAssignId).With("newAssigId", assignmentId).Log("WorkerAlreadyHasShard", "this should never happen")
+			slog.WarnContext(context.Background(), "this should never happen", slog.String("event", "WorkerAlreadyHasShard"), slog.Any("workerFullId", workerFullId), slog.Any("shardId", shardId), slog.Any("newReplica", replicaIdx), slog.Any("oldAssigId", oldAssignId), slog.Any("newAssigId", assignmentId))
 			// ignore and continue
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	replicaSnap, ok := shardSnap.Replicas[replicaIdx]
@@ -610,7 +617,8 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	shardSnap, ok := snap.AllShards.Get(shardId)
@@ -621,7 +629,8 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	replicaSnap, ok := shardSnap.Replicas[replicaIdx]
@@ -632,7 +641,8 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	_, ok = snap.AllAssignments.Get(assignmentId)
@@ -643,7 +653,8 @@ func (snap *Snapshot) Unassign(workerFullId data.WorkerFullId, shardId data.Shar
 		} else if mode == AM_Relaxed {
 			return
 		} else {
-			klogging.Fatal(context.Background()).With("mode", mode).Log("unknownMoveMode", "mode")
+			slog.ErrorContext(context.Background(), "mode", slog.String("event", "unknownMoveMode"), slog.Any("mode", mode))
+			os.Exit(1)
 		}
 	}
 	newWorkerSnap := workerSnap.Clone()
@@ -743,7 +754,8 @@ func (snap *Snapshot) ToJsonString() string {
 	obj := snap.ToJson()
 	jsonStr, err := json.Marshal(obj)
 	if err != nil {
-		klogging.Fatal(context.Background()).WithError(err).Log("ToJsonString", "error")
+		slog.ErrorContext(context.Background(), "error", slog.String("event", "ToJsonString"), slog.Any("error", err))
+		os.Exit(1)
 	}
 	return string(jsonStr)
 }

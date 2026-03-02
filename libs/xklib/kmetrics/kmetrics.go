@@ -2,6 +2,7 @@ package kmetrics
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -9,7 +10,6 @@ import (
 	"unsafe"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"go.opencensus.io/metric/metricdata"
 	"go.opencensus.io/resource"
 )
@@ -196,7 +196,10 @@ func CreateTimeSequence(ctx context.Context, key string, parent *Kmetric, tagVal
 
 	go func() {
 		// we have to defer this log operation into another goroutine to avoid dead-lock caused by re-entry
-		klogging.Verbose(ctxCopy).With("gaugeName", metricName).With("tagKey", tagKey).Log("CreateTimeSequence", "")
+		slog.DebugContext(ctxCopy, "Create time sequence",
+			slog.String("event", "CreateTimeSequence"),
+			slog.String("gaugeName", metricName),
+			slog.String("tagKey", tagKey))
 	}()
 	return seq
 }

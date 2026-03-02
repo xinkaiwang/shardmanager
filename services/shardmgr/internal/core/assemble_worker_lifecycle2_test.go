@@ -1,8 +1,8 @@
 package core
 
 import (
-	"log/slog"
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

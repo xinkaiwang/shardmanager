@@ -1,8 +1,8 @@
 package core
 
 import (
-	"log/slog"
 	"context"
+	"log/slog"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
@@ -101,8 +101,8 @@ func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShard
 		stop:    make(chan struct{}),
 		stopped: make(chan struct{}),
 	}
-	sp.InitMetrics(ctx)                         // 初始化指标
-	go sp.run(ctx) // spw = ShardPlanWatcher
+	sp.InitMetrics(ctx) // 初始化指标
+	go sp.run(ctx)      // spw = ShardPlanWatcher
 	return sp
 }
 

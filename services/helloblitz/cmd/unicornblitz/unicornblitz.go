@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,7 +32,9 @@ func runLoadTest(ctx context.Context, app *biz.UnicornBlitzApp, loopSleepMs int,
 
 	objId := kcommon.RandomString(ctx, 8)
 	randomDelay := kcommon.RandomInt(ctx, loopSleepMs)
-	klogging.Info(ctx).With("objId", objId).Log("LoadTestStart", "Starting load test")
+	slog.InfoContext(ctx, "starting load test",
+		slog.String("event", "LoadTestStart"),
+		slog.String("objId", objId))
 	time.Sleep(time.Duration(randomDelay) * time.Millisecond)
 	stop := false
 	for !stop {
@@ -44,9 +47,14 @@ func runLoadTest(ctx context.Context, app *biz.UnicornBlitzApp, loopSleepMs int,
 				app.RunLoadTest(ctx, objId)
 			})
 			if ke != nil {
-				klogging.Error(ctx).With("objId", objId).With("error", ke).Log("LoadTestError", "Error during load test")
+				slog.ErrorContext(ctx, "error during load test",
+					slog.String("event", "LoadTestError"),
+					slog.String("objId", objId),
+					slog.Any("error", ke))
 			} else {
-				klogging.Debug(ctx).With("objId", objId).Log("LoadTestSuccess", "Load test successful")
+				slog.DebugContext(ctx, "load test successful",
+					slog.String("event", "LoadTestSuccess"),
+					slog.String("objId", objId))
 			}
 
 			// 如果需要，在请求之间休眠
@@ -55,7 +63,9 @@ func runLoadTest(ctx context.Context, app *biz.UnicornBlitzApp, loopSleepMs int,
 			}
 		}
 	}
-	klogging.Info(ctx).With("objId", objId).Log("LoadTestStop", "Stopping load test")
+	slog.InfoContext(ctx, "stopping load test",
+		slog.String("event", "LoadTestStop"),
+		slog.String("objId", objId))
 }
 
 func main() {
@@ -68,24 +78,37 @@ func main() {
 	}
 	logFormat := os.Getenv("LOG_FORMAT")
 	if logFormat == "" {
-		logFormat = "simple" // 默认 JSON 格式
+		logFormat = "json" // 默认 JSON 格式
 	}
 
-	// 创建并配置 LogrusLogger
-	logrusLogger := klogging.NewLogrusLogger(ctx)
-	logrusLogger.SetConfig(ctx, logLevel, logFormat)
-	klogging.SetDefaultLogger(logrusLogger)
-	klogging.Info(ctx).With("logLevel", logLevel).With("logFormat", logFormat).Log("LogLevelSet", "")
+	// Initialize OpenTelemetry
+	klogging.InitOpenTelemetry()
+
+	// Create slog handler
+	handler := klogging.NewHandler(&klogging.HandlerOptions{
+		Level:  klogging.ParseLevel(logLevel),
+		Format: logFormat,
+	})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	slog.InfoContext(ctx, "log level set",
+		slog.String("event", "LogLevelSet"),
+		slog.String("logLevel", logLevel),
+		slog.String("logFormat", logFormat))
 
 	// 记录启动信息
-	klogging.Info(ctx).Log("Starting", "Starting helloblitz load test driver")
+	slog.InfoContext(ctx, "starting helloblitz load test driver",
+		slog.String("event", "Starting"))
 
 	// 创建 Prometheus 导出器
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "helloblitz",
 	})
 	if err != nil {
-		klogging.Fatal(ctx).With("error", err).Log("PrometheusExporterError", "Failed to create Prometheus exporter")
+		slog.ErrorContext(ctx, "failed to create prometheus exporter",
+			slog.String("event", "PrometheusExporterError"),
+			slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	// 注册 kmetrics 注册表
@@ -111,9 +134,13 @@ func main() {
 
 	// 启动 metrics 服务器
 	go func() {
-		klogging.Info(ctx).With("addr", metricsServer.Addr).Log("MetricsServerStarting", "Starting metrics server")
+		slog.InfoContext(ctx, "starting metrics server",
+			slog.String("event", "MetricsServerStarting"),
+			slog.String("addr", metricsServer.Addr))
 		if err := metricsServer.ListenAndServe(); err != http.ErrServerClosed {
-			klogging.Error(ctx).With("error", err).Log("MetricsServerError", "Metrics server error")
+			slog.ErrorContext(ctx, "metrics server error",
+				slog.String("event", "MetricsServerError"),
+				slog.Any("error", err))
 		}
 	}()
 
@@ -121,10 +148,11 @@ func main() {
 	threadCount := kcommon.GetEnvInt("BLITZ_THREAD_COUNT", 3)
 	loopSleepMs := kcommon.GetEnvInt("BLITZ_LOOP_SLEEP_MS", 0)
 
-	klogging.Info(ctx).With("thread_count", threadCount).
-		With("loop_sleep_ms", loopSleepMs).
-		With("metrics_port", metricsPort).
-		Log("Config", "Load test configuration")
+	slog.InfoContext(ctx, "load test configuration",
+		slog.String("event", "Config"),
+		slog.Int("thread_count", threadCount),
+		slog.Int("loop_sleep_ms", loopSleepMs),
+		slog.Int("metrics_port", metricsPort))
 
 	app := biz.NewUnicornBlitzApp(ctx)
 
@@ -157,8 +185,11 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-		klogging.Error(ctx).With("error", err).Log("MetricsServerShutdownError", "Error shutting down metrics server")
+		slog.ErrorContext(ctx, "error shutting down metrics server",
+			slog.String("event", "MetricsServerShutdownError"),
+			slog.Any("error", err))
 	}
 
-	klogging.Info(ctx).Log("Shutdown", "Load test driver stopped")
+	slog.InfoContext(ctx, "load test driver stopped",
+		slog.String("event", "Shutdown"))
 }

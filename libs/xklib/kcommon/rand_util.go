@@ -4,12 +4,11 @@ import (
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"log/slog"
 	"math/rand"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 const defaultCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -32,11 +31,15 @@ func GetRandom(ctx context.Context, op OpGetRand) {
 		buf := make([]byte, 8)
 		_, err := crypto_rand.Read(buf)
 		if err != nil {
-			klogging.Warning(ctx).WithError(err).Log("CryptoRandSeedFailed", "")
+			slog.WarnContext(ctx, "Crypto rand seed failed",
+				slog.String("event", "CryptoRandSeedFailed"),
+				slog.Any("error", err))
 		} else {
 			seed := int64(binary.BigEndian.Uint64(buf))
 			safeRand.seededRand = rand.New(rand.NewSource(seed))
-			klogging.Info(ctx).With("seed", strconv.FormatInt(seed, 16)).Log("CryptoRandSeedSucc", "")
+			slog.InfoContext(ctx, "Crypto rand seed success",
+				slog.String("event", "CryptoRandSeedSucc"),
+				slog.String("seed", strconv.FormatInt(seed, 16)))
 		}
 	}
 	op(safeRand.seededRand)

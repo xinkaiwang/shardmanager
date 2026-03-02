@@ -3,11 +3,12 @@ package kmetrics
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 var (
@@ -38,7 +39,10 @@ func invokeFuncVoid(ctx context.Context, ef FuncTypeVoid) (ke *kerror.Kerror) {
 					WithErrorCode(kerror.EC_UNKNOWN)
 			default:
 				// 非错误的 panic 值（比如字符串或其他类型），记录 fatal 日志并退出
-				klogging.Fatal(ctx).WithPanic(v).Log("InvalidPanic", "invalid panic with non-error value")
+				slog.ErrorContext(ctx, "invalid panic with non-error value",
+					slog.String("event", "InvalidPanic"),
+					slog.Any("panic", v))
+				os.Exit(1)
 			}
 		}
 	}()
@@ -103,7 +107,10 @@ func invokeFuncError(ctx context.Context, ef FuncTypeError) (err error) {
 					WithErrorCode(kerror.EC_UNKNOWN)
 			default:
 				// 非错误的 panic 值（比如字符串或其他类型），记录 fatal 日志并退出
-				klogging.Fatal(ctx).WithPanic(v).Log("InvalidPanic", "invalid panic with non-error value")
+				slog.ErrorContext(ctx, "invalid panic with non-error value",
+					slog.String("event", "InvalidPanic"),
+					slog.Any("panic", v))
+				os.Exit(1)
 			}
 		}
 	}()

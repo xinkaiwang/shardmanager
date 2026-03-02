@@ -3,8 +3,9 @@ package solver
 import (
 	"context"
 
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/data"
@@ -60,7 +61,7 @@ func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.S
 			}
 		})
 		if ke != nil {
-			klogging.Warning(ctx).WithError(ke).Log("UnsssignSolverTryCatch", "error in unassign solver loop, ignore this iteration")
+			slog.WarnContext(ctx, "error in unassign solver loop, ignore this iteration", slog.String("event", "UnsssignSolverTryCatch"), slog.Any("error", ke))
 		}
 	}
 	if bestMove == nil {
@@ -73,7 +74,7 @@ func (as *UnassignSolver) FindProposal(ctx context.Context, snapshot *costfunc.S
 	proposal.Signature = proposal.GetSignature()
 	proposal.OnClose = func(ctx2 context.Context, reason common.EnqueueResult) {
 		elapsedMs := kcommon.GetWallTimeMs() - proposal.StartTimeMs
-		klogging.Debug(ctx2).With("reason", reason).With("elapsedMs", elapsedMs).With("proposalId", proposal.ProposalId).With("solver", "unassign").Log("ProposalClosed", "")
+		slog.DebugContext(ctx2, "", slog.String("event", "ProposalClosed"), slog.Any("reason", reason), slog.Int64("elapsedMs", elapsedMs), slog.Any("proposalId", proposal.ProposalId), slog.String("solver", "unassign"))
 	}
 	return proposal
 }

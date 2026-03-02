@@ -1,8 +1,8 @@
 package core
 
 import (
-	"log/slog"
 	"context"
+	"log/slog"
 	"runtime"
 	"runtime/pprof"
 	"strings"

@@ -2,11 +2,12 @@ package kmetrics
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"sync"
 	"unsafe"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"go.opencensus.io/metric/metricdata"
 )
 
@@ -148,7 +149,11 @@ func (collection *KmetricsCollection) Clone() *KmetricsCollection {
 // AddGlobalTag adds a global tag for all metrics.
 func (registry *KmetricsRegistry) AddGlobalTag(key, value string) {
 	if metricName, exists := registry.allTagNames[key]; exists {
-		klogging.Fatal(context.Background()).With("tagName", key).With("metricName", metricName).Log("tagNameConflict", "global tag name should not conflict with any other existing metrics tags")
+		slog.ErrorContext(context.Background(), "global tag name should not conflict with any other existing metrics tags",
+			slog.String("event", "tagNameConflict"),
+			slog.String("tagName", key),
+			slog.String("metricName", metricName))
+		os.Exit(1)
 	}
 	registry.globalTags[key] = value
 }
@@ -158,7 +163,9 @@ func (registry *KmetricsRegistry) checkForTagNameConflicts(tagNames []string) {
 	for _, tagName := range tagNames {
 		if _, exists := registry.globalTags[tagName]; exists {
 			ne := kerror.Create("tagNameConflict", "").With("tagName", tagName)
-			klogging.Fatal(context.Background()).Log("tagNameConflict", "")
+			slog.ErrorContext(context.Background(), "tag name conflict",
+				slog.String("event", "tagNameConflict"))
+			os.Exit(1)
 			panic(ne)
 		}
 	}

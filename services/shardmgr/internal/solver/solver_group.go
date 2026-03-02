@@ -6,8 +6,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/costfunc"
@@ -62,7 +63,7 @@ func (sa *SolverGroup) AddSolver(ctx context.Context, solver Solver) {
 }
 
 func (sa *SolverGroup) OnSnapshot(ctx context.Context, snapshot *costfunc.Snapshot, reason string) {
-	klogging.Info(ctx).With("cost", snapshot.GetCost(ctx)).With("snapshotId", snapshot.SnapshotId).With("reason", reason).Log("SolverGroup", "OnSnapshot")
+	slog.InfoContext(ctx, "OnSnapshot", slog.String("event", "SolverGroup"), slog.Any("cost", snapshot.GetCost(ctx)), slog.Any("snapshotId", snapshot.SnapshotId), slog.String("reason", reason))
 	sa.storeSnapshot(snapshot)
 }
 
@@ -199,8 +200,7 @@ type DriverThread struct {
 }
 
 func NewDriverThread(ctx context.Context, parent *SolverDriver, threadName string) *DriverThread {
-	ctx2, info := klogging.GetOrCreateCtxInfo(ctx)
-	info.With("traceId", threadName)
+	ctx2 := ctx
 	dt := &DriverThread{
 		ctx:        ctx2,
 		parent:     parent,
@@ -253,7 +253,7 @@ func (dt *DriverThread) run() {
 			stop = true
 		}
 	}
-	klogging.Info(dt.ctx).With("threadName", dt.threadName).Log("DriverThread", "thread stopped")
+	slog.InfoContext(dt.ctx, "thread stopped", slog.String("event", "DriverThread"), slog.String("threadName", dt.threadName))
 	close(dt.stopped)
 }
 
@@ -292,7 +292,7 @@ func (dtt *DriverThreadTask) Execute() {
 	startTime := kcommon.GetWallTimeMs()
 	proposal := dtt.parent.parent.solver.FindProposal(dtt.parent.parent.ctx, dtt.parent.parent.parent.loadSnapshot())
 	elapsedMs := kcommon.GetWallTimeMs() - startTime
-	klogging.Verbose(dtt.ctx).With("solver", dtt.name).With("elapsedMs", elapsedMs).Log("SolverGroup", "Execute")
+	slog.DebugContext(dtt.ctx, "Execute", slog.String("event", "SolverGroup"), slog.Any("solver", dtt.name), slog.Int64("elapsedMs", elapsedMs))
 	solverGroupInvokeMsMetrics.GetTimeSequence(dtt.ctx, string(dtt.name)).Add(elapsedMs)
 	if proposal == nil {
 		close(dtt.done)

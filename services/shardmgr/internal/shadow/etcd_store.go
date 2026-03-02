@@ -7,8 +7,9 @@ import (
 	"strings"
 	"sync"
 
+	"log/slog"
+
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/etcdprov"
@@ -81,7 +82,7 @@ func GetCurrentEtcdStore(ctx context.Context) EtcdStore {
 
 	// 仅使用Info级别记录关键操作，避免过多日志
 	storeCreationCount++
-	klogging.Info(ctx).Log("EtcdStoreCreation", "创建新的EtcdStore实例")
+	slog.InfoContext(ctx, "创建新的EtcdStore实例", slog.String("event", "EtcdStoreCreation"))
 	store = NewBufferedEtcdStore(ctx)
 	currentEtcdStore = store
 	return store
@@ -103,15 +104,10 @@ func RunWithEtcdStore(store EtcdStore, fn func()) {
 	currentEtcdStore = store
 	storeMutex.Unlock()
 
-	klogging.Info(ctx).
-		With("oldStore", fmt.Sprintf("%T", oldStore)).
-		With("newStore", fmt.Sprintf("%T", store)).
-		Log("RunWithEtcdStore", "临时替换EtcdStore")
+	slog.InfoContext(ctx, "临时替换EtcdStore", slog.String("event", "RunWithEtcdStore"), slog.String("oldStore", fmt.Sprintf("%T", oldStore)), slog.String("newStore", fmt.Sprintf("%T", store)))
 
 	defer func() {
-		klogging.Info(ctx).
-			With("restoredStore", fmt.Sprintf("%T", oldStore)).
-			Log("RunWithEtcdStore", "恢复原始EtcdStore")
+		slog.InfoContext(ctx, "恢复原始EtcdStore", slog.String("event", "RunWithEtcdStore"), slog.String("restoredStore", fmt.Sprintf("%T", oldStore)))
 
 		// 恢复原始存储
 		storeMutex.Lock()
@@ -144,23 +140,23 @@ type BufferedEtcdStore struct {
 }
 
 func NewBufferedEtcdStore(ctx context.Context) *BufferedEtcdStore {
-	klogging.Info(ctx).Log("NewBufferedEtcdStore", "创建新的BufferedEtcdStore")
+	slog.InfoContext(ctx, "创建新的BufferedEtcdStore", slog.String("event", "NewBufferedEtcdStore"))
 	etcdProvider := etcdprov.GetCurrentEtcdProvider(ctx)
-	klogging.Info(ctx).With("providerType", fmt.Sprintf("%T", etcdProvider)).Log("NewBufferedEtcdStore", "使用的EtcdProvider类型")
+	slog.InfoContext(ctx, "使用的EtcdProvider类型", slog.String("event", "NewBufferedEtcdStore"), slog.String("providerType", fmt.Sprintf("%T", etcdProvider)))
 
 	store := &BufferedEtcdStore{
 		etcd: etcdProvider,
 	}
-	klogging.Info(ctx).Log("NewBufferedEtcdStore", "创建runloop")
+	slog.InfoContext(ctx, "创建runloop", slog.String("event", "NewBufferedEtcdStore"))
 	store.runloop = krunloop.NewRunLoop(ctx, store, "etcdstore")
 	go store.runloop.Run(ctx)
-	klogging.Info(ctx).Log("NewBufferedEtcdStore", "BufferedEtcdStore创建完成")
+	slog.InfoContext(ctx, "BufferedEtcdStore创建完成", slog.String("event", "NewBufferedEtcdStore"))
 	store.initMetrics(ctx)
 	return store
 }
 
 func (store *BufferedEtcdStore) Put(ctx context.Context, key string, value string, name string) {
-	klogging.Debug(ctx).With("key", key).With("valueLength", len(value)).With("name", name).Log("BufferedEtcdStorePut", "将写入请求加入队列")
+	slog.DebugContext(ctx, "将写入请求加入队列", slog.String("event", "BufferedEtcdStorePut"), slog.String("key", key), slog.Int("valueLength", len(value)), slog.String("name", name))
 	eve := NewWriteEvent(key, value, name)
 	store.runloop.PostEvent(eve)
 }
@@ -169,7 +165,7 @@ func (store *BufferedEtcdStore) Put(ctx context.Context, key string, value strin
 func (store *BufferedEtcdStore) IsResource() {}
 
 func (store *BufferedEtcdStore) Shutdown(ctx context.Context) {
-	klogging.Info(ctx).Log("BufferedEtcdStoreShutdown", "关闭BufferedEtcdStore")
+	slog.InfoContext(ctx, "关闭BufferedEtcdStore", slog.String("event", "BufferedEtcdStoreShutdown"))
 	store.runloop.StopAndWaitForExit()
 }
 
@@ -207,13 +203,13 @@ func (eve *WriteEvent) GetName() string {
 func (eve *WriteEvent) Process(ctx context.Context, resource *BufferedEtcdStore) {
 	size := len(eve.Value) + len(eve.Key)
 	EtcdStoreWriteSizeMetrics.GetTimeSequence(ctx, eve.Name).Add(int64(size))
-	klogging.Debug(ctx).With("key", eve.Key).With("len", len(eve.Value)).With("name", eve.Name).Log("WriteEventProcess", "处理写入请求")
+	slog.DebugContext(ctx, "处理写入请求", slog.String("event", "WriteEventProcess"), slog.String("key", eve.Key), slog.Int("len", len(eve.Value)), slog.String("name", eve.Name))
 	if eve.Value == "" {
-		klogging.Info(ctx).With("key", eve.Key).Log("WriteEventDelete", "从etcd中删除键")
+		slog.InfoContext(ctx, "从etcd中删除键", slog.String("event", "WriteEventDelete"), slog.String("key", eve.Key))
 		resource.etcd.Delete(ctx, eve.Key, false)
 		return
 	}
-	klogging.Debug(ctx).With("key", eve.Key).With("len", len(eve.Value)).Log("WriteEventProcess", "向etcd写入数据")
+	slog.DebugContext(ctx, "向etcd写入数据", slog.String("event", "WriteEventProcess"), slog.String("key", eve.Key), slog.Int("len", len(eve.Value)))
 	resource.etcd.Set(ctx, eve.Key, eve.Value)
 }
 

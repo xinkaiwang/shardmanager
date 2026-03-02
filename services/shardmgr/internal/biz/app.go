@@ -2,10 +2,10 @@ package biz
 
 import (
 	"context"
+	"log/slog"
 	"sort"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/api"
 	"github.com/xinkaiwang/shardmanager/services/shardmgr/internal/common"
@@ -43,7 +43,8 @@ func (app *App) Ping(ctx context.Context) string {
 }
 
 func (app *App) GetStatus(ctx context.Context, req *api.GetStateRequest) *api.GetStateResponse {
-	klogging.Info(ctx).Log("app.GetStatus", "")
+	slog.InfoContext(ctx, "",
+		slog.String("event", "app.GetStatus"))
 	eve := NewGetStateEvent()
 	app.ss.PostEvent(eve)
 	return <-eve.resp
@@ -119,7 +120,8 @@ func (app *App) SetServiceConfig(ctx context.Context, partialCfg *smgjson.Servic
 
 func (app *App) StartAppMetrics(ctx context.Context) {
 	// 启动应用级别的指标收集
-	klogging.Info(ctx).Log("app.StartAppMetrics", "Starting application metrics")
+	slog.InfoContext(ctx, "Starting application metrics",
+		slog.String("event", "app.StartAppMetrics"))
 	// dynamic threashold
 	kmetrics.AddInt64DerivedGaugeWithLabels(ctx, app.registry,
 		func() int64 { return app.ss.MetricsValues.MetricsValueDynamicThreshold.Load() },
@@ -204,7 +206,11 @@ func (app *App) StartAppMetrics(ctx context.Context) {
 			if ageMs > 0 {
 				moveStr := app.ss.MetricsValues.MetricsValueOldestMoveStr.Load().(string)
 				count := app.ss.MetricsValues.MetricsValueInflightMoveCount.Load()
-				klogging.Info(ctx).With("maxAge", ageMs).With("move", moveStr).With("count", count).Log("app.StartAppMetrics", "inflight move max age")
+				slog.InfoContext(ctx, "inflight move max age",
+					slog.String("event", "app.StartAppMetrics"),
+					slog.Int64("maxAge", ageMs),
+					slog.String("move", moveStr),
+					slog.Int64("count", count))
 			}
 			return ageMs
 		},
@@ -302,7 +308,8 @@ func (eve *GetStateEvent) GetName() string {
 }
 
 func (gse *GetStateEvent) Process(ctx context.Context, ss *core.ServiceState) {
-	klogging.Info(ctx).Log("GetStateEvent", "getting state")
+	slog.InfoContext(ctx, "getting state",
+		slog.String("event", "GetStateEvent"))
 	workers := make([]api.WorkerVm, 0)
 	shards := make([]api.ShardVm, 0)
 	for _, workerState := range ss.AllWorkers {

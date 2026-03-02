@@ -2,9 +2,9 @@ package unicorn
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/krunloop"
 )
 
@@ -44,7 +44,11 @@ func (bm *BatchManager) TryScheduleInternal(ctx context.Context, reasons ...stri
 	if !needSchedule {
 		scheduled = "merged"
 	}
-	klogging.Info(ctx).With("name", bm.name).With("result", scheduled).With("reason", reasons).Log("BatchManager", "in-bound")
+	slog.InfoContext(ctx, "batch manager in-bound",
+		slog.String("event", "BatchManager.InBound"),
+		slog.String("name", bm.name),
+		slog.String("result", scheduled),
+		slog.Any("reason", reasons))
 	if !needSchedule {
 		return
 	}
@@ -82,6 +86,9 @@ func (bpe *BatchProcessEvent) Process(_ context.Context, ss *Unicorn) {
 	reasons = bpe.parent.reasons
 	bpe.parent.reasons = nil
 
-	klogging.Info(bpe.ctx).With("name", bpe.parent.name).With("reason", reasons).Log("BatchManager", "out-bound")
+	slog.InfoContext(bpe.ctx, "batch manager out-bound",
+		slog.String("event", "BatchManager.OutBound"),
+		slog.String("name", bpe.parent.name),
+		slog.Any("reason", reasons))
 	bpe.parent.fn(bpe.ctx, ss)
 }

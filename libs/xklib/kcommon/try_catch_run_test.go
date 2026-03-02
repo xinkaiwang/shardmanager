@@ -2,11 +2,12 @@ package kcommon
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // this is used only for test, with stack-enabled in returned KError
@@ -20,7 +21,10 @@ func TryCatchRunWithStack(ctx context.Context, fn func()) (ret *kerror.Kerror) {
 				ret = kerror.Wrap(err, "UnknownError", "", true)
 			} else {
 				// we should never throw an non-error panic, this will crash this server
-				klogging.Fatal(ctx).WithPanic(r).Log("NonErrorPanic", "")
+				slog.ErrorContext(ctx, "non-error panic - exiting",
+					slog.String("event", "NonErrorPanic"),
+					slog.Any("panic", r))
+				os.Exit(1)
 			}
 		}
 	}()
@@ -46,20 +50,16 @@ func TestError_WhenFail_ShouldLogStackTrace(t *testing.T) {
 	assert.IsType(t, &kerror.Kerror{}, ne) // check to be a KError
 	assert.NotNil(t, ne.Stack)
 	// fmt.Println(ne.Stack)
-	// create logEntry
-	logEntry := klogging.Warning(ctx).WithError(ne)
-	assert.NotNil(t, logEntry)
-	assert.NotNil(t, getDetail(logEntry.Details, "stack"))
-	assert.NotNil(t, getDetail(logEntry.Details, "causedBy"))
-	assert.NotNil(t, getDetail(logEntry.Details, "errorType"))
-	logEntry.Log("TestLogEntry", "")
-}
-
-func getDetail(details []klogging.Keypair, key string) interface{} {
-	for _, detail := range details {
-		if detail.K == key {
-			return detail.V
-		}
-	}
-	return nil
+	
+	// Log the error with slog
+	slog.WarnContext(ctx, "test log entry",
+		slog.String("event", "TestLogEntry"),
+		slog.Any("error", ne),
+		slog.String("stack", ne.Stack),
+		slog.String("errorType", ne.Type))
+	
+	// Verify kerror fields exist
+	assert.NotNil(t, ne.Stack)
+	assert.NotNil(t, ne.Type)
+	assert.NotNil(t, ne.Msg)
 }

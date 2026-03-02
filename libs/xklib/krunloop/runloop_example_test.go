@@ -3,11 +3,11 @@ package krunloop
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 // Example of using RunLoop with a custom resource type
@@ -39,10 +39,11 @@ func (e *ExampleEvent) GetName() string {
 func (e *ExampleEvent) Process(ctx context.Context, resource *ExampleResource) {
 	// Process the event using the custom resource
 	resource.Value += 1
-	klogging.Info(ctx).With("action", e.Action).
-		With("resource", resource.Name).
-		With("new_value", resource.Value).
-		Log("ExampleEvent", "Processed example event")
+	slog.InfoContext(ctx, "processed example event",
+		slog.String("event", "ExampleEvent"),
+		slog.String("action", e.Action),
+		slog.String("resource", resource.Name),
+		slog.Int("new_value", resource.Value))
 
 	// Signal that the event was executed
 	select {

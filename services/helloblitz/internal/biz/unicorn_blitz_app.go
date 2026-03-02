@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/data"
@@ -11,7 +12,6 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/unicorn/unicornjson"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 )
 
 type UnicornBlitzApp struct {
@@ -44,7 +44,11 @@ func (app *UnicornBlitzApp) RunLoadTest(ctx context.Context, objId string) {
 		ke := kerror.Create("UnicornBlitzApp", "RunLoadTest").With("shardingKey", Uint32ToHexString(shardingKey)).With("objId", objId).With("error", "target is nil")
 		panic(ke)
 	}
-	klogging.Debug(ctx).With("shardingKey", Uint32ToHexString(shardingKey)).With("objId", objId).With("target", target.String()).Log("RunLoadTest", "TargetFound")
+	slog.DebugContext(ctx, "target found",
+		slog.String("event", "RunLoadTest.TargetFound"),
+		slog.String("shardingKey", Uint32ToHexString(shardingKey)),
+		slog.String("objId", objId),
+		slog.String("target", target.String()))
 	startMs := kcommon.GetWallTimeMs()
 	var resp string
 	ke := kcommon.TryCatchRun(ctx, func() {
@@ -52,9 +56,20 @@ func (app *UnicornBlitzApp) RunLoadTest(ctx context.Context, objId string) {
 	})
 	elapsedMs := kcommon.GetWallTimeMs() - startMs
 	if ke != nil {
-		klogging.Error(ctx).With("shardingKey", Uint32ToHexString(shardingKey)).With("target", target.String()).With("error", ke).With("elapsedMs", elapsedMs).Log("UnicornBlitzApp", "RunLoadTest")
+		slog.ErrorContext(ctx, "run load test error",
+			slog.String("event", "UnicornBlitzApp.RunLoadTest"),
+			slog.String("shardingKey", Uint32ToHexString(shardingKey)),
+			slog.String("target", target.String()),
+			slog.Any("error", ke),
+			slog.Int64("elapsedMs", elapsedMs))
 	} else {
-		klogging.Debug(ctx).With("shardingKey", Uint32ToHexString(shardingKey)).With("objId", objId).With("target", target.String()).With("elapsedMs", elapsedMs).With("resp", resp).Log("UnicornBlitzApp", "RunLoadTest")
+		slog.DebugContext(ctx, "run load test success",
+			slog.String("event", "UnicornBlitzApp.RunLoadTest"),
+			slog.String("shardingKey", Uint32ToHexString(shardingKey)),
+			slog.String("objId", objId),
+			slog.String("target", target.String()),
+			slog.Int64("elapsedMs", elapsedMs),
+			slog.String("resp", resp))
 	}
 }
 
