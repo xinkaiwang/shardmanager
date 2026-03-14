@@ -48,6 +48,11 @@ func (ke *Kerror) WithErrorCode(code ErrorCode) *Kerror {
 	return ke
 }
 
+func (ke *Kerror) WithHttpStatusCode(status int) *Kerror {
+	ke.ErrorCode = FromHTTPStatus(status)
+	return ke
+}
+
 // to make Kerror work with "errors.Is()", "errors.As()"... standard operations
 func (ke *Kerror) Unwrap() error {
 	return ke.CausedBy
