@@ -58,6 +58,14 @@ func NewHandler(opts *HandlerOptions) *Handler {
 	var baseHandler slog.Handler
 	handlerOpts := &slog.HandlerOptions{
 		Level: opts.SampledLevel, // Set to lowest level, Enabled() controls filtering
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			// Format timestamps as RFC3339 with millisecond precision (3 decimal digits).
+			// Default slog uses RFC3339Nano (6 digits) which is unnecessarily verbose.
+			if a.Key == slog.TimeKey && a.Value.Kind() == slog.KindTime {
+				return slog.String(a.Key, a.Value.Time().Format("2006-01-02T15:04:05.000Z07:00"))
+			}
+			return a
+		},
 	}
 	
 	switch opts.Format {
