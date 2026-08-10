@@ -5,16 +5,18 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
 // UnboundedQueue implements an unbounded queue for events of type IEvent[T]
 type UnboundedQueue[T CriticalResource] struct {
-	input  chan IEvent[T] // Channel for receiving events
-	buffer []IEvent[T]    // Internal buffer
-	output chan IEvent[T] // Channel for sending events
-	// closed    atomic.Bool    // Whether the queue is closed
-	size      atomic.Int64 // Current number of elements in the queue
-	closeOnce sync.Once    // Ensure output channel is closed only once
+	input     chan IEvent[T] // Channel for receiving events
+	buffer    []IEvent[T]    // Internal buffer
+	output    chan IEvent[T] // Channel for sending events
+	closed    atomic.Bool    // Whether the queue is closed (set on every run() exit path)
+	size      atomic.Int64   // Current number of elements in the queue
+	closeOnce sync.Once      // Ensure output channel is closed only once
 
 	stop    chan struct{} // Channel to signal stop processing
 	stopped chan struct{} // Channel to notify when thread has stopped
@@ -41,6 +43,13 @@ func NewUnboundedQueue[T CriticalResource](ctx context.Context) *UnboundedQueue[
 // run handles events in the queue
 func (q *UnboundedQueue[T]) run(ctx context.Context) {
 	defer func() {
+		// Mark closed BEFORE closing output: Enqueue checks this flag and
+		// panics, restoring the original "loud rejection after close"
+		// semantics without the close(q.input) race the original had
+		// (closing a channel that live producers send on panics the
+		// producer at a random point; a flag check panics deterministically
+		// at the call site with a typed kerror instead).
+		q.closed.Store(true)
 		// Ensure output channel is closed when thread exits
 		q.closeOnce.Do(func() {
 			close(q.output)
@@ -87,8 +96,19 @@ func (q *UnboundedQueue[T]) run(ctx context.Context) {
 	}
 }
 
-// Enqueue adds an element to the queue. This call never blocks.
+// Enqueue adds an element to the queue. This call never blocks (while the
+// queue is running). Enqueueing after the queue has stopped is a caller
+// lifecycle bug and panics with a kerror (catchable via kcommon.TryCatchRun) —
+// the alternatives are worse: the pre-fix behavior silently dropped the first
+// post-stop event into the dead input buffer and blocked forever on the next.
+// Note: an Enqueue racing with shutdown may still land in the dead buffer
+// (narrow window, event dropped as before); the flag converts the steady-state
+// after close from silent-loss/deadlock into a deterministic panic.
 func (q *UnboundedQueue[T]) Enqueue(item IEvent[T]) {
+	if q.closed.Load() {
+		ke := kerror.Create("QueueClosed", "enqueue on stopped UnboundedQueue")
+		panic(ke)
+	}
 	q.input <- item
 	q.size.Add(1)
 }
