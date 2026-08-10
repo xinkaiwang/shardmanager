@@ -39,7 +39,7 @@ func TestWorkerEphJsonMarshal(t *testing.T) {
 					worker.LastUpdateReason = "periodic update"
 					return worker
 				}(),
-				expected: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","session_id":"session-123","addr_port":"10.0.0.32:8080","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"}],"update_time_ms":1234567891000,"update_reason":"periodic update","stateful_type":"state_in_mem"}`,
+				expected: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","session_id":"session-123","addr_port":"10.0.0.32:8080","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"asgs":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"}],"update_time_ms":1234567891000,"update_reason":"periodic update","stateful_type":"state_in_mem"}`,
 				wantErr:  false,
 			},
 			{
@@ -50,7 +50,7 @@ func TestWorkerEphJsonMarshal(t *testing.T) {
 					1234567890000,
 					20,
 				),
-				expected: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","session_id":"session-456","start_time_ms":1234567890000,"capacity":20,"stateful_type":"state_in_mem"}`,
+				expected: `{"worker_id":"cougar-worker-75fffc88f9-xj9n2","session_id":"session-456","start_time_ms":1234567890000,"capacity":20,"asgs":[],"stateful_type":"state_in_mem"}`,
 				wantErr:  false,
 			},
 			{
@@ -61,7 +61,7 @@ func TestWorkerEphJsonMarshal(t *testing.T) {
 					1234567890000,
 					30,
 				),
-				expected: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","session_id":"session-789","start_time_ms":1234567890000,"capacity":30,"stateful_type":"state_in_mem"}`,
+				expected: `{"worker_id":"cougar-worker-75fffc88f9-p4m7k","session_id":"session-789","start_time_ms":1234567890000,"capacity":30,"asgs":[],"stateful_type":"state_in_mem"}`,
 				wantErr:  false,
 			},
 		}
@@ -89,7 +89,7 @@ func TestWorkerEphJsonUnmarshal(t *testing.T) {
 	}{
 		{
 			name:  "完整字段",
-			input: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","session_id":"session-123","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
+			input: `{"worker_id":"cougar-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","session_id":"session-123","start_time_ms":1234567890000,"capacity":10,"properties":{"region":"us-west","type":"compute"},"asgs":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"}],"update_time_ms":1234567891000,"update_reason":"periodic update"}`,
 			want: func() *WorkerEphJson {
 				worker := NewWorkerEphJson(
 					"cougar-worker-75fffc88f9-fkbcm",

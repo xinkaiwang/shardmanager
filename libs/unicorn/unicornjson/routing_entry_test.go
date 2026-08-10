@@ -29,7 +29,7 @@ func TestWorkerEntryJsonMarshal(t *testing.T) {
 				worker.LastUpdateAtMs = 1742104602847
 				return worker
 			}(),
-			expected: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}],"update_time_ms":1742104602847,"update_reason":"update"}`,
+			expected: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","session_id":"session-1","addr_port":"10.0.0.32:8080","asgs":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}],"update_time_ms":1742104602847,"update_reason":"update"}`,
 		},
 		{
 			name: "最小字段",
@@ -44,7 +44,7 @@ func TestWorkerEntryJsonMarshal(t *testing.T) {
 				worker.LastUpdateAtMs = 1742104602847
 				return worker
 			}(),
-			expected: `{"worker_id":"unicorn-worker-75fffc88f9-xj9n2","addr_port":"10.0.0.33:8080","update_time_ms":1742104602847,"update_reason":"update"}`,
+			expected: `{"worker_id":"unicorn-worker-75fffc88f9-xj9n2","session_id":"session-1","addr_port":"10.0.0.33:8080","update_time_ms":1742104602847,"update_reason":"update"}`,
 		},
 	}
 
@@ -68,7 +68,7 @@ func TestWorkerEntryJsonUnmarshal(t *testing.T) {
 	}{
 		{
 			name:  "完整字段",
-			input: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}]}`,
+			input: `{"worker_id":"unicorn-worker-75fffc88f9-fkbcm","addr_port":"10.0.0.32:8080","asgs":[{"shd":"shard-1","idx":1,"asg":"asg-1"},{"shd":"shard-2","asg":"asg-2"}]}`,
 			want: func() *WorkerEntryJson {
 				worker := NewWorkerEntryJson(
 					"unicorn-worker-75fffc88f9-fkbcm",

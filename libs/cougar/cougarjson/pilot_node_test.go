@@ -32,7 +32,7 @@ func TestPilotNodeJsonMarshal(t *testing.T) {
 					)
 					return node
 				}(),
-				expected: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
+				expected: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","asgs":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
 			},
 			{
 				name: "最小字段",
@@ -41,7 +41,7 @@ func TestPilotNodeJsonMarshal(t *testing.T) {
 					"session-456",
 					"minimal setup",
 				),
-				expected: `{"worker_id":"pilot-worker-75fffc88f9-xj9n2","session_id":"session-456","assignments":[],"update_time_ms":1234567890000,"update_reason":"minimal setup"}`,
+				expected: `{"worker_id":"pilot-worker-75fffc88f9-xj9n2","session_id":"session-456","asgs":[],"update_time_ms":1234567890000,"update_reason":"minimal setup"}`,
 			},
 		}
 
@@ -70,7 +70,7 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 		}{
 			{
 				name:  "完整字段",
-				input: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","assignments":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
+				input: `{"worker_id":"pilot-worker-75fffc88f9-fkbcm","session_id":"session-123","asgs":[{"shd":"shard-1","idx":1,"asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000,"update_reason":"initial setup"}`,
 				want: func() *PilotNodeJson {
 					node := NewPilotNodeJson(
 						"pilot-worker-75fffc88f9-fkbcm",
@@ -87,7 +87,7 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 			},
 			{
 				name:  "最小字段",
-				input: `{"worker_id":"pilot-worker-75fffc88f9-xj9n2","session_id":"session-456","assignments":[],"update_time_ms":1234567890000,"update_reason":"minimal setup"}`,
+				input: `{"worker_id":"pilot-worker-75fffc88f9-xj9n2","session_id":"session-456","asgs":[],"update_time_ms":1234567890000,"update_reason":"minimal setup"}`,
 				want: func() *PilotNodeJson {
 					node := NewPilotNodeJson(
 						"pilot-worker-75fffc88f9-xj9n2",
@@ -100,7 +100,7 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 			},
 			{
 				name:  "所有任务状态",
-				input: `{"worker_id":"pilot-worker-75fffc88f9-r8t3v","session_id":"session-789","assignments":[{"shd":"shard-1","asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000}`,
+				input: `{"worker_id":"pilot-worker-75fffc88f9-r8t3v","session_id":"session-789","asgs":[{"shd":"shard-1","asg":"asg-1","sts":"ready"},{"shd":"shard-2","asg":"asg-2","sts":"dropped"}],"update_time_ms":1234567890000}`,
 				want: func() *PilotNodeJson {
 					node := NewPilotNodeJson(
 						"pilot-worker-75fffc88f9-r8t3v",
@@ -123,7 +123,7 @@ func TestPilotNodeJsonUnmarshal(t *testing.T) {
 			},
 			{
 				name:  "无效的任务状态",
-				input: `{"worker_id":"w1","session_id":"s1","assignments":[{"shd":"shard-1","asg":"asg-1","sts":"invalid"}]}`,
+				input: `{"worker_id":"w1","session_id":"s1","asgs":[{"shd":"shard-1","asg":"asg-1","sts":"invalid"}]}`,
 				want: func() *PilotNodeJson {
 					node := NewPilotNodeJson(
 						"w1",
