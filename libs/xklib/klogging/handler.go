@@ -15,14 +15,21 @@ import (
 // - Automatic trace context injection
 type Handler struct {
 	baseHandler  slog.Handler
-	globalLevel  slog.Level
+	globalLevel  *slog.LevelVar // shared by all handlers derived via WithAttrs/WithGroup → SetLevel affects them all (KLOG-010)
 	sampledLevel slog.Level
 	metrics      MetricsReporter
 }
 
 // MetricsReporter reports logging metrics (optional).
+//
+// Emitted logs report once from Handle with dropped=false and full fields.
+// Level-suppressed logs report once from Enabled with dropped=true — at that
+// point the record does not exist yet, so event is "" and size is 0 (a
+// structural constraint, stated honestly by the data). Thus:
+//
+//	attempted = count(all) ; suppressed = count(dropped=true)
 type MetricsReporter interface {
-	ReportLog(ctx context.Context, level, event string, size int, logged bool)
+	ReportLog(ctx context.Context, level, event string, size int, dropped bool)
 }
 
 // HandlerOptions configures a Handler.
@@ -77,12 +84,23 @@ func NewHandler(opts *HandlerOptions) *Handler {
 		baseHandler = slog.NewJSONHandler(opts.Output, handlerOpts)
 	}
 	
+	globalLevel := new(slog.LevelVar)
+	globalLevel.Set(opts.Level)
+
 	return &Handler{
 		baseHandler:  baseHandler,
-		globalLevel:  opts.Level,
+		globalLevel:  globalLevel,
 		sampledLevel: opts.SampledLevel,
 		metrics:      opts.Metrics,
 	}
+}
+
+// SetLevel changes the global log level at runtime (KLOG-010). Takes effect
+// immediately, including for handlers previously derived via WithAttrs /
+// WithGroup (they share the same level variable). Typical use: an admin
+// endpoint calling SetLevel(ParseLevel(s)) to turn on debug logging in prod.
+func (h *Handler) SetLevel(level slog.Level) {
+	h.globalLevel.Set(level)
 }
 
 // Enabled implements slog.Handler.
@@ -93,13 +111,20 @@ func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
 	// Check OpenTelemetry sampling. Sampling may only LOWER the effective
 	// level (log more), never raise it: if the global level is already more
 	// verbose than sampledLevel, keep the global level (KLOG-006).
+	effective := h.globalLevel.Level()
 	span := trace.SpanFromContext(ctx)
 	if span.SpanContext().IsValid() && span.SpanContext().IsSampled() {
-		return level >= min(h.globalLevel, h.sampledLevel)
+		effective = min(effective, h.sampledLevel)
 	}
 
-	// Default level
-	return level >= h.globalLevel
+	enabled := level >= effective
+	// Suppressed logs never reach Handle, but every attempt passes through
+	// here — this is the only place they can be counted (KLOG-002). The
+	// record doesn't exist yet: level-granularity only.
+	if !enabled && h.metrics != nil {
+		h.metrics.ReportLog(ctx, level.String(), "", 0, true /*dropped*/)
+	}
+	return enabled
 }
 
 // Handle implements slog.Handler.
@@ -115,11 +140,12 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		)
 	}
 	
-	// Report metrics
+	// Report metrics. Handle only runs for emitted logs (slog gates on
+	// Enabled first), so this is unconditionally dropped=false — the
+	// dropped=true half lives in Enabled.
 	if h.metrics != nil {
 		event, size := extractEventAndSize(r)
-		logged := h.Enabled(ctx, r.Level)
-		h.metrics.ReportLog(ctx, r.Level.String(), event, size, logged)
+		h.metrics.ReportLog(ctx, r.Level.String(), event, size, false /*dropped*/)
 	}
 	
 	// Delegate to base handler

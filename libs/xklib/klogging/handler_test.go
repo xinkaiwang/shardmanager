@@ -125,17 +125,86 @@ func TestHandler_Metrics(t *testing.T) {
 
 	logger.InfoContext(ctx, "test message", slog.String("event", "TestEvent"))
 
-	if reporter.callCount == 0 {
-		t.Error("Expected metrics to be reported")
+	// KLOG-002 支点 B：一条被输出的日志恰好上报一次，dropped=false，全字段
+	if reporter.callCount() != 1 {
+		t.Fatalf("emitted log must report exactly once, got %d calls", reporter.callCount())
 	}
-	if reporter.lastEvent != "TestEvent" {
-		t.Errorf("Expected event=TestEvent, got %s", reporter.lastEvent)
+	got := reporter.last()
+	if got.event != "TestEvent" {
+		t.Errorf("Expected event=TestEvent, got %s", got.event)
 	}
-	if reporter.lastLevel != "INFO" {
-		t.Errorf("Expected level=INFO, got %s", reporter.lastLevel)
+	if got.level != "INFO" {
+		t.Errorf("Expected level=INFO, got %s", got.level)
 	}
-	if !reporter.lastLogged {
-		t.Error("Expected logged=true")
+	if got.dropped {
+		t.Error("Expected dropped=false for emitted log")
+	}
+	if got.size <= 0 {
+		t.Errorf("Expected size>0 for emitted log, got %d", got.size)
+	}
+}
+
+// KLOG-002：被级别压掉的日志必须以 dropped=true 上报（level 粒度；
+// 此时拿不到 event/attrs——结构性约束，event 为空串、size 为 0）。
+func TestHandler_MetricsCountsDropped(t *testing.T) {
+	var buf bytes.Buffer
+	reporter := &mockMetricsReporter{}
+	handler := NewHandler(&HandlerOptions{
+		Level:   slog.LevelInfo,
+		Format:  "json",
+		Output:  &buf,
+		Metrics: reporter,
+	})
+	logger := slog.New(handler)
+
+	logger.DebugContext(context.Background(), "suppressed", slog.String("event", "Invisible"))
+
+	if buf.Len() != 0 {
+		t.Fatalf("debug log must be suppressed at info level, got output: %s", buf.String())
+	}
+	if reporter.callCount() != 1 {
+		t.Fatalf("dropped log must report exactly once, got %d calls", reporter.callCount())
+	}
+	got := reporter.last()
+	if !got.dropped {
+		t.Error("Expected dropped=true")
+	}
+	if got.level != "DEBUG" {
+		t.Errorf("Expected level=DEBUG, got %s", got.level)
+	}
+	if got.event != "" || got.size != 0 {
+		t.Errorf("dropped report cannot know event/size, got event=%q size=%d", got.event, got.size)
+	}
+}
+
+// KLOG-010：运行时改级别立即生效，且对 WithAttrs 派生出的 handler 同样生效
+func TestHandler_SetLevelRuntime(t *testing.T) {
+	var buf bytes.Buffer
+	handler := NewHandler(&HandlerOptions{
+		Level:  slog.LevelInfo,
+		Format: "json",
+		Output: &buf,
+	})
+	derived := slog.New(handler.WithAttrs([]slog.Attr{slog.String("svc", "x")}))
+	base := slog.New(handler)
+	ctx := context.Background()
+
+	base.DebugContext(ctx, "before")
+	derived.DebugContext(ctx, "before-derived")
+	if buf.Len() != 0 {
+		t.Fatalf("debug must be suppressed before SetLevel, got: %s", buf.String())
+	}
+
+	handler.SetLevel(LevelDebug)
+
+	base.DebugContext(ctx, "after")
+	if buf.Len() == 0 {
+		t.Error("debug must be emitted after SetLevel(debug)")
+	}
+	buf.Reset()
+	derived.DebugContext(ctx, "after-derived")
+	if buf.Len() == 0 {
+		t.Error("SetLevel must also affect handlers derived via WithAttrs")
 	}
 }
 
@@ -153,20 +222,27 @@ func (s *mockSampledSpan) SpanContext() trace.SpanContext {
 	})
 }
 
-type mockMetricsReporter struct {
-	callCount  int
-	lastLevel  string
-	lastEvent  string
-	lastSize   int
-	lastLogged bool
+type reportedLog struct {
+	level   string
+	event   string
+	size    int
+	dropped bool
 }
 
-func (r *mockMetricsReporter) ReportLog(ctx context.Context, level, event string, size int, logged bool) {
-	r.callCount++
-	r.lastLevel = level
-	r.lastEvent = event
-	r.lastSize = size
-	r.lastLogged = logged
+type mockMetricsReporter struct {
+	calls []reportedLog
+}
+
+func (r *mockMetricsReporter) ReportLog(ctx context.Context, level, event string, size int, dropped bool) {
+	r.calls = append(r.calls, reportedLog{level: level, event: event, size: size, dropped: dropped})
+}
+
+func (r *mockMetricsReporter) callCount() int { return len(r.calls) }
+func (r *mockMetricsReporter) last() reportedLog {
+	if len(r.calls) == 0 {
+		return reportedLog{}
+	}
+	return r.calls[len(r.calls)-1]
 }
 
 // KLOG-006: sampled 提级只能放宽不能收紧——全局级别比 sampledLevel 更低（更啰嗦）时，
