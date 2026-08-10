@@ -107,17 +107,21 @@ func (h *Handler) SetLevel(level slog.Level) {
 // Dynamically determines if a log should be emitted based on:
 // 1. OpenTelemetry sampling (sampled → min(globalLevel, sampledLevel))
 // 2. Default global level
-func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
-	// Check OpenTelemetry sampling. Sampling may only LOWER the effective
-	// level (log more), never raise it: if the global level is already more
-	// verbose than sampledLevel, keep the global level (KLOG-006).
+// effectiveThreshold is the level actually in force for this ctx: the global
+// level, lowered to sampledLevel when the ctx carries a sampled trace.
+// Sampling may only LOWER the effective level (log more), never raise it
+// (KLOG-006).
+func (h *Handler) effectiveThreshold(ctx context.Context) slog.Level {
 	effective := h.globalLevel.Level()
 	span := trace.SpanFromContext(ctx)
 	if span.SpanContext().IsValid() && span.SpanContext().IsSampled() {
 		effective = min(effective, h.sampledLevel)
 	}
+	return effective
+}
 
-	enabled := level >= effective
+func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
+	enabled := level >= h.effectiveThreshold(ctx)
 	// Suppressed logs never reach Handle, but every attempt passes through
 	// here — this is the only place they can be counted (KLOG-002). The
 	// record doesn't exist yet: level-granularity only.
@@ -138,6 +142,12 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 			slog.String("trace_id", sc.TraceID().String()),
 			slog.String("span_id", sc.SpanID().String()),
 		)
+	}
+
+	// Inject ambient ctx fields (KLOG-007): static attr chain + live
+	// providers, gated by importance vs the effective threshold.
+	if node := parentNode(ctx); node != nil {
+		appendCtxAttrs(node, &r, h.effectiveThreshold(ctx))
 	}
 	
 	// Report metrics. Handle only runs for emitted logs (slog gates on

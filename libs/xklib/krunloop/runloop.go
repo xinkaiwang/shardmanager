@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -98,6 +99,10 @@ func (rl *RunLoop[T]) GetName() string {
 	return rl.name
 }
 func (rl *RunLoop[T]) Run(ctx context.Context) {
+	// KLOG-011 两级身份之二：runloop 身份走 ambient attr（人类可读、跨重启稳定），
+	// "哪次 run" 走每事件 trace_id。此后本循环内所有日志自动带 runloop=<name>。
+	ctx = klogging.CtxWithAttrs(ctx, slog.String("runloop", rl.name))
+
 	// 使用互斥锁保护 ctx 和 cancel 的设置
 	rl.mu.Lock()
 	rl.ctx, rl.cancel = context.WithCancel(ctx)
