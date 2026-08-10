@@ -104,3 +104,38 @@ func (e *logEmittingEvent) Process(ctx context.Context, _ *TestRunLoopResource) 
 	slog.InfoContext(ctx, "inside event", slog.String("event", "InsideEvent"))
 	e.wg.Done()
 }
+
+// XS-002：仅 cancel Run 的 ctx（与构造 ctx 不同）也必须让 queue 停止——
+// "Run 退出 ⇒ queue 停止"是结构保证，不是"调用方传同一个 ctx"的约定。
+func TestRunLoop_RunExitStopsQueue(t *testing.T) {
+	ctorCtx := context.Background()          // 构造用 ctx：永不取消
+	runCtx, cancel := context.WithCancel(context.Background()) // Run 用另一个 ctx
+
+	rl := NewRunLoop(ctorCtx, &TestRunLoopResource{}, "xs002-loop")
+	go rl.Run(runCtx)
+
+	// 等 Run 真正启动（投递一个事件并确认被处理）
+	var wg sync.WaitGroup
+	wg.Add(1)
+	var sc trace.SpanContext
+	rl.PostEvent(&traceCaptureEvent{wg: &wg, out: &sc})
+	wg.Wait()
+
+	cancel() // 只取消 Run 的 ctx
+
+	// queue 必须随 Run 退出而关闭：Enqueue 变为响亮丢弃（size 不再增长），
+	// 而非静默落入无人消费的 buffer
+	deadline := time.After(2 * time.Second)
+	for {
+		before := rl.queue.GetSize()
+		rl.queue.Enqueue(&traceCaptureEvent{wg: &sync.WaitGroup{}, out: &trace.SpanContext{}})
+		if rl.queue.GetSize() == before {
+			return // 已进入丢弃语义，queue 确认关闭，结构保证成立
+		}
+		select {
+		case <-deadline:
+			t.Fatal("queue still accepts events after Run exited (XS-002)")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}

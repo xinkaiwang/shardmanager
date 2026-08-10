@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 	"go.opencensus.io/metric"
 	"go.opencensus.io/metric/metricdata"
 )
@@ -84,53 +85,89 @@ func init() {
 	// systemCPUGauge.UpsertEntry(func() float64 { return currentSystemCPU })
 
 	// 创建内存指标
-	heapAllocGauge, _ = registry.AddInt64DerivedGauge(
-		"process_heap_bytes",
+	heapAllocGauge = mustRegisterInt64Gauge("process_heap_bytes",
+		func() int64 { return currentHeapAlloc },
 		metric.WithDescription("Process heap memory in bytes"),
 		metric.WithUnit("bytes"))
-	heapAllocGauge.UpsertEntry(func() int64 { return currentHeapAlloc })
 
-	stackInuseGauge, _ = registry.AddInt64DerivedGauge(
-		"process_stack_bytes",
+	stackInuseGauge = mustRegisterInt64Gauge("process_stack_bytes",
+		func() int64 { return currentStackInuse },
 		metric.WithDescription("Process stack memory in bytes"),
 		metric.WithUnit("bytes"))
-	stackInuseGauge.UpsertEntry(func() int64 { return currentStackInuse })
 
-	sysMemGauge, _ = registry.AddInt64DerivedGauge(
-		"process_resident_memory_bytes",
+	sysMemGauge = mustRegisterInt64Gauge("process_resident_memory_bytes",
+		func() int64 { return currentSysMem },
 		metric.WithDescription("Resident memory size in bytes"),
 		metric.WithUnit("bytes"))
-	sysMemGauge.UpsertEntry(func() int64 { return currentSysMem })
 
 	// 创建 Goroutine 指标
-	goroutineGauge, _ = registry.AddInt64DerivedGauge(
-		"process_goroutines",
+	goroutineGauge = mustRegisterInt64Gauge("process_goroutines",
+		func() int64 { return currentGoroutines },
 		metric.WithDescription("Number of goroutines"))
-	goroutineGauge.UpsertEntry(func() int64 { return currentGoroutines })
 
 	// 创建文件描述符指标
-	fdGauge, _ = registry.AddInt64DerivedGauge(
-		"process_open_fds",
+	fdGauge = mustRegisterInt64Gauge("process_open_fds",
+		func() int64 { return currentFDs },
 		metric.WithDescription("Number of open file descriptors"))
-	fdGauge.UpsertEntry(func() int64 { return currentFDs })
 
 	// 创建 GC 指标
-	gcPauseGauge, _ = registry.AddInt64DerivedGauge(
-		"process_gc_pause_total_ns",
+	gcPauseGauge = mustRegisterInt64Gauge("process_gc_pause_total_ns",
+		func() int64 { return currentGCPause },
 		metric.WithDescription("Total GC pause time in nanoseconds"),
 		metric.WithUnit("ns"))
-	gcPauseGauge.UpsertEntry(func() int64 { return currentGCPause })
 
-	gcIntervalGauge, _ = registry.AddInt64DerivedGauge(
-		"process_gc_interval_ms",
+	gcIntervalGauge = mustRegisterInt64Gauge("process_gc_interval_ms",
+		func() int64 { return currentGCInterval },
 		metric.WithDescription("Time since last GC in milliseconds"),
 		metric.WithUnit("ms"))
-	gcIntervalGauge.UpsertEntry(func() int64 { return currentGCInterval })
 
-	gcCPUFractionGauge, _ = registry.AddFloat64DerivedGauge(
-		"process_gc_cpu_fraction",
+	gcCPUFractionGauge = mustRegisterFloat64Gauge("process_gc_cpu_fraction",
+		func() float64 { return currentGCCPUFraction },
 		metric.WithDescription("Fraction of CPU time used by GC"))
-	gcCPUFractionGauge.UpsertEntry(func() float64 { return currentGCCPUFraction })
+}
+
+// registeredGaugeNames 自建查重（XS-003）：opencensus 对同名同类型的重复注册
+// 不报错而是静默覆盖（旧 gauge 孤儿化、从 scrape 消失——kmetrics/gauge.go 的
+// 注释记载过同一个坑），所以复制粘贴忘改名的错误靠检查 err 抓不住，必须自己记名。
+var registeredGaugeNames = map[string]bool{}
+
+func mustNewGaugeName(name string) {
+	if registeredGaugeNames[name] {
+		panic(kerror.Create("SysGaugeRegisterFail", "duplicate gauge name (opencensus would silently orphan the first one)").
+			With("gaugeName", name))
+	}
+	registeredGaugeNames[name] = true
+}
+
+// mustRegisterInt64Gauge 注册 derived gauge 并接上读取回调；重名或任何注册
+// 错误在真正病因处响亮 panic，带 gaugeName 的 kerror（XS-003：此前 `_ =`
+// 吞错后在下一行 nil-deref，栈指向 UpsertEntry 而非名字冲突）。
+func mustRegisterInt64Gauge(name string, fn func() int64, opts ...metric.Options) *metric.Int64DerivedGauge {
+	mustNewGaugeName(name)
+	g, err := registry.AddInt64DerivedGauge(name, opts...)
+	if err != nil {
+		panic(kerror.Create("SysGaugeRegisterFail", "cannot register derived gauge").
+			With("gaugeName", name).With("error", err.Error()))
+	}
+	if err := g.UpsertEntry(fn); err != nil {
+		panic(kerror.Create("SysGaugeUpsertFail", "cannot wire gauge read callback").
+			With("gaugeName", name).With("error", err.Error()))
+	}
+	return g
+}
+
+func mustRegisterFloat64Gauge(name string, fn func() float64, opts ...metric.Options) *metric.Float64DerivedGauge {
+	mustNewGaugeName(name)
+	g, err := registry.AddFloat64DerivedGauge(name, opts...)
+	if err != nil {
+		panic(kerror.Create("SysGaugeRegisterFail", "cannot register derived gauge").
+			With("gaugeName", name).With("error", err.Error()))
+	}
+	if err := g.UpsertEntry(fn); err != nil {
+		panic(kerror.Create("SysGaugeUpsertFail", "cannot wire gauge read callback").
+			With("gaugeName", name).With("error", err.Error()))
+	}
+	return g
 }
 
 // StartSysMetricsCollector 启动系统指标收集器

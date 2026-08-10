@@ -27,15 +27,16 @@ type FuncTypeError func(ctx context.Context) error
 func invokeFuncVoid(ctx context.Context, ef FuncTypeVoid) (ke *kerror.Kerror) {
 	defer func() {
 		if r := recover(); r != nil {
-			// we should print the panic type here to debug what's going on.
-			fmt.Printf("panic type: %T\n", r)
 			switch v := r.(type) {
 			case *kerror.Kerror:
 				// 已经是 kerror，直接使用
 				ke = v
 			case error:
-				// 普通 error，包装成 kerror
+				// 普通 error，包装成 kerror；panic 原始类型进结构化 detail
+				// （XS-004：此前是 fmt.Printf 裸打 stdout，无 event 无 trace，
+				// Splunk 检索不到——panic 现场最宝贵的类型信息走了野通道）
 				ke = kerror.Create("InternalServerError", v.Error()).
+					With("panicType", fmt.Sprintf("%T", v)).
 					WithErrorCode(kerror.EC_UNKNOWN)
 			default:
 				// 非错误的 panic 值（比如字符串或其他类型），记录 fatal 日志并退出
@@ -102,8 +103,9 @@ func invokeFuncError(ctx context.Context, ef FuncTypeError) (err error) {
 				// 已经是 kerror，直接使用
 				err = v
 			case error:
-				// 普通 error，包装成 kerror
+				// 普通 error，包装成 kerror；panic 原始类型进结构化 detail（对称 XS-004）
 				err = kerror.Create("InternalServerError", v.Error()).
+					With("panicType", fmt.Sprintf("%T", v)).
 					WithErrorCode(kerror.EC_UNKNOWN)
 			default:
 				// 非错误的 panic 值（比如字符串或其他类型），记录 fatal 日志并退出

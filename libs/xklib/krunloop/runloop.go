@@ -16,8 +16,13 @@ import (
 )
 
 var (
-	RunLoopElapsedMsMetric   = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"name", "event"})
-	RunLoopQueueTimeMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_queue_time_ms", "desc", []string{"name", "event"})
+	// in/out 三角（XS-007）：enqueue_ct = in，elapsed_ms 的 count = out，
+	// 队列积压深度 = runloop_enqueue_ct_count − runloop_elapsed_ms_count（PromQL 可算）。
+	RunLoopElapsedMsMetric   = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "per-event processing time (count = events processed, sum = ms)", []string{"name", "event"})
+	RunLoopQueueTimeMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_queue_time_ms", "per-event wait in queue before processing (count = events dequeued, sum = ms)", []string{"name", "event"})
+	RunLoopEnqueueMetric     = kmetrics.CreateKmetric(context.Background(), "runloop_enqueue_ct", "events enqueued (queue in-side; backlog = enqueue_ct_count - elapsed_ms_count)", []string{"name", "event"}).CountOnly()
+	// drop 边（XS-007 三角补全）：停机后到达的事件被响亮丢弃计数
+	RunLoopEnqueueDroppedMetric = kmetrics.CreateKmetric(context.Background(), "runloop_enqueue_dropped_ct", "events dropped because they arrived after queue stop (shutdown stragglers)", []string{"event"}).CountOnly()
 
 	// 包级缓存，避免每事件过 TracerProvider.Tracer() 的 mutex+map（KLOG-005b ③-5）。
 	// otel.Tracer 返回的是动态代理：每次 Start 时解析当前全局 provider，无初始化顺序问题。
@@ -55,7 +60,6 @@ type RunLoop[T CriticalResource] struct {
 	cancel           context.CancelFunc
 	epochId          int64 // 事件循环的时间戳
 
-	stop    chan struct{} // 用于停止 RunLoop
 	stopped chan struct{}
 }
 
@@ -67,7 +71,6 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 		resource: resource,
 		queue:    NewUnboundedQueue[T](ctx),
 		epochId:  0,
-		stop:     make(chan struct{}), // 初始化 stop 通道
 		stopped:  make(chan struct{}),
 	}
 	rl.sampler = NewRunloopSampler(ctx, func() string {
@@ -82,6 +85,7 @@ func NewRunLoop[T CriticalResource](ctx context.Context, resource T, name string
 
 // PostEvent: Enqueue an event to the run loop. This call never blocks.
 func (rl *RunLoop[T]) PostEvent(event IEvent[T]) {
+	RunLoopEnqueueMetric.GetTimeSequence(context.Background(), rl.name, event.GetName()).Add(1)
 	rl.queue.Enqueue(event)
 }
 
@@ -109,6 +113,10 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 	rl.mu.Unlock()
 
 	defer func() {
+		// XS-002 权威收尾：Run 退出 ⇒ queue 必须停止（closed 置位，Enqueue 转为
+		// 响亮拒绝）。此前这依赖"调用方给 NewRunLoop 和 Run 传同一个 ctx"的
+		// 隐式约定——约定破裂时 queue 存活、事件静默入 buffer 无人消费。
+		rl.queue.Stop()
 		// 通知 RunLoop 已退出
 		close(rl.stopped)
 	}()
@@ -148,8 +156,6 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			rl.currentEventName.Store("")
 			elapsedMs := kcommon.GetMonoTimeMs() - start
 			RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)
-		case <-rl.stop:
-			stop = true
 		}
 	}
 }
@@ -169,15 +175,24 @@ func (rl *RunLoop[T]) StopAndWaitForExit() {
 	rl.queue.StopAndWaitForExit()
 	// 取消 context
 	cancel()
+	// XS-005: 停止 sampler 的自我重调度链（否则每个 RunLoop 泄漏一条永久 50Hz 定时器链）
+	rl.sampler.Stop()
 
-	// 设置短超时，避免无限等待
-	select {
-	case <-rl.stopped:
-		// 正常退出
-	case <-time.After(1000 * time.Millisecond): // 增加超时时间，确保有足够时间退出
-		// 超时，可能 Run 方法尚未完全启动或已异常退出
-		slog.WarnContext(context.Background(), "RunLoop.StopAndWaitForExit 超时",
-			slog.String("event", "RunLoopStopTimeout"))
+	// XS-006: 等到 Run 真正退出为止，不设放弃超时——旧的"等 1s 然后放弃返回"
+	// 会让调用方在事件仍在处理时开始拆资源（use-after-teardown）。改为无限等待 +
+	// 周期性进度 Warn（带当前事件名，operator 可判断是哪个事件卡住）。
+	// 1s 只是日志节奏，不承重。
+	for {
+		select {
+		case <-rl.stopped:
+			return // 正常退出
+		case <-time.After(1000 * time.Millisecond):
+			eveName, _ := rl.currentEventName.Load().(string)
+			slog.WarnContext(context.Background(), "RunLoop.StopAndWaitForExit still waiting for in-flight event",
+				slog.String("event", "RunLoopStopWaiting"),
+				slog.String("runloop", rl.name),
+				slog.String("currentEvent", eveName))
+		}
 	}
 }
 

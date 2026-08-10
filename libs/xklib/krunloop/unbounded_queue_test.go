@@ -91,12 +91,18 @@ func TestUnboundedQueueClose(t *testing.T) {
 	cancel()
 	time.Sleep(1 * time.Millisecond)
 
-	// Verify cannot enqueue anymore
-	ke := kcommon.TryCatchRun(ctx, func() {
-		q.Enqueue(newTestEvent(4))
-	})
-	if ke == nil {
-		t.Error("Still able to enqueue after closing")
+	// Verify post-close enqueue is a LOUD DROP: returns without blocking,
+	// size unchanged, dropped metric incremented.
+	// （曾断言 panic；被真实代码推翻——停机掉队定时器是合法投递者，见 Enqueue 注释）
+	droppedBefore, _ := RunLoopEnqueueDroppedMetric.GetTimeSequence(ctx, "TestEvent").Get()
+	sizeBefore := q.GetSize()
+	q.Enqueue(newTestEvent(4))
+	if size := q.GetSize(); size != sizeBefore {
+		t.Errorf("post-close enqueue must not grow queue: before=%d after=%d", sizeBefore, size)
+	}
+	droppedAfter, _ := RunLoopEnqueueDroppedMetric.GetTimeSequence(ctx, "TestEvent").Get()
+	if droppedAfter != droppedBefore+1 {
+		t.Errorf("dropped metric must increment: before=%d after=%d", droppedBefore, droppedAfter)
 	}
 
 	// Verify can read all data
@@ -130,12 +136,11 @@ func TestUnboundedQueueContextCancellation(t *testing.T) {
 	// Wait to ensure processing is complete
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify cannot enqueue anymore
-	ke := kcommon.TryCatchRun(ctx, func() {
-		q.Enqueue(newTestEvent(4))
-	})
-	if ke == nil {
-		t.Error("Still able to enqueue after closing")
+	// Verify post-cancel enqueue is a loud drop (no block, no growth)
+	sizeBefore := q.GetSize()
+	q.Enqueue(newTestEvent(4))
+	if size := q.GetSize(); size != sizeBefore {
+		t.Errorf("post-cancel enqueue must not grow queue: before=%d after=%d", sizeBefore, size)
 	}
 
 	// Verify Dequeue returns false

@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
-
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
 // UnboundedQueue implements an unbounded queue for events of type IEvent[T]
@@ -18,8 +16,9 @@ type UnboundedQueue[T CriticalResource] struct {
 	size      atomic.Int64   // Current number of elements in the queue
 	closeOnce sync.Once      // Ensure output channel is closed only once
 
-	stop    chan struct{} // Channel to signal stop processing
-	stopped chan struct{} // Channel to notify when thread has stopped
+	stop     chan struct{} // Channel to signal stop processing
+	stopOnce sync.Once     // Stop() is called from multiple paths (XS-002: Run's defer + StopAndWaitForExit) — must be idempotent
+	stopped  chan struct{} // Channel to notify when thread has stopped
 }
 
 // NewUnboundedQueue creates a new unbounded queue for events of type IEvent[T]
@@ -97,17 +96,26 @@ func (q *UnboundedQueue[T]) run(ctx context.Context) {
 }
 
 // Enqueue adds an element to the queue. This call never blocks (while the
-// queue is running). Enqueueing after the queue has stopped is a caller
-// lifecycle bug and panics with a kerror (catchable via kcommon.TryCatchRun) —
-// the alternatives are worse: the pre-fix behavior silently dropped the first
-// post-stop event into the dead input buffer and blocked forever on the next.
-// Note: an Enqueue racing with shutdown may still land in the dead buffer
-// (narrow window, event dropped as before); the flag converts the steady-state
-// after close from silent-loss/deadlock into a deterministic panic.
+// queue is running). Enqueueing after the queue has stopped drops the event
+// LOUDLY — Warn log + runloop_enqueue_dropped_ct metric — and returns.
+//
+// 语义推导（曾短暂实现为 panic，被真实代码推翻）：后停机投递者有两类——
+// (a) 生命周期顺序 bug：需要可见（Warn+metric 足够诊断）；
+// (b) 合法掉队者：事件处理中调度的延迟定时器（如 AcceptEvent 的重试）与
+//     shutdown 赛跑失败——这不是 bug，事件本该在停机时丢弃，panic 会把
+//     优雅停机窗口里的每个良性定时器变成崩溃。
+// 修复前的行为则是最坏的：第一个事件无声落入死 buffer（size 计数还错了），
+// 第二个永久阻塞（调用方 goroutine 泄漏）。
+// 注：与 shutdown 竞态的窗口内事件仍可能落入死 buffer（窄窗口，行为同前）；
+// closed 标志保证稳态下是"响亮丢弃"而非"无声吞没/死锁"。
 func (q *UnboundedQueue[T]) Enqueue(item IEvent[T]) {
 	if q.closed.Load() {
-		ke := kerror.Create("QueueClosed", "enqueue on stopped UnboundedQueue")
-		panic(ke)
+		eveName := item.GetName()
+		RunLoopEnqueueDroppedMetric.GetTimeSequence(context.Background(), eveName).Add(1)
+		slog.WarnContext(context.Background(), "event dropped: enqueue after queue stopped (shutdown straggler or teardown-order bug)",
+			slog.String("event", "EnqueueAfterStop"),
+			slog.String("droppedEvent", eveName))
+		return
 	}
 	q.input <- item
 	q.size.Add(1)
@@ -130,8 +138,9 @@ func (q *UnboundedQueue[T]) GetSize() int64 {
 // }
 
 func (q *UnboundedQueue[T]) Stop() {
-	// Stop the processing thread
-	close(q.stop)
+	// Stop the processing thread (idempotent — called from both Run's defer
+	// and StopAndWaitForExit)
+	q.stopOnce.Do(func() { close(q.stop) })
 }
 
 func (q *UnboundedQueue[T]) StopAndWaitForExit() {
