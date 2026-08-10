@@ -107,6 +107,9 @@ func NewShardPlanWatcher(ctx context.Context, parent *ServiceState, currentShard
 }
 
 func (sp *ShardPlanWatcher) run(ctx context.Context) {
+	// defer 保证所有退出路径都发出 exit 信号——此前 "ch closed" 分支用裸 return
+	// 跳过了尾部的 close(sp.stopped)，StopAndWaitForExit 会永久挂死（half-fact twin path）。
+	defer close(sp.stopped)
 	slog.InfoContext(ctx, "start watching",
 		slog.String("event", "ShardPlanWatcher"),
 		slog.Any("path", sp.path))
@@ -140,7 +143,6 @@ func (sp *ShardPlanWatcher) run(ctx context.Context) {
 			stop = true
 		}
 	}
-	close(sp.stopped) // 发送 thread exit 信号
 }
 
 func (sp *ShardPlanWatcher) Stop() {

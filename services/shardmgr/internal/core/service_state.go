@@ -125,16 +125,11 @@ func (ss *ServiceState) GetRunloopQueueLength() int {
 // IsResource implements the CriticalResource interface
 func (ss *ServiceState) IsResource() {}
 
+// StopAndWaitForExit 按数据流方向拆除：先停生产者（watchers/solver 都会向
+// runloop PostEvent），再停消费者（runloop），最后停下游（shadow）。
+// 此前顺序相反（runloop 最先停），窗口期内 watcher 仍在投递事件——旧 queue
+// 语义静默吞掉，Enqueue 改为 fail-fast 后暴露为 QueueClosed panic。
 func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
-	if ss.runloop != nil {
-		ss.runloop.StopAndWaitForExit()
-	}
-	if ss.ShadowState != nil {
-		ss.ShadowState.StopAndWaitForExit(ctx)
-	}
-	if ss.SolverGroup != nil {
-		ss.SolverGroup.StopAndWaitForExit()
-	}
 	if ss.ShardPlanWatcher != nil {
 		ss.ShardPlanWatcher.StopAndWaitForExit()
 	}
@@ -143,6 +138,15 @@ func (ss *ServiceState) StopAndWaitForExit(ctx context.Context) {
 	}
 	if ss.ServiceConfigWatcher != nil {
 		ss.ServiceConfigWatcher.StopAndWaitForExit()
+	}
+	if ss.SolverGroup != nil {
+		ss.SolverGroup.StopAndWaitForExit()
+	}
+	if ss.runloop != nil {
+		ss.runloop.StopAndWaitForExit()
+	}
+	if ss.ShadowState != nil {
+		ss.ShadowState.StopAndWaitForExit(ctx)
 	}
 }
 

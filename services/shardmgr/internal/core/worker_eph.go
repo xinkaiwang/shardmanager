@@ -40,7 +40,15 @@ func (w *WorkerEphWatcher) Run(ctx context.Context) {
 			slog.InfoContext(ctx, "CtxDone.Exit",
 				slog.String("event", "WorkerEphWatcher"))
 			stop = true
-		case kvItem := <-w.ch:
+		case kvItem, ok := <-w.ch:
+			if !ok {
+				// watch channel 已关闭：此前无 ok 检查，关闭后此分支永远命中
+				// 零值 kvItem——解析空 key 并向（可能已停止的）runloop 疯狂投递
+				slog.InfoContext(ctx, "ch closed",
+					slog.String("event", "WorkerEphWatcher"))
+				stop = true
+				continue
+			}
 			if kvItem.Value == "" {
 				// this is a delete event
 				// str := kvItem.Key[len(w.ss.PathManager.GetWorkerEphPathPrefix()):] // exclude prefix '/smg/eph/'
