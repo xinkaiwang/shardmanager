@@ -1,15 +1,11 @@
 package klogging
 
 import (
-	crand "crypto/rand"
 	"context"
-	"encoding/binary"
-	"io"
 	"math/rand"
 	"strconv"
-	"sync"
 
-	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -36,9 +32,15 @@ import (
 // export spans to a backend, register a span processor on the returned
 // provider — no call-site changes needed.
 func InitDefaultTracerProvider(serviceName string, sampleRatio float64) *sdktrace.TracerProvider {
+	// Warm-up draw: kcommon's PRNG seeds lazily and fail-fasts on a dead
+	// entropy source (KLOG-013). Forcing the seeding here moves that
+	// potential panic to startup — the cheapest possible time to die —
+	// instead of the first span of some request.
+	kcommon.GetRandom(context.Background(), func(*rand.Rand) {})
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio))),
-		sdktrace.WithIDGenerator(newIDGeneratorFromReader(crand.Reader)),
+		sdktrace.WithIDGenerator(kcommonIDGenerator{}),
 		// Explicit limits (SDK defaults, minus the env channel). Bounded
 		// queues protect memory if some span accumulates events/links.
 		sdktrace.WithSpanLimits(sdktrace.SpanLimits{
@@ -79,46 +81,34 @@ func ParseSampleRatio(s string) float64 {
 	return ratio
 }
 
-// failFastIDGenerator is shape-identical to the SDK's default generator
-// (mutex + PRNG stream; the ns-scale critical section is acceptable — see
-// KLOG-005a). The one difference: a failed entropy read at seeding time
-// panics instead of silently degrading to a fixed seed-0 sequence
-// (KLOG-005b (3)-1: multiple instances silently emitting identical ID
-// sequences would corrupt cross-pod log correlation with no symptom).
-// Seeding happens once at startup — exactly when fail-fast is cheapest.
-type failFastIDGenerator struct {
-	sync.Mutex
-	randSource *rand.Rand
-}
+// kcommonIDGenerator delegates ID generation to kcommon's SafeRand — the
+// project's single random primitive (one PRNG to audit instead of two
+// parallel crypto-seeded streams). Semantics match the D1 decision: mutex +
+// crypto-seeded PRNG (ns-scale critical section, acceptable per KLOG-005a),
+// fail-fast on entropy failure (kcommon panics with kerror; the seed-failure
+// path is tested where the code lives, kcommon/rand_util_test.go). Trace IDs
+// need uniqueness, not unpredictability (KLOG-013①) — sharing the stream
+// with jitter consumers does not weaken either.
+type kcommonIDGenerator struct{}
 
-var _ sdktrace.IDGenerator = &failFastIDGenerator{}
-
-func newIDGeneratorFromReader(r io.Reader) sdktrace.IDGenerator {
-	var seed int64
-	if err := binary.Read(r, binary.LittleEndian, &seed); err != nil {
-		ke := kerror.Create("TraceIDSeedFailed", "cannot seed trace ID generator from entropy source").
-			With("error", err.Error())
-		panic(ke)
-	}
-	return &failFastIDGenerator{randSource: rand.New(rand.NewSource(seed))}
-}
+var _ sdktrace.IDGenerator = kcommonIDGenerator{}
 
 // NewIDs returns a new trace and span ID.
-func (gen *failFastIDGenerator) NewIDs(ctx context.Context) (trace.TraceID, trace.SpanID) {
-	gen.Lock()
-	defer gen.Unlock()
+func (kcommonIDGenerator) NewIDs(ctx context.Context) (trace.TraceID, trace.SpanID) {
 	tid := trace.TraceID{}
-	_, _ = gen.randSource.Read(tid[:])
 	sid := trace.SpanID{}
-	_, _ = gen.randSource.Read(sid[:])
+	kcommon.GetRandom(ctx, func(r *rand.Rand) {
+		_, _ = r.Read(tid[:])
+		_, _ = r.Read(sid[:])
+	})
 	return tid, sid
 }
 
 // NewSpanID returns a span ID for an existing trace.
-func (gen *failFastIDGenerator) NewSpanID(ctx context.Context, traceID trace.TraceID) trace.SpanID {
-	gen.Lock()
-	defer gen.Unlock()
+func (kcommonIDGenerator) NewSpanID(ctx context.Context, traceID trace.TraceID) trace.SpanID {
 	sid := trace.SpanID{}
-	_, _ = gen.randSource.Read(sid[:])
+	kcommon.GetRandom(ctx, func(r *rand.Rand) {
+		_, _ = r.Read(sid[:])
+	})
 	return sid
 }

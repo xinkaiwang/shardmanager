@@ -2,7 +2,6 @@ package klogging
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"go.opentelemetry.io/otel/trace"
@@ -82,16 +81,20 @@ func TestInitDefaultTracerProvider_EnvVarDoesNotOverrideExplicitSampler(t *testi
 	}
 }
 
-type failingReader struct{}
-
-func (failingReader) Read([]byte) (int, error) { return 0, errors.New("no entropy") }
-
-// KLOG-005b ③-1：种子读取失败必须响亮地死（fail-fast），不得静默降级为固定序列
-func TestIDGenerator_PanicsOnSeedFailure(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("expected panic on seed failure, got none")
-		}
-	}()
-	newIDGeneratorFromReader(failingReader{})
+// KLOG-005b ③-1 的 fail-fast 属性现由 kcommon 承担（IDGenerator 委托
+// kcommon.GetRandom；InitDefaultTracerProvider 用预热调用把懒播种提前到启动）。
+// 种子失败 → panic 的测试在代码所在处：kcommon/rand_util_test.go
+// TestGetRandom_SeedFailurePanicsLoudly。
+//
+// 这里补一个委托正确性测试：两次 NewIDs 产出的 ID 均有效且互不相同。
+func TestKcommonIDGenerator_ProducesDistinctValidIDs(t *testing.T) {
+	gen := kcommonIDGenerator{}
+	tid1, sid1 := gen.NewIDs(context.Background())
+	tid2, sid2 := gen.NewIDs(context.Background())
+	if !tid1.IsValid() || !sid1.IsValid() || !tid2.IsValid() || !sid2.IsValid() {
+		t.Fatalf("ids must be valid: %s/%s %s/%s", tid1, sid1, tid2, sid2)
+	}
+	if tid1 == tid2 || sid1 == sid2 {
+		t.Errorf("consecutive draws must differ: %s==%s or %s==%s", tid1, tid2, sid1, sid2)
+	}
 }
