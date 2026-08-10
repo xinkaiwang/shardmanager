@@ -24,7 +24,7 @@ type UnboundedQueue[T CriticalResource] struct {
 // NewUnboundedQueue creates a new unbounded queue for events of type IEvent[T]
 func NewUnboundedQueue[T CriticalResource](ctx context.Context) *UnboundedQueue[T] {
 	q := &UnboundedQueue[T]{
-		input:  make(chan IEvent[T], 1), // Buffer of 1 to ensure Enqueue doesn't block
+		input:  make(chan IEvent[T], 1), // buffer 1 使 Enqueue 在常态下不阻塞（run 及时清空 input；消费者忙时并发的第二个 Enqueue 仍会短暂等待——不是"绝不阻塞"的硬保证）
 		buffer: make([]IEvent[T], 0),
 		output: make(chan IEvent[T]),
 		// closed:    atomic.Bool{},
