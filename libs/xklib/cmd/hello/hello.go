@@ -30,7 +30,7 @@ func main() {
 	ctx := context.TODO()
 	
 	// Initialize OpenTelemetry for trace propagation
-	klogging.InitOpenTelemetry()
+	klogging.InitDefaultPropagator()
 	
 	// Create and configure slog handler
 	handler := klogging.NewHandler(&klogging.HandlerOptions{

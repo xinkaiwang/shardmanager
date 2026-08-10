@@ -23,7 +23,7 @@ func main() {
 	ctx := context.Background()
 
 	// klogging 初始化（和生产完全一致）
-	klogging.InitOpenTelemetry()
+	klogging.InitDefaultPropagator()
 	handler := klogging.NewHandler(&klogging.HandlerOptions{
 		Level:        klogging.LevelInfo,  // 全局级别: Info（Debug 默认被压掉）
 		SampledLevel: klogging.LevelDebug, // 被采样的请求: 降到 Debug

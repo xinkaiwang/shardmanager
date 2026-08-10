@@ -10,11 +10,17 @@ import (
 
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
 	RunLoopElapsedMsMetric   = kmetrics.CreateKmetric(context.Background(), "runloop_elapsed_ms", "desc", []string{"name", "event"})
 	RunLoopQueueTimeMsMetric = kmetrics.CreateKmetric(context.Background(), "runloop_queue_time_ms", "desc", []string{"name", "event"})
+
+	// 包级缓存，避免每事件过 TracerProvider.Tracer() 的 mutex+map（KLOG-005b ③-5）。
+	// otel.Tracer 返回的是动态代理：每次 Start 时解析当前全局 provider，无初始化顺序问题。
+	runloopTracer = otel.Tracer("xklib/krunloop")
 )
 
 // CriticalResource is an interface that represents resources that can be processed by events
@@ -127,9 +133,13 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			RunLoopQueueTimeMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(waitTimeMs)
 			// 使用原子操作存储当前事件名
 			rl.currentEventName.Store(eveName)
-			// Note: EmbedTraceId removed - OpenTelemetry handles trace IDs automatically
-			// epochId is now used only for runloop-internal event sequencing
-			event.Process(ctx, rl.resource)
+			// KLOG-011: runloop 是 daemon，每个事件在自己的 root span 里执行
+			// （WithNewRoot 显式声明：不继承 Run 的 ctx 里可能存在的任何 span）。
+			// 事件处理期间的所有日志由此获得同一 trace_id；采样按事件独立决策。
+			// 前提：main 已调用 klogging.InitDefaultTracerProvider，否则退化为 noop。
+			ctx2, span := runloopTracer.Start(ctx, eveName, trace.WithNewRoot())
+			event.Process(ctx2, rl.resource)
+			span.End()
 			rl.currentEventName.Store("")
 			elapsedMs := kcommon.GetMonoTimeMs() - start
 			RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)

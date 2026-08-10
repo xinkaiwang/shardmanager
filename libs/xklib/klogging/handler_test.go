@@ -168,3 +168,23 @@ func (r *mockMetricsReporter) ReportLog(ctx context.Context, level, event string
 	r.lastSize = size
 	r.lastLogged = logged
 }
+
+// KLOG-006: sampled 提级只能放宽不能收紧——全局级别比 sampledLevel 更低（更啰嗦）时，
+// 被采样的请求必须取 min(globalLevel, sampledLevel)，不得反而打得更少。
+func TestHandler_SampledNeverRaisesEffectiveLevel(t *testing.T) {
+	var buf bytes.Buffer
+	handler := NewHandler(&HandlerOptions{
+		Level:        LevelVerbose, // 全局已经开到 verbose
+		SampledLevel: LevelDebug,
+		Format:       "json",
+		Output:       &buf,
+	})
+	logger := slog.New(handler)
+
+	ctx := trace.ContextWithSpan(context.Background(), &mockSampledSpan{})
+	logger.LogAttrs(ctx, LevelVerbose, "verbose in sampled request")
+
+	if buf.Len() == 0 {
+		t.Errorf("global=verbose + sampled ctx: verbose log must be emitted, got nothing (sampled branch tightened the level)")
+	}
+}

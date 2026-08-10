@@ -87,15 +87,17 @@ func NewHandler(opts *HandlerOptions) *Handler {
 
 // Enabled implements slog.Handler.
 // Dynamically determines if a log should be emitted based on:
-// 1. OpenTelemetry sampling (sampled → use sampledLevel)
+// 1. OpenTelemetry sampling (sampled → min(globalLevel, sampledLevel))
 // 2. Default global level
 func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
-	// Check OpenTelemetry sampling
+	// Check OpenTelemetry sampling. Sampling may only LOWER the effective
+	// level (log more), never raise it: if the global level is already more
+	// verbose than sampledLevel, keep the global level (KLOG-006).
 	span := trace.SpanFromContext(ctx)
 	if span.SpanContext().IsValid() && span.SpanContext().IsSampled() {
-		return level >= h.sampledLevel
+		return level >= min(h.globalLevel, h.sampledLevel)
 	}
-	
+
 	// Default level
 	return level >= h.globalLevel
 }
