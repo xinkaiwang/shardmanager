@@ -34,8 +34,10 @@ func main() {
 		logFormat = "simple" // 默认格式
 	}
 
-	// 初始化 OpenTelemetry
-	klogging.InitOpenTelemetry()
+	// 初始化 OpenTelemetry：propagator（header 格式）+ TracerProvider（span 引擎，no-export）
+	klogging.InitDefaultPropagator()
+	tp := klogging.InitDefaultTracerProvider("shardmgr", klogging.ParseSampleRatio(os.Getenv("TRACE_SAMPLE_RATIO")))
+	defer klogging.ShutdownTracerProvider(ctx, tp)
 
 	// 创建并配置 slog Handler
 	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
@@ -105,7 +107,7 @@ func main() {
 	// 创建主 HTTP 服务器
 	mainServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", apiPort),
-		Handler: mainMux,
+		Handler: klogging.TracingMiddleware(mainMux),
 	}
 
 	// 创建 metrics HTTP 服务器

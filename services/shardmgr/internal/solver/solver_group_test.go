@@ -133,7 +133,7 @@ func (mcp *mockConfigProvider) GetUnassignSolverConfig() *config.BaseSolverConfi
 // - SolverGroup 能否正确收集 Solver 生成的提案
 func TestSolverGroup_Basic(t *testing.T) {
 	ctx := context.Background()
-	klogging.InitOpenTelemetry()
+	klogging.InitDefaultPropagator()
 	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
 		Level:  klogging.ParseLevel("debug"),
 		Format: "text",
@@ -229,7 +229,7 @@ func TestSolverGroup_Basic(t *testing.T) {
 
 func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 	ctx := context.Background()
-	klogging.InitOpenTelemetry()
+	klogging.InitDefaultPropagator()
 	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
 		Level:  klogging.ParseLevel("debug"),
 		Format: "text",
@@ -346,7 +346,7 @@ func TestSolverGroup_MultiSolverTypes(t *testing.T) {
 // 这个测试的目的是验证 SolverGroup 能够根据配置自动扩展线程处理能力，当 QPM 提高时，系统能够相应地生成更多的提案，说明线程扩展功能正常工作。这是优化系统性能和确保处理能力能够与负载需求相匹配的重要测试。
 func TestSolverGroup_ThreadScaling(t *testing.T) {
 	ctx := context.Background()
-	klogging.InitOpenTelemetry()
+	klogging.InitDefaultPropagator()
 	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
 		Level:  klogging.ParseLevel("debug"),
 		Format: "text",

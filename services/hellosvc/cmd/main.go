@@ -49,8 +49,10 @@ func main() {
 		logFormat = "json" // 默认 JSON 格式
 	}
 
-	// Initialize OpenTelemetry
-	klogging.InitOpenTelemetry()
+	// Initialize OpenTelemetry: propagator (header formats) + TracerProvider (span engine, no-export)
+	klogging.InitDefaultPropagator()
+	tp := klogging.InitDefaultTracerProvider("hellosvc", klogging.ParseSampleRatio(os.Getenv("TRACE_SAMPLE_RATIO")))
+	defer klogging.ShutdownTracerProvider(ctx, tp)
 
 	// Create slog handler
 	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
@@ -103,7 +105,7 @@ func main() {
 	// 创建主 HTTP 服务器
 	mainServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", apiPort),
-		Handler: mainMux,
+		Handler: klogging.TracingMiddleware(mainMux),
 	}
 
 	// 创建 metrics HTTP 服务器

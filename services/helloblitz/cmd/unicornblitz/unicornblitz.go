@@ -81,8 +81,10 @@ func main() {
 		logFormat = "json" // 默认 JSON 格式
 	}
 
-	// Initialize OpenTelemetry
-	klogging.InitOpenTelemetry()
+	// Initialize OpenTelemetry: propagator (header formats) + TracerProvider (span engine, no-export)
+	klogging.InitDefaultPropagator()
+	tp := klogging.InitDefaultTracerProvider("unicornblitz", klogging.ParseSampleRatio(os.Getenv("TRACE_SAMPLE_RATIO")))
+	defer klogging.ShutdownTracerProvider(ctx, tp)
 
 	// Create slog handler
 	handler := klogging.NewHandler(&klogging.HandlerOptions{

@@ -15,7 +15,7 @@ import (
 func TestCostfunc_2replica(t *testing.T) {
 	ctx := context.Background()
 	cfg := createDefaultCostConfig()
-	klogging.InitOpenTelemetry()
+	klogging.InitDefaultPropagator()
 	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
 		Level:  klogging.ParseLevel("debug"),
 		Format: "simple",

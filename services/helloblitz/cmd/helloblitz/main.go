@@ -13,7 +13,7 @@ import (
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
-	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging" // Retained for InitOpenTelemetry, NewHandler, ParseLevel
+	"github.com/xinkaiwang/shardmanager/libs/xklib/klogging" // Retained for InitDefaultPropagator, NewHandler, ParseLevel
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 	"github.com/xinkaiwang/shardmanager/libs/xklib/ksysmetrics"
 	"github.com/xinkaiwang/shardmanager/services/helloblitz/internal/biz"
@@ -71,8 +71,10 @@ func main() {
 		logFormat = "json" // 默认 JSON 格式
 	}
 
-	// Initialize OpenTelemetry
-	klogging.InitOpenTelemetry()
+	// Initialize OpenTelemetry: propagator (header formats) + TracerProvider (span engine, no-export)
+	klogging.InitDefaultPropagator()
+	tp := klogging.InitDefaultTracerProvider("helloblitz", klogging.ParseSampleRatio(os.Getenv("TRACE_SAMPLE_RATIO")))
+	defer klogging.ShutdownTracerProvider(ctx, tp)
 
 	// Create slog handler
 	handler := klogging.NewHandler(&klogging.HandlerOptions{
