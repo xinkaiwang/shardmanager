@@ -25,8 +25,12 @@ import (
 )
 
 func main() {
-	// 1. Initialize OpenTelemetry (once at startup)
-	klogging.InitOpenTelemetry()
+	// 1. Initialize OpenTelemetry (once at startup):
+	//    propagator = header formats; TracerProvider = span engine (no-export)
+	klogging.InitDefaultPropagator()
+	tp := klogging.InitDefaultTracerProvider("my-service",
+		klogging.ParseSampleRatio(os.Getenv("TRACE_SAMPLE_RATIO")))
+	defer klogging.ShutdownTracerProvider(context.Background(), tp)
 	
 	// 2. Create handler
 	handler := klogging.NewHandler(&klogging.HandlerOptions{
@@ -155,14 +159,22 @@ slog.InfoContext(ctx, "User logged in",
 )
 ```
 
+### Ambient ctx fields (successor of the old CtxInfo)
+
+```go
+// biz layer: attach once — every downstream log carries the field
+ctx = klogging.CtxWithAttrs(ctx, slog.String("orderId", id))
+// gated fields: only appear when effective threshold reaches Debug/Verbose
+ctx = klogging.CtxWithAttrsLevel(ctx, klogging.MidImportance, slog.Any("cfg", c))
+// live mutable object (e.g. cost accounting), snapshot taken at log time
+ctx = klogging.CtxWithProvider(ctx, costCenter) // implements klogging.AttrProvider
+```
+
 ### Trace Context
 
-**Before**:
+**Before** (CtxInfo, removed):
 ```go
-ctxInfo := klogging.GetCtxInfoFromCtx(ctx)
-if ctxInfo != nil {
-	traceID := ctxInfo.TraceID
-}
+ctxInfo := klogging.GetCtxInfoFromCtx(ctx) // no longer exists
 ```
 
 **After**:

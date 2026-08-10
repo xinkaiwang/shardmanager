@@ -4,15 +4,28 @@ import (
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"io"
 	"log/slog"
 	"math/rand"
-	"strconv"
 	"sync"
 	"time"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kerror"
 )
 
 const defaultCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+// cryptoReader is the entropy source for seeding; a var so tests can inject
+// a failing reader (KLOG-013).
+var cryptoReader io.Reader = crypto_rand.Reader
+
+// SafeRand: crypto-seeded math/rand PRNG behind a mutex.
+//
+// CONTRACT (KLOG-013①): the output stream is NOT cryptographically secure —
+// after the 64-bit seed everything is deterministic. Fine for IDs (needs
+// uniqueness) and jitter (needs statistical spread); NEVER use RandomXxx for
+// tokens, session ids, or anything an attacker must not predict — use
+// crypto/rand directly for those.
 type SafeRand struct {
 	mu         sync.Mutex
 	seededRand *rand.Rand
@@ -29,18 +42,24 @@ func GetRandom(ctx context.Context, op OpGetRand) {
 	}()
 	if safeRand.seededRand == nil {
 		buf := make([]byte, 8)
-		_, err := crypto_rand.Read(buf)
+		_, err := io.ReadFull(cryptoReader, buf)
 		if err != nil {
-			slog.WarnContext(ctx, "Crypto rand seed failed",
-				slog.String("event", "CryptoRandSeedFailed"),
-				slog.Any("error", err))
-		} else {
-			seed := int64(binary.BigEndian.Uint64(buf))
-			safeRand.seededRand = rand.New(rand.NewSource(seed))
-			slog.InfoContext(ctx, "Crypto rand seed success",
-				slog.String("event", "CryptoRandSeedSucc"),
-				slog.String("seed", strconv.FormatInt(seed, 16)))
+			// KLOG-013③ fail-fast: the old path logged a Warn, left
+			// seededRand nil, and nil-deref'd inside op — "wrote a
+			// fallback, shipped a crash". A dead entropy source at first
+			// use is process-level infrastructure failure: die loudly with
+			// a typed error at the real cause.
+			ke := kerror.Create("CryptoRandSeedFailed", "cannot seed PRNG from crypto/rand").
+				With("error", err.Error())
+			panic(ke)
 		}
+		seed := int64(binary.BigEndian.Uint64(buf))
+		safeRand.seededRand = rand.New(rand.NewSource(seed))
+		// KLOG-013② hygiene: do not log the seed value — with a
+		// deterministic PRNG it would let any log reader replay the whole
+		// stream. The event (without the seed) is Debug-grade at best.
+		slog.DebugContext(ctx, "PRNG seeded from crypto/rand",
+			slog.String("event", "CryptoRandSeeded"))
 	}
 	op(safeRand.seededRand)
 }

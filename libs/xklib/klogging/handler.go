@@ -33,12 +33,19 @@ type MetricsReporter interface {
 }
 
 // HandlerOptions configures a Handler.
+//
+// Zero-value convention (KLOG-008): slog.LevelInfo == 0, so an unset Level is
+// indistinguishable from an explicit Info — both yield Info (harmless, Info
+// IS the default). The real constraint is SampledLevel: it cannot be
+// explicitly set to Info (0 is replaced by the Debug default). If that is
+// ever needed, the field must become *slog.Level — until then this is the
+// documented trade for keeping the struct flat.
 type HandlerOptions struct {
-	Level        slog.Level      // Default log level (e.g., Info)
-	SampledLevel slog.Level      // Log level when trace is sampled (e.g., Debug)
-	Format       string          // "json" or "text"
-	Output       io.Writer       // Output destination (default: os.Stderr)
-	Metrics      MetricsReporter // Optional metrics reporter
+	Level        slog.Level      // Default log level (0 = Info)
+	SampledLevel slog.Level      // Level when trace is sampled (0 = Debug; cannot be explicit Info, see above)
+	Format       string          // "json" or "text" ("" = json)
+	Output       io.Writer       // Output destination (nil = os.Stderr)
+	Metrics      MetricsReporter // Optional metrics reporter (nil = no metrics)
 }
 
 // NewHandler creates a new klogging Handler.
@@ -70,6 +77,13 @@ func NewHandler(opts *HandlerOptions) *Handler {
 			// Default slog uses RFC3339Nano (6 digits) which is unnecessarily verbose.
 			if a.Key == slog.TimeKey && a.Value.Kind() == slog.KindTime {
 				return slog.String(a.Key, a.Value.Time().Format("2006-01-02T15:04:05.000Z07:00"))
+			}
+			// Render custom levels by name (VERBOSE/FATAL) instead of
+			// slog's arithmetic form (DEBUG-1/ERROR+1).
+			if a.Key == slog.LevelKey {
+				if lv, ok := a.Value.Any().(slog.Level); ok {
+					return slog.String(a.Key, LevelString(lv))
+				}
 			}
 			return a
 		},
