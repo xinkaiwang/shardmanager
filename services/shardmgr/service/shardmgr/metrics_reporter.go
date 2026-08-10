@@ -6,29 +6,28 @@ import (
 	"github.com/xinkaiwang/shardmanager/libs/xklib/kmetrics"
 )
 
-var (
-	LogSizeBytesMetrics  = kmetrics.CreateKmetric(context.Background(), "klogging_volume_byte", "log size in byte (don't include skipped events)", []string{"level", "event"})
-	LogErrorCountMetrics = kmetrics.CreateKmetric(context.Background(), "klogging_breif_count", "log event count (include those skipped)", []string{"level", "event", "logged"}).CountOnly()
-)
+// logMetric: 单指标 + drop tag（2026-08-09 KLOG-002 决策，见
+// research/2026_0809.CtxInfoRevisit/notes.md）：
+//   - log_size_count{level,event,drop}: 日志行数；总尝试量 = sum(全部)，
+//     压掉量 = sum(drop="1")
+//   - log_size_sum{level,event,drop}:   日志字节数（drop="1" 行恒为 0——
+//     被压掉的日志没有 record，字节数不可知，结构性约束如实呈现）
+//
+// drop="1" 的行 event 恒为空串（Enabled 阶段拿不到 event，level 粒度）。
+var logMetric = kmetrics.CreateKmetric(context.Background(), "log_size",
+	"log lines (count) and bytes (sum) by level/event/drop", []string{"level", "event", "drop"})
 
-// MyLoggerMetrcsReporter implements klogging.MyLoggerMetrcsReporter interface
-type MyLoggerMetrcsReporter struct {
+// KloggingMetricsReporter implements klogging.MetricsReporter（KLOG-001 接线）。
+type KloggingMetricsReporter struct{}
+
+func NewKloggingMetricsReporter() *KloggingMetricsReporter {
+	return &KloggingMetricsReporter{}
 }
 
-func NewMyLoggerMetrcsReporter() *MyLoggerMetrcsReporter {
-	return &MyLoggerMetrcsReporter{}
-}
-
-func (lmr *MyLoggerMetrcsReporter) ReportLogSizeBytes(ctx context.Context, size int, logLevel, eventType string) {
-	// Implement logic to report log size in bytes
-	LogSizeBytesMetrics.GetTimeSequence(ctx, logLevel, eventType).Add(int64(size))
-}
-
-func (lmr *MyLoggerMetrcsReporter) ReportLogErrorCount(ctx context.Context, count int, logLevel, eventType string, isLogged bool) {
-	// Implement logic to report log error count
-	isLoggedStr := "false"
-	if isLogged {
-		isLoggedStr = "true"
+func (r *KloggingMetricsReporter) ReportLog(ctx context.Context, level, event string, size int, dropped bool) {
+	drop := "0"
+	if dropped {
+		drop = "1"
 	}
-	LogErrorCountMetrics.GetTimeSequence(ctx, logLevel, eventType, isLoggedStr).Add(int64(count))
+	logMetric.GetTimeSequence(ctx, level, event, drop).Add(int64(size))
 }

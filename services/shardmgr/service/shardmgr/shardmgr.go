@@ -39,10 +39,11 @@ func main() {
 	tp := klogging.InitDefaultTracerProvider("shardmgr", klogging.ParseSampleRatio(os.Getenv("TRACE_SAMPLE_RATIO")))
 	defer klogging.ShutdownTracerProvider(ctx, tp)
 
-	// 创建并配置 slog Handler
+	// 创建并配置 slog Handler（Metrics: 日志量指标 log_size_count/sum{level,event,drop}）
 	slogHandler := klogging.NewHandler(&klogging.HandlerOptions{
-		Level:  klogging.ParseLevel(logLevel),
-		Format: logFormat,
+		Level:   klogging.ParseLevel(logLevel),
+		Format:  logFormat,
+		Metrics: NewKloggingMetricsReporter(),
 	})
 	logger := slog.New(slogHandler)
 	slog.SetDefault(logger)
