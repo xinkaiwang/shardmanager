@@ -4,21 +4,34 @@ Source of truth for agent skills that belong to this codebase — version
 controlled, reviewable in a PR, and shared instead of living only in someone's
 home directory.
 
-**This folder is not a discovery path.** No agent runtime loads skills from
-`<repo>/skills/`; they load from the runtime's own directory. Install by
-symlink, so edits here take effect immediately with no copy to keep in sync.
+**Whether this folder is itself a discovery path depends on the runtime.**
+OpenClaw scans `<workspace>/skills` and gives it the highest precedence
+(`<workspace>/skills` > `~/.openclaw/skills` > bundled), so a skill here loads
+with no install at all — but only while this repo is the workspace. Claude Code
+and the `~/.agents` family never scan a repo. Symlink into each runtime's own
+directory to get every agent, in every project, from this one copy.
 
 ## Install
 
 ```bash
-# Claude Code
-for s in honest-go using-xklib; do ln -s "$PWD/skills/$s" ~/.claude/skills/$s; done
-
-# Codex / Copilot CLI / Gemini CLI (cross-runtime alias)
-mkdir -p ~/.agents/skills && for s in honest-go using-xklib; do ln -s "$PWD/skills/$s" ~/.agents/skills/$s; done
+# from the repo root
+for s in honest-go using-xklib; do
+  ln -s "$PWD/skills/$s" ~/.claude/skills/$s                        # Claude Code
+  mkdir -p ~/.agents/skills   && ln -s "$PWD/skills/$s" ~/.agents/skills/$s    # Codex / Copilot CLI / Gemini CLI
+  mkdir -p ~/.openclaw/skills && ln -s "$PWD/skills/$s" ~/.openclaw/skills/$s  # OpenClaw (global; workspace copies still win)
+done
 ```
 
-Both locations can coexist; each runtime reads the one it knows.
+All three coexist; each runtime reads the one it knows, and every one resolves
+to the same file. **Do not copy a skill into another project's `skills/`** — that
+creates a second copy to keep in sync, which is the failure this layout exists
+to prevent. The global symlink already reaches every project.
+
+| Runtime | Where it looks |
+| --- | --- |
+| Claude Code | `~/.claude/skills/` |
+| Codex, Copilot CLI, Gemini CLI | `~/.agents/skills/` |
+| OpenClaw | `<workspace>/skills` > `~/.openclaw/skills` > bundled; plus `skills.load.extraDirs` in `~/.openclaw/openclaw.json` |
 
 ## Catalog
 
