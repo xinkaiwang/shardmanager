@@ -153,6 +153,9 @@ func (rl *RunLoop[T]) Run(ctx context.Context) {
 			ctx2, span := runloopTracer.Start(ctx, eveName, trace.WithNewRoot())
 			event.Process(ctx2, rl.resource)
 			span.End()
+			// in-flight -1 必须在 Process 之后：保证 handler 里 ScheduleRun 的
+			// 后续任务先入堆、计数才可能归零，虚拟时钟跳钟时任务堆是完整的
+			kcommon.InFlightWorkDone()
 			rl.currentEventName.Store("")
 			elapsedMs := kcommon.GetMonoTimeMs() - start
 			RunLoopElapsedMsMetric.GetTimeSequence(ctx, rl.name, eveName).Add(elapsedMs)

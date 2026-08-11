@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+
+	"github.com/xinkaiwang/shardmanager/libs/xklib/kcommon"
 )
 
 // UnboundedQueue implements an unbounded queue for events of type IEvent[T]
@@ -15,6 +17,13 @@ type UnboundedQueue[T CriticalResource] struct {
 	closed    atomic.Bool    // Whether the queue is closed (set on every run() exit path)
 	size      atomic.Int64   // Current number of elements in the queue
 	closeOnce sync.Once      // Ensure output channel is closed only once
+
+	// enqMu 让 Enqueue 与关闭路径互斥有序（临界区 = closed 检查 + 一次 chan 发送，
+	// 纳秒级）。两个收益：(1) in-flight 计数无泄漏——任何 +1 过的事件必然被
+	// run() 消费（Process 后 -1）或被关闭路径配平补减；(2) 消灭了旧的
+	// "关闭竞态窗口内事件静默落入死 buffer" 缺陷——关闭后的 Enqueue 确定性走
+	// 响亮丢弃路径。
+	enqMu sync.Mutex
 
 	stop     chan struct{} // Channel to signal stop processing
 	stopOnce sync.Once     // Stop() is called from multiple paths (XS-002: Run's defer + StopAndWaitForExit) — must be idempotent
@@ -42,13 +51,25 @@ func NewUnboundedQueue[T CriticalResource](ctx context.Context) *UnboundedQueue[
 // run handles events in the queue
 func (q *UnboundedQueue[T]) run(ctx context.Context) {
 	defer func() {
-		// Mark closed BEFORE closing output: Enqueue checks this flag and
-		// panics, restoring the original "loud rejection after close"
-		// semantics without the close(q.input) race the original had
-		// (closing a channel that live producers send on panics the
-		// producer at a random point; a flag check panics deterministically
-		// at the call site with a typed kerror instead).
+		// 持 enqMu 置位 closed 并清点未消费事件：与 Enqueue 互斥保证
+		// "任何成功入队（+1 过）的事件都会被本次清点或正常处理路径配平"，
+		// in-flight 计数器不可能被停机竞态污染（否则虚拟时间测试会永久冻结）。
+		undelivered := len(q.buffer)
+		q.enqMu.Lock()
 		q.closed.Store(true)
+	drainLoop:
+		for {
+			select {
+			case <-q.input:
+				undelivered++
+			default:
+				break drainLoop
+			}
+		}
+		q.enqMu.Unlock()
+		for i := 0; i < undelivered; i++ {
+			kcommon.InFlightWorkDone()
+		}
 		// Ensure output channel is closed when thread exits
 		q.closeOnce.Do(func() {
 			close(q.output)
@@ -109,7 +130,9 @@ func (q *UnboundedQueue[T]) run(ctx context.Context) {
 // 注：与 shutdown 竞态的窗口内事件仍可能落入死 buffer（窄窗口，行为同前）；
 // closed 标志保证稳态下是"响亮丢弃"而非"无声吞没/死锁"。
 func (q *UnboundedQueue[T]) Enqueue(item IEvent[T]) {
+	q.enqMu.Lock()
 	if q.closed.Load() {
+		q.enqMu.Unlock()
 		eveName := item.GetName()
 		RunLoopEnqueueDroppedMetric.GetTimeSequence(context.Background(), eveName).Add(1)
 		slog.WarnContext(context.Background(), "event dropped: enqueue after queue stopped (shutdown straggler or teardown-order bug)",
@@ -117,8 +140,10 @@ func (q *UnboundedQueue[T]) Enqueue(item IEvent[T]) {
 			slog.String("droppedEvent", eveName))
 		return
 	}
+	kcommon.InFlightWorkAdd() // 与 run() 的消费/清点路径严格配平（见 enqMu 注释）
 	q.input <- item
 	q.size.Add(1)
+	q.enqMu.Unlock()
 }
 
 // GetOutputChan returns the channel for receiving elements from the queue.
