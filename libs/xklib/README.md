@@ -14,6 +14,10 @@ This document covers what the source and [pkg.go.dev](https://pkg.go.dev/github.
 to honor for them to work, and what fails silently if you skip a step. For API
 details, read the godoc or the source — both are current.
 
+Writing code with an AI agent? [AGENTS.md](AGENTS.md) covers the same ground as
+rules and wrong/right pairs, and ships inside the module so it matches whichever
+version you resolved.
+
 ## Install
 
 ```
