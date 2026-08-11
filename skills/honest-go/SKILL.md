@@ -194,10 +194,13 @@ Only those three are inlined. Everything else is pulled on demand — style from
 this skill, API from the module's shipped docs — because everything else is
 visible in review and already has a `smell-*` scanner behind it.
 
-**2. Depend on the library**
+**2. Depend on the library** — two modules, not one. The wiring block needs a
+metrics exporter, which xklib deliberately does not bundle (it emits through
+OpenCensus registries; choosing the exporter is the service's call).
 
 ```bash
 go get github.com/xinkaiwang/shardmanager/libs/xklib@latest
+go get contrib.go.opencensus.io/exporter/prometheus     # or your exporter of choice
 ```
 
 **3. Wire `main()`** — copy the startup block from the module's `README.md`
@@ -205,6 +208,20 @@ go get github.com/xinkaiwang/shardmanager/libs/xklib@latest
 omitted (metrics recorded and scraped by nobody, process gauges reading a steady
 zero, logs with no `trace_id`, requests starting their own trace). Do not trim
 it to "the parts we need".
+
+**4. Prove it compiles and runs.** Not optional, and not "it looks right":
+
+```bash
+go mod tidy && go build ./... && go vet ./...
+PORT=8080 METRICS_PORT=9090 go run ./cmd/<binary>
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/health   # expect 200
+curl -s localhost:9090/metrics | grep process_goroutines          # expect a real number
+```
+
+This step exists because the first repo bootstrapped this way did not build:
+`go mod tidy` had run before `main.go` existed, so the module was recorded as
+`// indirect` with no `go.sum` entries for its transitive deps, and the exporter
+from step 2 was never added at all. Everything read correctly. Nothing compiled.
 
 Then write code. The agent has the style here, the API in the module, and the
 three contracts in front of it at all times.

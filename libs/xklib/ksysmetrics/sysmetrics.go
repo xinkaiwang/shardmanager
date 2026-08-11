@@ -194,13 +194,19 @@ func StartSysMetricsCollector(ctx context.Context, interval time.Duration, versi
 		metric.WithLabelKeys("version"))
 	systemCPUGauge.UpsertEntry(func() float64 { return currentSystemCPU }, metricdata.NewLabelValue(currentVersion))
 
+	// 获取进程 ID
+	pid := os.Getpid()
+
+	// 先同步采一次再进 ticker 循环：否则进程启动后的第一个 interval 内所有
+	// gauge 读 0——scrape 到的是"这个进程有 0 个 goroutine、0 字节堆"，与
+	// "根本没调 StartSysMetricsCollector"（README 记载的无声失败模式）在
+	// 仪表盘上完全同形。默认 15s 的窗口，每次 pod 重启都出现一次。
+	collectMetrics(ctx, pid)
+
 	// 启动定时收集
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-
-		// 获取进程 ID
-		pid := os.Getpid()
 
 		for {
 			select {

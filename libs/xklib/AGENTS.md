@@ -165,6 +165,14 @@ recover once, returning only when the failure is an expected outcome the caller
 must branch on. Never `panic("some string")` — a raw value carries no type, no
 fields, no cause.
 
+- **An uncaught panic prints the outer layer only.** Go renders a panic value
+  through `Error()`, and `Kerror.Error()` is `ShortString()` — type, message and
+  detail fields, but **not the cause and not the stack**. So
+  `panic(kerror.Wrap(err, "ListenFailed", ...))` that escapes to the top prints
+  `ListenFailed: http listener stopped, addr=:8080` and swallows the
+  `bind: address already in use` underneath it. Where the cause is the whole
+  diagnosis, either log `ke.FullString()` at the recover boundary, or lift the
+  cause into a detail field: `.With("cause", err.Error())`.
 - `Create` captures a stack. On a hot path where you do not need it, chain
   `.WithoutStack()`.
 - Test retryability with `kerror.Retryable(err)`, which works on a plain

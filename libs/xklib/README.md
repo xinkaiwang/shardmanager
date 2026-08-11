@@ -38,6 +38,15 @@ propagator), `kmetrics` and `ksysmetrics` pull in OpenCensus. `kerror`,
 Nothing below is optional-but-recommended — each line switches on one capability,
 and skipping it fails **silently**, which is why this section exists.
 
+You need one dependency beyond xklib: a metrics exporter. xklib emits through
+OpenCensus registries and deliberately does not bundle an exporter — which one
+you scrape with is the service's decision, not the library's.
+
+```bash
+go get github.com/xinkaiwang/shardmanager/libs/xklib
+go get contrib.go.opencensus.io/exporter/prometheus
+```
+
 ```go
 func main() {
     ctx := context.Background()
