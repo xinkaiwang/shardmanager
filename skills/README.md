@@ -15,7 +15,7 @@ directory to get every agent, in every project, from this one copy.
 
 ```bash
 # from the repo root
-for s in honest-go using-xklib; do
+for s in honest-go using-xklib research-discipline; do
   ln -s "$PWD/skills/$s" ~/.claude/skills/$s                        # Claude Code
   mkdir -p ~/.agents/skills   && ln -s "$PWD/skills/$s" ~/.agents/skills/$s    # Codex / Copilot CLI / Gemini CLI
   mkdir -p ~/.openclaw/skills && ln -s "$PWD/skills/$s" ~/.openclaw/skills/$s  # OpenClaw (global; workspace copies still win)
@@ -39,6 +39,7 @@ to prevent. The global symlink already reaches every project.
 | --- | --- |
 | [`honest-go`](honest-go/SKILL.md) | The Go **style**: semantic names, zero caller burden, searchability first-class, interface sizing, hiding implementation, panic-with-typed-error discipline, `GetCurrentXxx` singletons, comment style. Version-free — contains no library API. |
 | [`using-xklib`](using-xklib/SKILL.md) | Authoring rules for code that depends on xklib: ctx-carrying logs, the `event` convention, the kcommon time abstraction, kerror, kmetrics, and the krunloop adopt-or-not decision. Fires **before** code is written, unlike the scan-only `smell-*` family. |
+| [`research-discipline`](research-discipline/SKILL.md) | How dated design docs, investigation notes, and numbered experiment folders are laid out — and the rule that a rerun with a changed parameter is a new experiment, never an overwrite. |
 
 ## Where a rule belongs
 
