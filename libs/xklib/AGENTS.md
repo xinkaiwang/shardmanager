@@ -148,21 +148,31 @@ Rules:
 
 ```go
 // new error
-return kerror.Create("ShardNotFound", "no such shard").
-    With("shardId", id).
+ke := kerror.Create("ShardNotFound", "no such shard").
+    With("shardId", id).                   // structured field, never concatenated into the message
     WithErrorCode(kerror.EC_RETRYABLE)     // only if a retry could actually succeed
+panic(ke)
 
 // wrapping a cause
-return kerror.Wrap(err, "EtcdReadFailed", "cannot read shard plan", true /*needStack*/)
+panic(kerror.Wrap(err, "EtcdReadFailed", "cannot read shard plan", true /*needStack*/))
 ```
+
+**Panic or return?** That is the consuming project's style, not xklib's, and
+both callers of this library panic by default — shardmanager has 195 `panic(ke)`
+sites and zero `return kerror`. Match the code around you; if the project
+follows Honest Go, panic with the typed error and let the HTTP/RPC boundary
+recover once, returning only when the failure is an expected outcome the caller
+must branch on. Never `panic("some string")` — a raw value carries no type, no
+fields, no cause.
 
 - `Create` captures a stack. On a hot path where you do not need it, chain
   `.WithoutStack()`.
-- Callers test retryability with `kerror.Retryable(err)`, which works on a
-  plain `error`.
-- Declare the concrete type in signatures where every producer returns one:
-  `*kerror.Kerror`, not `error` — an `error` return forces callers to
-  type-assert or string-match.
+- Test retryability with `kerror.Retryable(err)`, which works on a plain
+  `error`. Check the kind by asserting `*kerror.Kerror` and comparing `.Type`
+  — never by matching on the message text.
+- Where a value is declared rather than panicked, declare the concrete type:
+  `*kerror.Kerror`, not `error`. An `error` field or return forces every
+  consumer to type-assert or string-match.
 
 ### 3.4 Testing code that depends on time
 

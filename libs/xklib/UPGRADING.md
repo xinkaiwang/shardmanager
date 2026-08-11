@@ -89,9 +89,23 @@ no background worker, nothing shipped anywhere. That is all log correlation
 needs. `ParseSampleRatio("")` returns 0, which still generates IDs — only the
 sampled-request debug boost stays off.
 
-**DECISION** — if `grep -rn "SetTracerProvider\|NewTracerProvider" --include="*.go" .`
-finds that you already install your own provider, do **not** add this call; it
-would override yours. Ask the human which one wins.
+**DECISION** — do not add this blindly if the project already correlates logs
+some other way. Two checks, because the second one is the easy miss:
+
+```bash
+# (a) an OpenTelemetry provider of your own — this call would override it
+grep -rn "SetTracerProvider\|NewTracerProvider" --include="*.go" .
+
+# (b) a hand-rolled correlation-ID system — greps clean for (a) yet collides
+grep -rln "TraceID\|trace_id\|RequestID\|CorrelationID\|X-.*-Trace" --include="*.go" .
+```
+
+A project that mints its own request IDs, propagates them in a custom header,
+and stores them in ctx will end up with **two** independent trace identities in
+its logs — the home-grown one and OpenTelemetry's — with no relationship
+between them. That is worse than having neither. Stop and ask the human whether
+to adopt xklib's tracing and retire the home-grown one, keep the home-grown one
+and skip this step, or bridge them.
 
 Verify: start the service, hit an endpoint, confirm a log line carries
 `trace_id`. If it does not, one of the two Init calls is missing or runs after
