@@ -19,7 +19,7 @@ import (
 // Note: propagation.Baggage is deliberately NOT registered. Baggage silently
 // forwards ctx key-values onto every outgoing request header — a cross-service
 // data channel this project has explicitly rejected (KLOG-014, see
-// research/2026_0809.CtxInfoRevisit/notes.md). Re-enabling it must be an
+// research/2026-08-09-ctx-info-revisit/notes.md). Re-enabling it must be an
 // explicit, reviewed change to this function.
 func InitDefaultPropagator() {
 	otel.SetTextMapPropagator(

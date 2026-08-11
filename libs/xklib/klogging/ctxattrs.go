@@ -1,7 +1,7 @@
 package klogging
 
 // ctx-carried ambient log fields (KLOG-007, three-layer design — see
-// research/2026_0809.CtxInfoRevisit/notes.md).
+// research/2026-08-09-ctx-info-revisit/notes.md).
 //
 // Layer 1 — immutable attr chain: CtxWithAttrs / CtxWithAttrsLevel attach
 // fields once; every log written via slog.XxxContext(ctx, ...) below that

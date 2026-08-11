@@ -66,7 +66,7 @@ const pollInterval = 10 * time.Microsecond
 // 一轮约 7 万次跳钟，每次无条件付一个 grace。实测 core 用时：
 // grace=100µs → 10.6s，grace=10µs → 2.2s（只降 pollInterval 则是 9.9s，
 // 即 busy 轮询仅占 6%）。取 10µs 是**用兜底厚度换 4.8 倍测试速度的自觉取舍**，
-// 决策与反对意见见 research/2026_0810.FakeTimeQuiescence/notes.md 的 D8。
+// 决策与反对意见见 research/2026-08-10-fake-time-quiescence/notes.md 的 D8。
 const graceInterval = 10 * time.Microsecond
 
 // busyTimeout 是深度死锁逃生舱：in-flight 计数持续不归零（事件处理真死锁）

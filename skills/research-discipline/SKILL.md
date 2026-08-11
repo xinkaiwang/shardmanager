@@ -113,5 +113,8 @@ comparison the whole investigation existed to make would be gone.
 `YYYY-MM-DD` everywhere — design docs, research folders, experiment days. ISO
 sorts correctly in every tool and matches the date the artifact records.
 
-Older folders using other forms (`2026_0809.TopicName`) are grandfathered; do
-not mass-rename working history, but write new ones the new way.
+Migrating older folders is optional, not required — a convention that demands
+mass-renaming working history gets ignored instead of followed. Rename when the
+references are few enough to fix in one pass (shardmanager's three folders cost
+ten edits, several of them in shipped library comments); otherwise leave the old
+names and write new ones the new way.

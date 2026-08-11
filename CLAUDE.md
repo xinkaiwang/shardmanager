@@ -3,13 +3,13 @@
 1. 本文件包含的是针对本项目的特定规则和经验教训，优先级高于任何通用知识。
 2. 总是用中文回答我，即使我有时会用英文提问。因为中文是我的母语，我更习惯用中文阅读，但是我的键盘输入英文比较快。
 
-# 判断纪律（2026-08-09 CtxInfoRevisit 讨论沉淀，完整推导见 research/2026_0809.CtxInfoRevisit/notes.md）
+# 判断纪律（2026-08-09 CtxInfoRevisit 讨论沉淀，完整推导见 research/2026-08-09-ctx-info-revisit/notes.md）
 
 3. **定性/定级必须给出具体 failure scenario**（谁、什么场景、什么损害）；写不出后果链的只能记"观察"，不得记"问题"。禁止凭"最佳实践"标签下判断——反面教材：我曾凭 "crypto rand=好/伪随机=坏" 误判 kcommon（trace ID 只需唯一性，不需不可预测性；真熵采集速率极低，headless 机器仅个位~百级 bits/s）。
 4. **审计判断从"消费者需要什么性质"出发推导**，不从"用了什么技术"贴标签；量化判断算数量级（熵预算/QPS/临界区），算不出就明说是估计。
 5. **xklib 是"一盒胶带和笔"**：原件简单、独立、可见全貌；组装发生在使用者的 diff 里；库背后不得有默认运行的复杂度（反例：默认注册的 Baggage propagator、log4j JNDI）。"功能多=好"是必须抵制的互联网先验，未定价的功能是负资产。不得以本仓库 grep 用量判断库功能取舍——使用者在仓库之外（此错一天犯过两次：Importance 分级、B3）。
 6. **对开源依赖与对我自己的输出适用同一信任模型**：不信默认输出，只信过验货的结论（读源码给 file:line 收据、跑 demo 实证、算数量级）。依赖热路径审计优先级：隐藏串行点（channel/单 worker/全局锁）> 每操作分配。opencensus 的 QPS 封顶病根 = stats 全走单 channel + 单 worker goroutine（worker.go）。
-7. **重要讨论落盘**：research/<date>.<topic>/notes.md，问题编号化（如 KLOG-NNN）+ 决策日志（含否决理由）。用户的质疑是流程的承重结构，被顶撞后修正结论是常态，不要护短。
+7. **重要讨论落盘**：`research/YYYY-MM-DD-<slug>/notes.md`，问题编号化（如 KLOG-NNN）+ 决策日志（含否决理由）。可运行实验另按 `expNN-<slug>/` 归档，改参数重跑一律开新 exp、不得覆盖旧结果——完整约定见 skill `research-discipline`。用户的质疑是流程的承重结构，被顶撞后修正结论是常态，不要护短。
 
 # 编码约定
 

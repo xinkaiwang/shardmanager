@@ -7,7 +7,7 @@ import (
 )
 
 // logMetric: 单指标 + drop tag（2026-08-09 KLOG-002 决策，见
-// research/2026_0809.CtxInfoRevisit/notes.md）：
+// research/2026-08-09-ctx-info-revisit/notes.md）：
 //   - log_size_count{level,event,drop}: 日志行数；总尝试量 = sum(全部)，
 //     压掉量 = sum(drop="1")
 //   - log_size_sum{level,event,drop}:   日志字节数（drop="1" 行恒为 0——

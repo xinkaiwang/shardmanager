@@ -54,7 +54,7 @@ func (rs *RunloopSampler) Run(ctx context.Context) {
 	}
 	RunLoopSamplerMetric.GetTimeSequence(ctx, rs.name, current).Add(1)
 	// 采样周期 20ms：每 tick 成本为一次原子读 + 一次计数加，量级无害；
-	// 20 这个值是取用方便而非实测定值（见 research/2026_0809.XklibSmellScan）。
+	// 20 这个值是取用方便而非实测定值（见 research/2026-08-09-xklib-smell-scan）。
 	rs.schedule(20, func() {
 		rs.Run(ctx)
 	})

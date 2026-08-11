@@ -6,7 +6,7 @@ import "sync/atomic"
 //
 // 语义：计数"已投递但尚未处理完"的异步工作单元。FakeTimeProvider 在计数
 // 归零前冻结虚拟时钟——把旧实现"睡 100µs 赌系统安静了"的猜测，换成精确
-// 条件（2026-08-10 设计，见 research/2026_0810.FakeTimeQuiescence/notes.md）。
+// 条件（2026-08-10 设计，见 research/2026-08-10-fake-time-quiescence/notes.md）。
 //
 // 记账方（目前唯一）：krunloop——Enqueue +1，事件 Process 返回后 -1
 // （减数必须在 Process 之后：保证 handler 内的 ScheduleRun 先入任务堆、

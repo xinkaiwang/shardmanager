@@ -3,7 +3,7 @@
 > **⚠️ 历史文档（2026-08-09 归档）**：本计划已执行完毕，且实际实现与本文有出入
 > （未做 compat 兼容层、接口签名不同、B3 采样当时并不存在等）。
 > 迁移遗留问题的复盘、后续设计决策与实施记录见
-> `research/2026_0809.CtxInfoRevisit/`（notes.md + proposal_v2.md）。
+> `research/2026-08-09-ctx-info-revisit/`（notes.md + proposal_v2.md）。
 > 阅读本文仅作历史参考，勿按其代码示例实现。
 
 **作者**: 大白 (Bruce)  

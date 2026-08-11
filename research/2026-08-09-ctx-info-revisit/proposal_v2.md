@@ -129,7 +129,7 @@ runloop 定位是 daemon：每个事件在**自己的** trace/span 里运行，�
   依赖 Handler 同步写 stderr 落盘——写注释钉死此前提 + 测试断言
   （MockOsProvider 触发前日志已可读），防将来 Output 换缓冲/异步 writer 丢临终日志。
 - KLOG-004：README 去掉 CtxInfo 段落；REFACTOR_PLAN.md 头部标注
-  "已完成，后续见 research/2026_0809.CtxInfoRevisit/"。
+  "已完成，后续见 research/2026-08-09-ctx-info-revisit/"。
 - KLOG-008：HandlerOptions 加文档注释说明零值约定（不改类型，代价最小）。
 - KLOG-009：`StopAndWaitForExit(ctx)` 接受调用方 ctx；内部日志改用之。
 

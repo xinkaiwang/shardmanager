@@ -1,5 +1,5 @@
 // oteldemo: 演示 OTel SDK (no-export 模式) 对日志 trace 关联的效果。
-// 对应 research/2026_0809.CtxInfoRevisit/ 的 D1 决策演示。
+// 对应 research/2026-08-09-ctx-info-revisit/ 的 D1 决策演示。
 //
 // 三个场景：
 //  1. 不装 SDK（当前生产现状）—— 日志没有任何 trace_id
