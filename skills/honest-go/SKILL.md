@@ -113,23 +113,54 @@ package to that medium forever.
 - One line is almost always enough.
 - For types that cross a boundary, show direction and a real example value.
 
-## Adopting it in a project
+## Bootstrapping a new project
 
-Put a pointer in the project's `CLAUDE.md` / `AGENTS.md` — an agent cannot guess
-that a project follows a style:
+Nothing to install. This skill and `using-xklib` are symlinked into every
+runtime's global directory, so they are already present in any repo on this
+machine. Three steps, all inside the new project:
+
+**1. Declare it** — in the project's `CLAUDE.md` (or `AGENTS.md`; use whichever
+the agents you run there read). An agent cannot guess that a project follows a
+style:
 
 ```markdown
 ## Conventions
+
 This project follows Honest Go (skill `honest-go`) and depends on xklib.
-Library rules: `go list -m -f '{{.Dir}}' <xklib module>` → AGENTS.md / UPGRADING.md
-Three contracts violated by default: use slog's Context variants; every log line
-carries an `event` field; never call time.Now/Sleep/After directly.
+Library rules ship with the module:
+`go list -m -f '{{.Dir}}' github.com/xinkaiwang/shardmanager/libs/xklib`
+→ AGENTS.md (authoring rules), UPGRADING.md (version migrations).
+
+Three contracts, violated by default because ordinary Go idiom is wrong here,
+and breaking them produces no error and no visible symptom:
+
+1. Log with `slog.XxxContext(ctx, ...)`, never `slog.Xxx(...)`.
+2. Every log line carries `slog.String("event", "...")`. Casing: <pick one and
+   say so — CamelCase or snake_case — then never mix>.
+3. Never call `time.Now/Sleep/After/AfterFunc`; use `kcommon.GetWallTimeMs()`,
+   `GetMonoTimeMs()`, `SleepMs(ctx, ms)`, `ScheduleRun(ms, fn)`.
+
+Errors: panic with a typed kerror; the HTTP/RPC boundary recovers once.
 ```
 
-Those last three are inlined on purpose — breaking them produces no error and no
-visible symptom, so they cannot wait for a skill to be triggered. Everything else
-in this file is visible in review, and the `smell-*` skills catch it after the
-fact.
+Only those three are inlined. Everything else is pulled on demand — style from
+this skill, API from the module's shipped docs — because everything else is
+visible in review and already has a `smell-*` scanner behind it.
+
+**2. Depend on the library**
+
+```bash
+go get github.com/xinkaiwang/shardmanager/libs/xklib@latest
+```
+
+**3. Wire `main()`** — copy the startup block from the module's `README.md`
+§ "Wiring it into main()" **whole**. Four of its six steps fail silently when
+omitted (metrics recorded and scraped by nobody, process gauges reading a steady
+zero, logs with no `trace_id`, requests starting their own trace). Do not trim
+it to "the parts we need".
+
+Then write code. The agent has the style here, the API in the module, and the
+three contracts in front of it at all times.
 
 ## Related skills
 
