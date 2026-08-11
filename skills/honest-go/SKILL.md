@@ -142,6 +142,39 @@ web/              front-end assets, if any
 and the migration cost was 2 files with zero references on one side against 163
 files with 388 references on the other. GitHub also serves Pages from `/docs`.
 
+### Every module has a Makefile
+
+Not a build system — a **discoverable list of what you can do to this module**.
+`make help` should answer "how do I run the tests here" without reading CI
+config or asking anyone. Adoption is already total: all 8 module Makefiles in
+these repos carry the same core.
+
+```make
+all: fmt lint build test    # the pre-commit sweep
+build:                      # binaries → bin/ (omit for a library)
+test:                       # go test ./... -count=1
+fmt:                        # gofmt -w
+lint:                       # go vet ./... (+ linter if configured)
+tidy:                       # go mod tidy
+clean:                      # remove bin/ and test output
+run:                        # run the primary binary locally
+docker-build: docker-push:  # only if the module ships an image
+help:                       # list targets — make this the default if you add nothing else
+```
+
+Two names are settled by majority, because both spellings exist in the wild and
+a target you have to guess at defeats the point: **`lint`** (7 of 9), not `vet`;
+**`docker-build`** (7 of 9), not `docker`. A module may add targets freely —
+`test-race`, `test-with-log`, per-binary builds — but not rename these.
+
+Binaries go to `bin/` (7 of 8 Makefiles; the one using `build/` is the outlier).
+
+One deliberate change from current practice: **`test` should pass `-count=1`**.
+No existing Makefile does, so this is a proposal rather than a description — Go
+caches passing results, so a bare `go test` answers "has anything changed since
+the last pass", not "does it pass". The difference shows up exactly when you
+most want the truth: re-running after a change elsewhere.
+
 ### What is not prescribed
 
 Everything driven by what the project *is* — `ios/`, `k8s/`, `data/`,
@@ -208,6 +241,16 @@ go get contrib.go.opencensus.io/exporter/prometheus     # or your exporter of ch
 omitted (metrics recorded and scraped by nobody, process gauges reading a steady
 zero, logs with no `trace_id`, requests starting their own trace). Do not trim
 it to "the parts we need".
+
+**Name the smoke service for what it is.** The step-3 binary is a health-check
+stub, so call it `hellosvc` — not the project's name. Naming it `kitten` inside
+the kitten repo makes `cmd/kitten` a placeholder squatting the name the real
+binary will want, and it lies to the next reader about what the folder holds.
+Principle 1 applies to binaries too: the name says what the thing *is*. Delete
+or rename it once a real entrypoint exists.
+
+Add the module's `Makefile` at the same time (see § Repo layout) — the smoke
+service is exactly what `make run` should start.
 
 **4. Prove it compiles and runs.** Not optional, and not "it looks right":
 
