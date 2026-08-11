@@ -1,6 +1,6 @@
 ---
 name: honest-go
-description: Honest Go — the Go code style used across xinkai's projects: names describe semantics not implementation, callers carry zero burden, searchability is first-class. Covers constructor and type naming, interface sizing, hiding implementation behind accessors, the panic-with-typed-error discipline and when to return instead, the GetCurrentXxx singleton pattern, and comment style. Version-free by design — it contains no library API snippets. Also carries the bootstrap checklist for putting a new repo on this stack. Invoke when the user says "onboard honest-go" / "set up this project with honest-go" / "bootstrap a new Go project" / "what do I need for a new project", when starting a Go repo that has no conventions declared yet, when writing or reviewing Go in a project that follows Honest Go, when naming a new type/constructor/interface, when deciding whether a function should panic or return an error, or when the user says "honest go" / "is this honest go" / "review naming".
+description: Honest Go — the Go code style used across xinkai's projects: names describe semantics not implementation, callers carry zero burden, searchability is first-class. Covers constructor and type naming, interface sizing, hiding implementation behind accessors, the panic-with-typed-error discipline and when to return instead, the GetCurrentXxx singleton pattern, comment style, and repo layout (cmd/ internal/ service/ docs/ research/). Version-free by design — it contains no library API snippets. Also carries the bootstrap checklist for putting a new repo on this stack. Invoke when the user says "onboard honest-go" / "set up this project with honest-go" / "bootstrap a new Go project" / "what do I need for a new project", when starting a Go repo that has no conventions declared yet, when writing or reviewing Go in a project that follows Honest Go, when naming a new type/constructor/interface, when deciding whether a function should panic or return an error, or when the user says "honest go" / "is this honest go" / "review naming".
 ---
 
 # Honest Go
@@ -104,6 +104,53 @@ Related: an IO-layer dependency should sit behind an interface with
 subject-named implementations (`RedisXxx` / `MemoryXxx` / `DiskXxx`), reached
 through this pattern. A struct that wraps a concrete client directly couples its
 package to that medium forever.
+
+## Repo layout
+
+Two rules earn their place by deriving from the principles above. Everything
+else is a default you can depart from with a reason.
+
+**`internal/` holds everything not meant to be imported from outside.** This is
+the only form of "hide implementation from callers" that the compiler enforces —
+lowercase names, comments, and good intentions do not. Putting a package outside
+`internal/` is a promise of API stability to strangers; make that promise
+deliberately, for the few packages that are genuinely a public surface, and put
+the rest inside. A package that migrates out of `pkg/` into `internal/` is
+moving in the right direction.
+
+**`cmd/<binary>/main.go`, where the folder name is the binary name.** Principle
+1 at the filesystem level, and it makes "where does this program start" a
+one-hop search instead of a grep for `func main`.
+
+**Consistency across repos is itself the third principle at repo scale**: "where
+do I find X" should have one answer, not one per project.
+
+### The default layout
+
+```
+cmd/<binary>/     one folder per binary, folder name == binary name
+internal/         everything not meant to be imported from outside
+service/          long-running service assembly
+docs/             design docs, notes, diagrams  (docs/, never doc/)
+research/         dated investigation write-ups: research/<date>.<topic>/notes.md
+skills/           agent skills owned by this repo
+bin/              build output (gitignored)
+web/              front-end assets, if any
+```
+
+`docs/` over `doc/` is settled: the two repos on this stack had drifted apart,
+and the migration cost was 2 files with zero references on one side against 163
+files with 388 references on the other. GitHub also serves Pages from `/docs`.
+
+### What is not prescribed
+
+Everything driven by what the project *is* — `ios/`, `k8s/`, `data/`,
+`scripts/`, `api/`, domain packages. Add what you need; do not add a folder
+because a template has one.
+
+In particular, do not adopt `golang-standards/project-layout` wholesale. It is
+not official Go guidance despite the name, and most of its folders are cargo for
+any given project. The two rules above are the ones with a reason behind them.
 
 ## Comments
 
