@@ -15,6 +15,10 @@ Locate this file from a consuming project:
 go list -m -f '{{.Dir}}' github.com/xinkaiwang/shardmanager/libs/xklib
 ```
 
+Upgrading from an older xklib? Do [UPGRADING.md](UPGRADING.md) first — it ships
+alongside this file and has one section per version jump, with discovery
+commands and exact before/after edits.
+
 ---
 
 ## 1. The three contracts
@@ -56,7 +60,13 @@ slog.InfoContext(ctx, "worker went offline",
     slog.String("workerId", id))
 ```
 
-Name it in CamelCase after what happened, not where the code is.
+Name it after what happened, not after where the code is.
+
+Casing is **your project's convention, not xklib's** — shardmanager uses
+`WorkerOffline`, other consumers use `worker_offline`. xklib requires the field
+to exist (the handler labels log-volume metrics by it); it does not dictate the
+style. Match the surrounding code, and follow your project's `CLAUDE.md` /
+`AGENTS.md` if it states one.
 
 ### 1.3 Never call `time.Now`, `time.Sleep`, `time.After`, `time.AfterFunc`
 

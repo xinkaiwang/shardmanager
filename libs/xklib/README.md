@@ -16,7 +16,8 @@ details, read the godoc or the source — both are current.
 
 Writing code with an AI agent? [AGENTS.md](AGENTS.md) covers the same ground as
 rules and wrong/right pairs, and ships inside the module so it matches whichever
-version you resolved.
+version you resolved. Coming from an older release? See
+[UPGRADING.md](UPGRADING.md).
 
 ## Install
 
