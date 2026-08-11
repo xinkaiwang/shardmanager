@@ -53,20 +53,37 @@ func (provider *FakeTimeProvider) ScheduleRun(delayMs int, fn func()) {
 	})
 }
 
-// pollInterval 是静默轮询间隔：只决定"发现系统变安静的延迟"，不承担任何
+// pollInterval 是 busy 轮询间隔：只决定"发现系统变安静的延迟"，不承担任何
 // 正确性（正确性来自 InFlightWorkCount 条件）。
-const pollInterval = 100 * time.Microsecond
+const pollInterval = 10 * time.Microsecond
 
-// maxBusyPolls 是深度死锁逃生舱：in-flight 计数持续不归零（事件处理真死锁）
+// graceInterval 是跳钟前那一轮复核的时长——与 pollInterval 语义不同：它是
+// 概率性的正确性兜底，覆盖 in-flight 计数看不见的窄窗口（watcher 从 channel
+// 收到数据到 PostEvent 之间）。两者曾共用一个常量，2026-08-10 拆开，因为
+// 调它们的后果完全不同：pollInterval 只影响延迟，graceInterval 影响对错概率。
+//
+// 定价（实测，2026-08-10）：grace 是仿真的主要成本——shardmgr internal/core
+// 一轮约 7 万次跳钟，每次无条件付一个 grace。实测 core 用时：
+// grace=100µs → 10.6s，grace=10µs → 2.2s（只降 pollInterval 则是 9.9s，
+// 即 busy 轮询仅占 6%）。取 10µs 是**用兜底厚度换 4.8 倍测试速度的自觉取舍**，
+// 决策与反对意见见 research/2026_0810.FakeTimeQuiescence/notes.md 的 D8。
+const graceInterval = 10 * time.Microsecond
+
+// busyTimeout 是深度死锁逃生舱：in-flight 计数持续不归零（事件处理真死锁）
 // 时放弃等待，让测试以失败而非挂起的方式暴露问题。
-// 取值 50000 × 100µs = 5s 真实时间——刻意取宽（正常事件处理是毫秒级），
-// 它是护栏不是测量值，只在真死锁时触发，宽一点只影响死锁测试的失败延迟。
-const maxBusyPolls = 50000
+//
+// 用时间而不是轮询次数表达（2026-08-10）：旧版写作 maxBusyPolls=50000，其真实
+// 语义是 "50000 × 100µs = 5s"——轮询间隔一变，护栏长度就跟着变，而没人会想到
+// 去改它。按 10µs 算旧常量只剩约 0.9s，一个算得久的 solver 事件就会被误判成
+// 死锁并 panic。5s 是护栏不是测量值：正常事件处理是毫秒级，刻意取宽，只在真
+// 死锁时触发，宽一点只影响死锁测试的失败延迟。
+const busyTimeout = 5 * time.Second
 
-// maxEmptyPolls 是任务堆异常清空的逃生舱：本次推进的哨兵任务一直在堆里，
-// 堆不该为空；连续 20 轮为空说明有别的调用方把堆抽干了（如任务回调里嵌套
-// 调用 VirtualTimeForward 顺手跑掉了本次的哨兵），仿真无法到达目标时刻。
-const maxEmptyPolls = 20
+// emptyTimeout 是任务堆异常清空的逃生舱：本次推进的哨兵任务一直在堆里，堆不该
+// 为空；持续为空说明有别的调用方把堆抽干了（如任务回调里嵌套调用
+// VirtualTimeForward 顺手跑掉了本次的哨兵），仿真无法到达目标时刻。
+// 2ms 沿用旧实现的等效值（旧版 20 × 100µs），同样按时间表达。
+const emptyTimeout = 2 * time.Millisecond
 
 // giveUp 是仿真引擎放弃推进时的唯一出口——响亮失败。
 //
@@ -111,14 +128,16 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 		vtDeadline = true
 	})
 
-	emptyPolls := 0
-	busyPolls := 0
+	// 两个逃生舱都用"起始时刻 + 超时"表达，零值 = 当前不在该状态里
+	var busySince, emptySince time.Time
 	graceDone := false // 每次跳钟决定前的一轮复核标记
 	for !vtDeadline {
 		// 第一关：in-flight 工作未清零 → 时钟冻结
 		if InFlightWorkCount() > 0 {
-			busyPolls++
-			if busyPolls >= maxBusyPolls {
+			switch {
+			case busySince.IsZero():
+				busySince = time.Now()
+			case time.Since(busySince) >= busyTimeout:
 				provider.giveUp(ctx, "FakeTimeInFlightStuck",
 					"virtual clock frozen: in-flight work never drained (event processing deadlock?)", forwardMs)
 			}
@@ -126,15 +145,17 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 			time.Sleep(pollInterval)
 			continue
 		}
-		busyPolls = 0
+		busySince = time.Time{}
 
 		var needRunTask *FakeTimerTask
 		needSleep := false
+		sleepDur := pollInterval
+		emptyHeap := false
 		RunWithLock(&provider.mu, func() {
 			topTask := provider.taskQueue.Peek()
 			if topTask == nil {
 				needSleep = true
-				emptyPolls++
+				emptyHeap = true
 				return
 			}
 			if topTask.ScheduledForMs <= provider.MonoTime {
@@ -145,6 +166,7 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 			// 第二关：跳钟前保留一轮 grace 复核（睡一轮后重查计数与堆）
 			if !graceDone {
 				needSleep = true
+				sleepDur = graceInterval
 				graceDone = true
 				return
 			}
@@ -155,16 +177,25 @@ func (provider *FakeTimeProvider) VirtualTimeForward(ctx context.Context, forwar
 			needRunTask = topTask
 			heap.Pop(provider.taskQueue)
 		})
+		// 堆一旦不空就清零计时——否则"空 → 有任务 → 再空"会沿用上一次的起点，
+		// 两次短暂的空加起来可能凑满 emptyTimeout，误触发逃生舱
+		if !emptyHeap {
+			emptySince = time.Time{}
+		}
 		if needSleep {
-			if emptyPolls >= maxEmptyPolls {
-				provider.giveUp(ctx, "FakeTimeTaskQueueDrained",
-					"virtual clock stalled: task heap empty although this call's sentinel should be in it", forwardMs)
+			if emptyHeap {
+				switch {
+				case emptySince.IsZero():
+					emptySince = time.Now()
+				case time.Since(emptySince) >= emptyTimeout:
+					provider.giveUp(ctx, "FakeTimeTaskQueueDrained",
+						"virtual clock stalled: task heap empty although this call's sentinel should be in it", forwardMs)
+				}
 			}
-			time.Sleep(pollInterval)
+			time.Sleep(sleepDur)
 			continue
 		}
 		if needRunTask != nil {
-			emptyPolls = 0
 			needRunTask.TaskFunc()
 			continue
 		}
